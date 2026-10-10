@@ -1,6 +1,6 @@
-// Package plugin is the adapter registry. An adapter registers a factory for one kind
-// from its package init; a binary picks its adapters by importing their packages
-// (adapters/all brings every bundled one).
+// Package plugin is the in-process adapter registry. An adapter registers a factory for one kind
+// from its package init; jig itself bundles none (they live in goxang/jig-plugins and reach jig as
+// plugins), while jig-std imports them all to serve them.
 package plugin
 
 import (

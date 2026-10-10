@@ -8,7 +8,6 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	_ "github.com/goxang/jig/adapters/all"
 	"github.com/goxang/jig/engine"
 )
 

@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"sync"
 
@@ -61,7 +62,11 @@ func (a *App) componentsOf(plugin string) map[string]protocol.Args {
 // kind's contract, a bridge to that plugin.
 func (a *App) newComponent(c *spec.Component) (any, plugin.Adapter, error) {
 	if _, err := plugin.Resolve(c); err == nil || !a.hasPlugin(c.Type) {
-		return plugin.New(a, c)
+		v, ad, err := plugin.New(a, c)
+		if err != nil && len(plugin.List()) == 0 {
+			err = fmt.Errorf("%w: no plugin named %q is installed (official ones: `jig-std install`, from goxang/jig-plugins)", err, c.Type)
+		}
+		return v, ad, err
 	}
 	p := a.Host().Get(c.Type)
 	if p == nil {

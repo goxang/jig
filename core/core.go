@@ -1,5 +1,5 @@
-// Package core defines what every component kind must do. Adapters in adapters/<kind>/<type>
-// implement one of these interfaces; anything an adapter can do beyond it is offered through
+// Package core defines what every component kind must do. Adapters (in goxang/jig-plugins, or a
+// plugin bridged through its contract) implement one of these interfaces; anything an adapter can do beyond it is offered through
 // the optional interfaces at the bottom (Forwarder, Actioner, Querier, ...), found by type assertion.
 package core
 

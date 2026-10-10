@@ -5,7 +5,6 @@ import (
 	"os"
 	"runtime/debug"
 
-	_ "github.com/goxang/jig/adapters/all"
 	"github.com/goxang/jig/host"
 	"github.com/goxang/jig/internal/cli"
 	"github.com/goxang/jig/internal/tui"

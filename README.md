@@ -42,6 +42,13 @@ curl -fsSL https://raw.githubusercontent.com/goxang/jig/main/install.sh | sh
 
 Linux and macOS (amd64, arm64). With Go 1.26+: `go install github.com/goxang/jig/cmd/jig@latest`.
 
+jig itself knows no technology. Runtimes, builders, databases, metrics and the rest come from the
+official plugins in [goxang/jig-plugins](https://github.com/goxang/jig-plugins):
+
+```bash
+go install github.com/goxang/jig-plugins/cmd/jig-std@latest && jig-std install
+```
+
 ## Start
 
 ```bash

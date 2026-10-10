@@ -23,5 +23,16 @@ streams stream, effects match, optional capabilities are whole, and the sources 
 arguments answer frames with the contract's fields.
 
 The contracts are `runtime builder registry logs metrics traces profiles debugger database cache
-queue kv load tests hosts vcs scm tracker docs iac notify secrets ai`, each at version 1. Their
+queue kv load query tests hosts vcs scm tracker docs iac notify secrets ai`, each at version 1. Their
 definitions are in `contracts/<name>/v1.yaml`; a new version lives next to the old one.
+
+Optional capabilities are what a built-in screen offers beyond the kind's basics: `browse`, `edit`
+and `snapshot` on data, `forward`, `env` and `resources` on a runtime, and so on. A screen shows
+those features only for plugins that provide the whole capability.
+
+Wire values follow the protocol: times are Unix seconds, durations are seconds, and `json` fields
+hold nested values. A `browse` frame named `leaf` holds rows, not further levels. `exec` and `shell`
+answer `outputs.argv` (with `env` and `dir`), which jig runs on the user's terminal.
+
+Go adapters can be served without writing these by hand: `contracts.Serve` exposes an in-process
+component as its kind's contract, which is how `jig-std` serves the official adapters.
