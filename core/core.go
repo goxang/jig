@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/goxang/jig/manifest"
 	"github.com/goxang/jig/spec"
 )
 
@@ -619,6 +620,20 @@ type Seeder interface {
 
 // Gated is a component whose optional interfaces depend on what serves it, such as a plugin that
 // provides only some of a contract's capabilities.
+// Manifester is a runtime that deploys Kubernetes manifests (kubernetes, kind): what the Manifests
+// screen reads, compares with the cluster and applies.
+type Manifester interface {
+	// Objects are the service's manifest objects and, among them, its workload.
+	Objects(s *spec.Service) ([]*manifest.Object, *manifest.Object, error)
+	LiveObject(ctx context.Context, kind, name string) ([]byte, error)
+	// LiveObjects are the namespace's objects as YAML documents.
+	LiveObjects(ctx context.Context) ([]byte, error)
+	// InjectedEnv are the variables the runtime adds, left out when syncing from the cluster.
+	InjectedEnv(s *spec.Service) map[string]bool
+	KubectlArgs() []string
+	ApplyManifests(ctx context.Context, objs []*manifest.Object) error
+}
+
 type Gated interface {
 	Has(iface string) bool
 }

@@ -32,6 +32,19 @@ sources:
     fields: {name: string, value: string}
   runtime.hosts:
     fields: {name: string, addr: string, roles: json, ready: bool, reason: string, os: string, kernel: string, cpus: int, cpu_used: number, mem_total: int, mem_used: int, disk_total: int, disk_used: int, load1: number, labels: json, pods: json}
+  runtime.objects:
+    args: {service: string!}
+    fields: {file: string, doc: int, workload: bool}
+  runtime.live-object:
+    args: {kind: string!, name: string!}
+    fields: {json: string}
+  runtime.live-objects:
+    fields: {yaml: string}
+  runtime.injected-env:
+    args: {service: string!}
+    fields: {name: string}
+  runtime.kubectl-args:
+    fields: {args: json}
 actions:
   runtime.start: {effect: write, args: {service: string!}}
   runtime.stop: {effect: danger, args: {service: string!}}
@@ -48,6 +61,8 @@ actions:
   runtime.set-resources: {effect: write, args: {service: string!, container: string, cpu_request: string, cpu_limit: string, mem_request: string, mem_limit: string}}
   runtime.forward: {effect: read, args: {service: string!, instance: string, port: int!}, outputs: {addr: string}}
   runtime.shell: {effect: write, args: {host: string!, command: json}, outputs: {argv: json}}
+  # objects are {file, doc, yaml}: each one's document as the caller has it, edits included
+  runtime.apply: {effect: write, args: {objects: json!}}
 capabilities:
   autoscale: {actions: [runtime.autoscale]}
   resources: {sources: [runtime.resources], actions: [runtime.set-resources]}
@@ -59,6 +74,7 @@ capabilities:
   load-image: {actions: [runtime.load-image]}
   bridge: {actions: [runtime.bridge]}
   hosts: {sources: [runtime.hosts], actions: [runtime.shell]}
+  manifests: {sources: [runtime.objects, runtime.live-object, runtime.live-objects, runtime.injected-env, runtime.kubectl-args], actions: [runtime.apply]}
   query: {sources: [runtime.run-query, runtime.query-language]}
   ping: {sources: [runtime.ping]}
   actions: {sources: [runtime.actions], actions: [runtime.run-action]}

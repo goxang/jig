@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"gopkg.in/yaml.v3"
 
+	"github.com/goxang/jig/core"
 	"github.com/goxang/jig/manifest"
 )
 
@@ -296,7 +297,7 @@ func (t *manifestsTab) saveField(what string, m *model, edit func(o *manifest.Ob
 // applyField edits a live object and applies it to the cluster; the list reloads once it has run.
 func (t *manifestsTab) applyField(what string, m *model, edit func(o *manifest.Object) (*yaml.Node, bool)) tea.Cmd {
 	o := t.fieldsObj
-	ap, ok := m.app.Runtime().(applier)
+	ap, ok := core.As[core.Manifester](m.app.Runtime())
 	if !ok {
 		return nil
 	}

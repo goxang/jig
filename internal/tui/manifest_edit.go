@@ -14,16 +14,7 @@ import (
 
 	"github.com/goxang/jig/core"
 	"github.com/goxang/jig/manifest"
-	"github.com/goxang/jig/spec"
 )
-
-// k8sObjects is a runtime that knows a service's manifests and the cluster's live objects (Kubernetes, kind).
-type k8sObjects interface {
-	Objects(s *spec.Service) ([]*manifest.Object, *manifest.Object, error)
-	LiveObject(ctx context.Context, kind, name string) ([]byte, error)
-	InjectedEnv(s *spec.Service) map[string]bool
-	KubectlArgs() []string
-}
 
 type (
 	// manifestEditedMsg: the editor closed on an object's document (or on what the cluster runs, for a sync).
@@ -46,8 +37,8 @@ type (
 	}
 )
 
-func (m *model) k8s() (k8sObjects, bool) {
-	k, ok := m.app.Runtime().(k8sObjects)
+func (m *model) k8s() (core.Manifester, bool) {
+	k, ok := core.As[core.Manifester](m.app.Runtime())
 	return k, ok
 }
 
@@ -206,7 +197,7 @@ func editLive(m *model, o *manifest.Object) tea.Cmd {
 	return runEditLive(k, o)
 }
 
-func runEditLive(k k8sObjects, o *manifest.Object) tea.Cmd {
+func runEditLive(k core.Manifester, o *manifest.Object) tea.Cmd {
 	c := exec.Command("kubectl", append(k.KubectlArgs(), "edit", strings.ToLower(o.Kind)+"/"+o.Name)...)
 	c.Env = append(os.Environ(), "KUBE_EDITOR="+editorCmd())
 	return execProcess(c, func(err error) tea.Msg {
@@ -257,18 +248,19 @@ func (m *model) synced(msg syncedMsg) tea.Cmd {
 }
 
 func applyObject(m *model, o *manifest.Object) tea.Cmd {
-	if _, ok := m.app.Runtime().(applier); !ok {
+	ap, ok := core.As[core.Manifester](m.app.Runtime())
+	if !ok {
 		m.setStatus("this environment's runtime ("+m.app.Env.Runtime.Type+") does not apply manifests", true)
 		return nil
 	}
 	return m.act("apply "+o.ID(), true, func(ctx context.Context) error {
-		return m.app.Runtime().(applier).ApplyManifests(ctx, []*manifest.Object{o})
+		return ap.ApplyManifests(ctx, []*manifest.Object{o})
 	})
 }
 
 // applyObjectNow applies without asking: the caller's confirmation was the question.
 func applyObjectNow(m *model, o *manifest.Object) tea.Cmd {
-	ap, ok := m.app.Runtime().(applier)
+	ap, ok := core.As[core.Manifester](m.app.Runtime())
 	if !ok {
 		return func() tea.Msg { return statusMsg{text: "saved; this runtime does not apply manifests"} }
 	}

@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/goxang/jig/core"
+	"github.com/goxang/jig/manifest"
 	"github.com/goxang/jig/protocol"
 	"github.com/goxang/jig/spec"
 )
@@ -503,6 +504,57 @@ func (s *server) runtime(probe any) {
 	if is[core.Hosts](probe) {
 		s.hostsOf("hosts", "shell")
 	}
+	if is[core.Manifester](probe) {
+		s.manifests()
+	}
+}
+
+func (s *server) manifests() {
+	svcSrc(s, "objects", func(_ context.Context, c core.Manifester, sv *spec.Service, _ protocol.Args) (*protocol.Frame, error) {
+		objs, w, err := c.Objects(sv)
+		f := frame("file:string doc:int workload:bool")
+		for _, o := range objs {
+			for j, v := range []any{o.File, o.Doc, o == w} {
+				f.Columns[j] = append(f.Columns[j], v)
+			}
+		}
+		return f, err
+	})
+	src(s, "live-object", func(ctx context.Context, c core.Manifester, a protocol.Args) (*protocol.Frame, error) {
+		b, err := c.LiveObject(ctx, str(a["kind"]), str(a["name"]))
+		return frame("json:string", []any{string(b)}), err
+	})
+	src(s, "live-objects", func(ctx context.Context, c core.Manifester, _ protocol.Args) (*protocol.Frame, error) {
+		b, err := c.LiveObjects(ctx)
+		return frame("yaml:string", []any{string(b)}), err
+	})
+	svcSrc(s, "injected-env", func(_ context.Context, c core.Manifester, sv *spec.Service, _ protocol.Args) (*protocol.Frame, error) {
+		f := frame("name:string")
+		for _, n := range sortedKeys(c.InjectedEnv(sv)) {
+			f.Columns[0] = append(f.Columns[0], n)
+		}
+		return f, nil
+	})
+	src(s, "kubectl-args", func(_ context.Context, c core.Manifester, _ protocol.Args) (*protocol.Frame, error) {
+		return frame("args:json", []any{c.KubectlArgs()}), nil
+	})
+	act(s, "apply", func(ctx context.Context, c core.Manifester, a protocol.Args, _ io.Writer) (protocol.Args, error) {
+		var docs []struct {
+			File, YAML string
+			Doc        int
+		}
+		decode(a["objects"], &docs)
+		var objs []*manifest.Object
+		for _, d := range docs {
+			set := manifest.Parse(d.File, []byte(d.YAML))
+			if len(set.Objects) != 1 {
+				return nil, fmt.Errorf("%s#%d: want one object, have %d", d.File, d.Doc, len(set.Objects))
+			}
+			set.Objects[0].Doc = d.Doc
+			objs = append(objs, set.Objects[0])
+		}
+		return none(c.ApplyManifests(ctx, objs))
+	})
 }
 
 func (s *server) hostsOf(list, shell string) {

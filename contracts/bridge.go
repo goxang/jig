@@ -8,6 +8,7 @@ import (
 	"io"
 	"os/exec"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -16,6 +17,7 @@ import (
 	"github.com/goxang/jig/core"
 	"github.com/goxang/jig/kernel/frames"
 	"github.com/goxang/jig/kernel/jobs"
+	"github.com/goxang/jig/manifest"
 	"github.com/goxang/jig/protocol"
 	"github.com/goxang/jig/spec"
 )
@@ -50,6 +52,7 @@ var optional = []struct {
 	{reflect.TypeFor[core.EnvReader](), "env"},
 	{reflect.TypeFor[core.Forwarder](), "forward"},
 	{reflect.TypeFor[core.Hosts](), "hosts"},
+	{reflect.TypeFor[core.Manifester](), "manifests"},
 	{reflect.TypeFor[core.Pusher](), "push"},
 	{reflect.TypeFor[core.LoadConfigured](), "configured"},
 	{reflect.TypeFor[core.LoadScaler](), "scale"},
@@ -524,6 +527,79 @@ func (r *runtimeBridge) Shell(ctx context.Context, host string, cmd []string) (*
 		return nil, err
 	}
 	return command(ctx, out)
+}
+
+func (r *runtimeBridge) Objects(s *spec.Service) ([]*manifest.Object, *manifest.Object, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	rows, err := r.rows(ctx, "runtime.objects", protocol.Args{"service": s.Name})
+	if err != nil || len(rows) == 0 {
+		return nil, nil, err
+	}
+	var files []string
+	for _, row := range rows {
+		if f := str(row["file"]); !slices.Contains(files, f) {
+			files = append(files, f)
+		}
+	}
+	set, err := manifest.Scan(files...)
+	if err != nil {
+		return nil, nil, err
+	}
+	var objs []*manifest.Object
+	var w *manifest.Object
+	for _, row := range rows {
+		for _, o := range set.Objects {
+			if o.File == str(row["file"]) && o.Doc == integer(row["doc"]) {
+				objs = append(objs, o)
+				if row["workload"] == true {
+					w = o
+				}
+			}
+		}
+	}
+	return objs, w, nil
+}
+
+func (r *runtimeBridge) LiveObject(ctx context.Context, kind, name string) ([]byte, error) {
+	rows, err := r.rows(ctx, "runtime.live-object", protocol.Args{"kind": kind, "name": name})
+	if err != nil || len(rows) == 0 {
+		return nil, err
+	}
+	return []byte(str(rows[0]["json"])), nil
+}
+
+func (r *runtimeBridge) LiveObjects(ctx context.Context) ([]byte, error) {
+	rows, err := r.rows(ctx, "runtime.live-objects", nil)
+	if err != nil || len(rows) == 0 {
+		return nil, err
+	}
+	return []byte(str(rows[0]["yaml"])), nil
+}
+
+func (r *runtimeBridge) InjectedEnv(s *spec.Service) map[string]bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	rows, _ := r.rows(ctx, "runtime.injected-env", protocol.Args{"service": s.Name})
+	out := map[string]bool{}
+	for _, row := range rows {
+		out[str(row["name"])] = true
+	}
+	return out
+}
+
+func (r *runtimeBridge) KubectlArgs() []string { return strs(r.fact("runtime.kubectl-args")["args"]) }
+
+func (r *runtimeBridge) ApplyManifests(ctx context.Context, objs []*manifest.Object) error {
+	var docs []map[string]any
+	for _, o := range objs {
+		y, err := manifest.Encode([]*manifest.Object{o})
+		if err != nil {
+			return err
+		}
+		docs = append(docs, map[string]any{"file": o.File, "doc": o.Doc, "yaml": string(y)})
+	}
+	return r.do(ctx, "runtime.apply", protocol.Args{"objects": docs})
 }
 
 // ---- builder ----

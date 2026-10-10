@@ -13,6 +13,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/goxang/jig/core"
 	"github.com/goxang/jig/internal/viz"
 	"github.com/goxang/jig/manifest"
 )
@@ -62,11 +63,6 @@ type manifestsTab struct {
 	liveStale bool
 }
 
-// liveLister is a runtime that lists the namespace's objects (Kubernetes, kind).
-type liveLister interface {
-	LiveObjects(ctx context.Context) ([]byte, error)
-}
-
 type manifestsLiveMsg struct {
 	gen int
 	set *manifest.Set
@@ -78,7 +74,7 @@ const liveFile = "cluster:"
 func isLive(o *manifest.Object) bool { return strings.HasPrefix(o.File, liveFile) }
 
 func (t *manifestsTab) fetchLive(m *model) tea.Cmd {
-	l, ok := m.app.Runtime().(liveLister)
+	l, ok := core.As[core.Manifester](m.app.Runtime())
 	if !ok {
 		return nil
 	}
@@ -191,11 +187,6 @@ func (t *manifestsTab) shown(o *manifest.Object) bool {
 	return ok
 }
 
-// applier is a runtime that can apply manifests (Kubernetes).
-type applier interface {
-	ApplyManifests(ctx context.Context, objs []*manifest.Object) error
-}
-
 func (t *manifestsTab) name() string { return "Manifests" }
 func (t *manifestsTab) typing() bool { return t.filtering }
 
@@ -243,7 +234,7 @@ func (t *manifestsTab) hints() [][2]string {
 func (t *manifestsTab) open(m *model) tea.Cmd {
 	t.dirs = m.app.ManifestDirs()
 	t.marked = map[string]bool{}
-	_, t.cluster = m.app.Runtime().(liveLister)
+	_, t.cluster = core.As[core.Manifester](m.app.Runtime())
 	t.files, t.live, t.set = nil, nil, nil
 	return batch(t.scan(m), t.fetchLive(m))
 }
@@ -487,7 +478,7 @@ func (t *manifestsTab) update(m *model, msg tea.Msg) tea.Cmd {
 		case "u":
 			t.all, t.sel, t.offset = !t.all, 0, 0
 		case "c":
-			if _, ok := m.app.Runtime().(liveLister); !ok {
+			if _, ok := core.As[core.Manifester](m.app.Runtime()); !ok {
 				m.setStatus(m.app.Env.Name+" is not on Kubernetes: only the files", true)
 				return nil
 			}
@@ -499,7 +490,7 @@ func (t *manifestsTab) update(m *model, msg tea.Msg) tea.Cmd {
 			}
 			m.setStatus("the manifest files · c shows what runs", false)
 		case "t", "shift+left", "shift+right":
-			if _, live := m.app.Runtime().(liveLister); live && msg.String() != "t" {
+			if _, live := core.As[core.Manifester](m.app.Runtime()); live && msg.String() != "t" {
 				cur := 1 + boolInt(t.tree)
 				if t.cluster {
 					cur = 0
@@ -616,7 +607,7 @@ func (t *manifestsTab) apply(m *model) tea.Cmd {
 	if len(objs) == 0 {
 		return nil
 	}
-	ap, ok := m.app.Runtime().(applier)
+	ap, ok := core.As[core.Manifester](m.app.Runtime())
 	if !ok {
 		m.setStatus("this environment's runtime ("+m.app.Env.Runtime.Type+") does not apply manifests", true)
 		return nil
@@ -727,7 +718,7 @@ func addService(file, name, role, groups, image, workload, manifestFile string) 
 
 func (t *manifestsTab) view(m *model, w, h int) string {
 	modes, cur := []string{"objects", "folders and files"}, boolInt(t.tree)
-	if _, ok := m.app.Runtime().(liveLister); ok {
+	if _, ok := core.As[core.Manifester](m.app.Runtime()); ok {
 		modes, cur = []string{"on the cluster", "files: objects", "files: folders"}, 1+boolInt(t.tree)
 		if t.cluster {
 			cur = 0
@@ -750,7 +741,7 @@ func (t *manifestsTab) mode(m *model, i int) tea.Cmd {
 
 func (t *manifestsTab) click(m *model, h hit) tea.Cmd {
 	if i, ok := stripHit(h, "mf:mode"); ok {
-		if _, live := m.app.Runtime().(liveLister); live {
+		if _, live := core.As[core.Manifester](m.app.Runtime()); live {
 			return t.mode(m, i)
 		}
 		if (i == 1) != t.tree {

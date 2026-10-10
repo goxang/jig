@@ -6,12 +6,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/goxang/jig/core"
+	"github.com/goxang/jig/manifest"
 	"github.com/goxang/jig/protocol"
 	"github.com/goxang/jig/spec"
 )
@@ -281,5 +283,56 @@ func TestRuntimeRoundTrip(t *testing.T) {
 	}
 	if _, ok := core.As[core.StateStore](v); ok {
 		t.Fatal("state admitted without the capability")
+	}
+}
+
+type fakeK8s struct {
+	fakeRuntime
+	file    string
+	applied []string
+}
+
+func (k *fakeK8s) Objects(*spec.Service) ([]*manifest.Object, *manifest.Object, error) {
+	set, err := manifest.Scan(k.file)
+	if err != nil {
+		return nil, nil, err
+	}
+	return set.Objects, set.Get("Deployment", "api"), nil
+}
+func (*fakeK8s) LiveObject(_ context.Context, kind, name string) ([]byte, error) {
+	return []byte(`{"kind":"` + kind + `"}`), nil
+}
+func (*fakeK8s) LiveObjects(context.Context) ([]byte, error) { return []byte("kind: Service\n"), nil }
+func (*fakeK8s) InjectedEnv(*spec.Service) map[string]bool   { return map[string]bool{"OTEL": true} }
+func (*fakeK8s) KubectlArgs() []string                       { return []string{"--context", "c"} }
+func (k *fakeK8s) ApplyManifests(_ context.Context, objs []*manifest.Object) error {
+	for _, o := range objs {
+		k.applied = append(k.applied, fmt.Sprintf("%s#%d %s", o.ID(), o.Doc, o.Labels["edited"]))
+	}
+	return nil
+}
+
+func TestManifestsRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	file := t.TempDir() + "/api.yaml"
+	if err := os.WriteFile(file, []byte("apiVersion: v1\nkind: Service\nmetadata: {name: api}\n---\napiVersion: apps/v1\nkind: Deployment\nmetadata: {name: api}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	k := &fakeK8s{file: file}
+	v := roundTrip(t, core.KindRuntime, k)
+	m, ok := core.As[core.Manifester](v)
+	if !ok {
+		t.Fatal("manifests not admitted")
+	}
+	objs, w, err := m.Objects(&spec.Service{Name: "api"})
+	if err != nil || len(objs) != 2 || w == nil || w.ID() != "Deployment/api" || w.Doc != 1 {
+		t.Fatalf("objects: %v %v %v", objs, w, err)
+	}
+	w.Node = manifest.Parse(file, []byte("apiVersion: apps/v1\nkind: Deployment\nmetadata: {name: api, labels: {edited: yes}}\n")).Objects[0].Node
+	if err := m.ApplyManifests(ctx, []*manifest.Object{w}); err != nil || len(k.applied) != 1 || k.applied[0] != "Deployment/api#1 yes" {
+		t.Fatalf("apply: %v %v", k.applied, err)
+	}
+	if !m.InjectedEnv(&spec.Service{Name: "api"})["OTEL"] || m.KubectlArgs()[1] != "c" {
+		t.Fatal("injected env or kubectl args")
 	}
 }
