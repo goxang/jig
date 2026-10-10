@@ -432,7 +432,9 @@ policy:
 A rule is `action[:effect][@env/<name>]`, globs throughout. The most restrictive matching rule wins:
 deny, approve, reauth, confirm, then allow; an action no rule matches is denied. `ai` binds the
 assistant. Without `policy:` the local default applies: reads run, a `readonly` environment takes no
-writes, the assistant's writes wait in `jig inbox`, danger and protected environments ask first.
+writes, the assistant's writes wait in `jig inbox`, danger and protected environments ask first. With
+roles, an allowed write to a protected environment still asks to confirm. `jig serve` adds the roles
+`viewer`, `dev`, `operator`, `admin` and `ai` where the project does not define them (`jig admin roles`).
 
 ## otel
 

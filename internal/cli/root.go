@@ -21,15 +21,17 @@ import (
 	"github.com/goxang/jig/core"
 	"github.com/goxang/jig/engine"
 	"github.com/goxang/jig/internal/sh"
+	"github.com/goxang/jig/server"
 	"github.com/goxang/jig/spec"
 )
 
 var Version = "dev"
 
 type globals struct {
-	file string
-	env  string
-	yes  bool
+	file   string
+	env    string
+	yes    bool
+	remote string
 }
 
 var g globals
@@ -60,11 +62,14 @@ func Execute() int {
 			_ = os.WriteFile(f, []byte(text), 0o600) // the UI that ran this shows it after the terminal closes
 		}
 		code = 1
+		var pe *protocol.Error
 		switch {
 		case errors.Is(err, engine.ErrFailed):
 			code = 3
-		case errors.Is(err, engine.ErrProtected):
+		case errors.Is(err, engine.ErrProtected), errors.As(err, &pe) && pe.Code == protocol.CodeDenied:
 			code = 4
+		case errors.As(err, &pe) && pe.Code == server.CodeFailed:
+			code = 3
 		}
 	}
 	if f := os.Getenv("JIG_DONE_FILE"); f != "" {
@@ -117,7 +122,11 @@ Run jig with no arguments for the terminal UI.`,
 	root.PersistentFlags().StringVarP(&g.env, "env", "e", "", "environment (default: $JIG_ENV, then the project's default; the UI opens on the one it last showed)")
 	root.PersistentFlags().StringVar(&engine.NamespaceOverride, "namespace", "", "Kubernetes namespace for this run, instead of the environment's (jig ns switches it for good)")
 	root.PersistentFlags().BoolVar(&brief, "brief", brief, "terse output for agents and scripts: no colour, tab-separated, long cells cut (or $JIG_BRIEF=1)")
-	root.PersistentPreRun = func(*cobra.Command, []string) { setBrief(brief) }
+	root.PersistentFlags().StringVarP(&g.remote, "remote", "r", os.Getenv("JIG_REMOTE"), "run on a jig server signed in to with jig login (or $JIG_REMOTE)")
+	root.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {
+		setBrief(brief)
+		return checkRemote(cmd)
+	}
 	root.PersistentFlags().BoolVarP(&g.yes, "yes", "y", os.Getenv("JIG_YES") != "", "confirm changes to a protected environment (or $JIG_YES)")
 
 	root.AddGroup(&cobra.Group{ID: "svc", Title: "Services:"}, &cobra.Group{ID: "obs", Title: "Observe:"},
@@ -143,7 +152,7 @@ Run jig with no arguments for the terminal UI.`,
 	ac := aiCommand()
 	ac.GroupID = "obs"
 	root.AddCommand(ac)
-	for _, c := range append(projectCommands(), pluginCommand(), trustCommand(), doctorCommand(), kubeconfigCommand(), whyCommand(), inboxCommand(), agentCommand(), docsCommand(), schemaCommand(), skillCommand(), themeCommand()) {
+	for _, c := range append(append(projectCommands(), pluginCommand(), trustCommand(), doctorCommand(), kubeconfigCommand(), whyCommand(), inboxCommand(), agentCommand(), serveCommand(), loginCommand(), logoutCommand(), whoamiCommand(), adminCommand(), callCommand(), docsCommand(), schemaCommand(), skillCommand(), themeCommand()), lockCommands()...) {
 		c.GroupID = "infra"
 		root.AddCommand(c)
 	}

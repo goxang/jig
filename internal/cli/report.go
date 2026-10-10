@@ -18,28 +18,7 @@ func reportCommand() *cobra.Command {
 	var from, to, out, source, format, verbosity, vs string
 	var noPublish bool
 	save := func(ctx context.Context, a *engine.App, rep *engine.ReportResult) error {
-		if format != "" {
-			rep.Format = format
-		}
-		file, err := a.SaveReport(rep, out)
-		if err != nil {
-			return err
-		}
-		if err := rep.Write(os.Stdout, engine.ReportFormat(file, rep.Format)); err != nil {
-			return err
-		}
-		fmt.Println(dim("\nsaved to " + file))
-		if !noPublish {
-			e := engine.NewLocal(a, &jobs.Manager{})
-			defer e.Close()
-			if err := e.Publish(ctx, rep, file); err != nil {
-				return err
-			}
-		}
-		if rep.Failed() {
-			return fmt.Errorf("report %s: %w", rep.Name, engine.ErrFailed)
-		}
-		return nil
+		return saveReport(ctx, a, rep, format, out, !noPublish)
 	}
 	verbose := func(a *engine.App, name string) {
 		if r := a.Spec.Reports[name]; r != nil && verbosity != "" {
@@ -132,37 +111,69 @@ func reportCommand() *cobra.Command {
 		Short: "measure and publish each report with a schedule: when it comes due, over the time since its last run",
 		Args:  cobra.NoArgs,
 		RunE: withApp(func(ctx context.Context, a *engine.App, _ []string) error {
-			last := map[string]time.Time{}
 			fmt.Println(dim("watching report schedules; Ctrl-C stops"))
-			for {
-				now := time.Now()
-				select {
-				case <-ctx.Done():
-					return nil
-				case <-time.After(now.Truncate(time.Minute).Add(time.Minute).Sub(now)):
-				}
-				for _, n := range a.ReportNames() {
-					r := a.Spec.Reports[n]
-					if ok, err := cron.Due(r.Schedule, time.Now()); err != nil || !ok {
-						continue
-					}
-					from := last[n]
-					if from.IsZero() {
-						from = time.Now().Add(-since)
-					}
-					last[n] = time.Now()
-					rep, err := a.MeasureReport(ctx, n, source, from, last[n])
-					if err == nil {
-						err = save(ctx, a, rep)
-					}
-					if err != nil {
-						fmt.Fprintln(os.Stderr, red("✗")+" "+err.Error())
-					}
-				}
-			}
+			return watchReports(ctx, a, source, since, save)
 		}),
 	})
 	return c
+}
+
+// saveReport writes rep (prints it, keeps it, publishes it) and fails when its checks did.
+func saveReport(ctx context.Context, a *engine.App, rep *engine.ReportResult, format, out string, publish bool) error {
+	if format != "" {
+		rep.Format = format
+	}
+	file, err := a.SaveReport(rep, out)
+	if err != nil {
+		return err
+	}
+	if err := rep.Write(os.Stdout, engine.ReportFormat(file, rep.Format)); err != nil {
+		return err
+	}
+	fmt.Println(dim("\nsaved to " + file))
+	if publish {
+		e := engine.NewLocal(a, &jobs.Manager{})
+		defer e.Close()
+		if err := e.Publish(ctx, rep, file); err != nil {
+			return err
+		}
+	}
+	if rep.Failed() {
+		return fmt.Errorf("report %s: %w", rep.Name, engine.ErrFailed)
+	}
+	return nil
+}
+
+// watchReports measures and publishes each scheduled report when it comes due, until ctx ends.
+func watchReports(ctx context.Context, a *engine.App, source string, since time.Duration,
+	save func(context.Context, *engine.App, *engine.ReportResult) error) error {
+	last := map[string]time.Time{}
+	for {
+		now := time.Now()
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(now.Truncate(time.Minute).Add(time.Minute).Sub(now)):
+		}
+		for _, n := range a.ReportNames() {
+			r := a.Spec.Reports[n]
+			if ok, err := cron.Due(r.Schedule, time.Now()); err != nil || !ok {
+				continue
+			}
+			from := last[n]
+			if from.IsZero() {
+				from = time.Now().Add(-since)
+			}
+			last[n] = time.Now()
+			rep, err := a.MeasureReport(ctx, n, source, from, last[n])
+			if err == nil {
+				err = save(ctx, a, rep)
+			}
+			if err != nil {
+				fmt.Fprintln(os.Stderr, red("✗")+" "+err.Error())
+			}
+		}
+	}
 }
 
 // clock reads a time of today (15:04 or 15:04:05) or an RFC 3339 timestamp.

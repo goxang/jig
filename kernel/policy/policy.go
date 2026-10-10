@@ -55,8 +55,8 @@ type Config struct {
 // Decide answers req. For a subject no role binds, the local default applies: reads are allowed; a readonly
 // environment takes no writes; the AI's writes need approval; an agent's writes are allowed
 // unless dangerous, protected or matching its approve globs; danger and writes to a protected
-// environment need confirming. With roles, the most restrictive matching rule wins and nothing
-// matching is denied.
+// environment need confirming. With roles, the most restrictive matching rule wins, an allowed write to a
+// protected environment still needs confirming, and nothing matching is denied.
 func (c *Config) Decide(req Request, envs map[string]Env) (Decision, string) {
 	env := envs[req.Env]
 	if env.Readonly && req.Effect != protocol.EffectRead {
@@ -94,6 +94,9 @@ func (c *Config) Decide(req Request, envs map[string]Env) (Decision, string) {
 		for _, r := range roles {
 			for _, rule := range r.rules(d) {
 				if matches(rule, req) {
+					if d == Allow && env.Protected && req.Effect != protocol.EffectRead {
+						return Confirm, "environment " + req.Env + " is protected"
+					}
 					return d, rule
 				}
 			}

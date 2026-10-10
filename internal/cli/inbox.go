@@ -9,9 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/goxang/jig/engine"
+	"github.com/goxang/jig/api"
 	"github.com/goxang/jig/kernel/inbox"
-	"github.com/goxang/jig/kernel/jobs"
 )
 
 func inboxCommand() *cobra.Command {
@@ -20,9 +19,7 @@ func inboxCommand() *cobra.Command {
 		Use:   "inbox [approve|reject <id>]",
 		Short: "writes waiting for your approval (the AI's and agents', by default): what each would do, then approve or reject",
 		Args:  cobra.MaximumNArgs(2),
-		RunE: withApp(func(ctx context.Context, a *engine.App, args []string) error {
-			e := engine.NewLocal(a, &jobs.Manager{})
-			defer e.Close()
+		RunE: withEngine(func(ctx context.Context, e api.Engine, args []string) error {
 			if len(args) == 2 && (args[0] == "approve" || args[0] == "reject") {
 				res, err := e.Decide(ctx, args[1], args[0] == "approve")
 				if err != nil {

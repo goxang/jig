@@ -68,6 +68,7 @@ func NewLocal(a *App, jm *jobs.Manager) *Local {
 		Inbox: inbox.Open(filepath.Join(a.StateDir(), "inbox")),
 	}
 	l.builtins()
+	l.leases()
 	l.pluginActions()
 	l.plugins()
 	return l
@@ -361,9 +362,12 @@ func (l *Local) Stream(ctx context.Context, source string, args protocol.Args) (
 }
 
 func (l *Local) Run(ctx context.Context, action string, args protocol.Args, o api.RunOpts) (*jobs.Job, *protocol.RunResult, error) {
-	who := l.me
+	who := l.Session(ctx)
 	if o.As != nil {
 		who = *o.As
+	}
+	if err := l.leased(action, who); err != nil {
+		return nil, nil, err
 	}
 	j, res, err := l.runner.Run(ctx, actions.Call{Subject: who, Env: l.envName(), Action: action, Args: args, DryRun: o.DryRun})
 	var pe *protocol.Error
@@ -439,7 +443,12 @@ func (l *Local) Complete(context.Context, string, string, int) ([]protocol.Compl
 	return nil, nil
 }
 
-func (l *Local) Session(context.Context) identity.Subject { return l.me }
+func (l *Local) Session(ctx context.Context) identity.Subject {
+	if s, ok := identity.From(ctx); ok {
+		return s
+	}
+	return l.me
+}
 
 // Provides is every source and action this engine serves, for finding them by what they do.
 func (l *Local) Provides(context.Context) protocol.Provides {
@@ -459,7 +468,7 @@ func (l *Local) Provides(context.Context) protocol.Provides {
 func (l *Local) Inbox(context.Context) []inbox.Item { return l.runner.Inbox.List() }
 
 func (l *Local) Decide(ctx context.Context, id string, approve bool) (*protocol.RunResult, error) {
-	res, err := l.runner.Decide(ctx, id, approve, l.me)
+	res, err := l.runner.Decide(ctx, id, approve, l.Session(ctx))
 	l.Bus.Publish(protocol.Event{Topic: "inbox.decided", Source: "core", Data: protocol.Args{"id": id, "approved": approve}})
 	return res, err
 }

@@ -42,12 +42,14 @@ jig resume last               # the TUI as a saved session (S) left it
 jig ide --open                # every service into GoLand's Services view by section: live logs, stop, debug
 jig attach api                # start it if down, follow its logs; Ctrl-C stops it (what GoLand's configs run)
 jig mcp                       # MCP server for AI agents
+jig call services.status      # any action or source by name, through policy
+jig lock --for 1h             # hold the environment: nobody else changes it until then
 ```
 
 `-e <env>` (or `$JIG_ENV`) picks the environment. A `protected: true` environment refuses changes
 without `--yes`; pushing over an existing image tag needs it too. A `readonly: true` one refuses them
-even with it. Exit codes: 1 an error, 3 a check failed (tests, load assertions, a report), 4 a protected
-environment needs `--yes`. In the TUI the confirmation is the `--yes`; `jig --yes` opens it already confirmed, so a
+even with it. Exit codes: 1 an error, 3 a check failed (tests, load assertions, a report), 4 denied by policy
+or a protected environment that needs `--yes`. In the TUI the confirmation is the `--yes`; `jig --yes` opens it already confirmed, so a
 protected environment asks nothing more.
 
 ## Terminal UI
@@ -275,3 +277,29 @@ do, `jig inbox approve <id>` runs one as the assistant (audited with you as appr
 opencode and others know how to write and extend jig.yaml (services, infrastructure, `otel:`, `ui.tabs`,
 dashboards, tests) and check it with `jig env`; `jig docs config` is the reference they read, and `jig docs <words>`
 prints only the sections that hold them (`jig docs tasks steps`), across every doc.
+
+## Server
+
+`jig serve` shares a project with a team over HTTPS: remote CLIs (`jig -r <name>`), MCP clients and a
+web inbox at `/` all go through the same Engine API, with policy enforced on the server.
+
+```bash
+jig admin users add alice --role dev --totp   # accounts live with the server; --totp prints the secret to scan
+jig serve --addr :7443 --host jig.example.local --pull 1m
+jig login https://jig.example.local:7443 --name work   # pins a self-signed certificate after you compare it
+jig -r work call runtime.restart service=api  # runs there, as you
+jig -r work -e loadtest2 lock --for 2h        # a lease: nobody else changes loadtest2 until you unlock
+jig -r work inbox approve <id>                # four eyes: another person approves
+jig -r work admin tokens create ci            # an API token for CI: jig login <url> --token <token>
+jig -r work admin audit --who alice
+```
+
+Without `--cert`/`--key` the server makes a self-signed certificate once and prints its fingerprint.
+Sign-in is a password (argon2id) with an optional TOTP code, OIDC (`--oidc-issuer`, `--oidc-client-id`,
+`--oidc-redirect`; the secret in `$JIG_OIDC_CLIENT_SECRET`; `jig login --oidc` opens the browser), or an
+API token. Built-in roles `viewer`, `dev`, `operator` (reauth on danger), `admin` and `ai` apply where the
+project's `policy:` does not define them; an account with no known role only reads. A `reauth` rule
+asks for the password or a TOTP code again (valid five minutes), `confirm` asks yes or no (`--yes`),
+`approve` puts the write in the inbox for another person whose own role allows it. Agents and scheduled
+reports run on the server for as long as it does. With `-r`, these commands work remotely: `call`,
+`inbox`, `lock`, `unlock`, `whoami`, `mcp`, `admin tokens` and `admin audit`.

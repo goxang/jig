@@ -88,6 +88,9 @@ func serveMCP(ctx context.Context, in io.Reader, out io.Writer, flat bool) error
 	}
 	r, closeEngine := mcpRouter()
 	defer closeEngine()
+	if g.remote != "" {
+		tools = nil // the built-in tools run jig here; remotely only the router's reach the server
+	}
 	tools = append(tools, routerTools(ctx, r, tools, flat)...)
 	byName := map[string]mcpTool{}
 	for _, t := range tools {
@@ -168,6 +171,15 @@ func serveMCP(ctx context.Context, in io.Reader, out io.Writer, flat bool) error
 func mcpRouter() (*router.Router, func()) {
 	if lock := os.Getenv(ai.EnvLock); lock != "" {
 		g.env = lock
+	}
+	if g.remote != "" {
+		c, err := remoteClient()
+		if err != nil {
+			return nil, func() {}
+		}
+		c.Ask = nil // stdin carries the protocol: the server's questions fail the call instead
+		me := identity.AI(c.Session(context.Background()))
+		return &router.Router{E: c, As: &me, Approve: func(context.Context, string, map[string]any) bool { return false }}, func() {}
 	}
 	a, err := engine.Open(g.file, g.env)
 	if err != nil {

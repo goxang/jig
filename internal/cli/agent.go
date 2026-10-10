@@ -59,23 +59,28 @@ func agentCommand() *cobra.Command {
 		RunE: withApp(func(ctx context.Context, a *engine.App, _ []string) error {
 			e := engine.NewLocal(a, &jobs.Manager{})
 			defer e.Close()
-			var busy sync.Map
 			fmt.Println(dim(fmt.Sprintf("watching %d agents; writes they need approved wait in jig inbox", len(a.Spec.Agents))))
-			return agents.Watch(ctx, e, a.Spec.Agents, func(name string, ev *protocol.Event) {
-				// ponytail: a firing while the agent still runs is dropped, queue them if agents miss events
-				if _, running := busy.LoadOrStore(name, true); running {
-					return
-				}
-				go func() {
-					defer busy.Delete(name)
-					if err := runAgent(ctx, a, name, ev); err != nil {
-						fmt.Fprintln(os.Stderr, red("✗")+" agent "+name+": "+err.Error())
-					}
-				}()
-			})
+			return watchAgents(ctx, a, e)
 		}),
 	})
 	return c
+}
+
+// watchAgents runs each agent whenever its event arrives on e or its schedule comes due.
+func watchAgents(ctx context.Context, a *engine.App, e *engine.Local) error {
+	var busy sync.Map
+	return agents.Watch(ctx, e, a.Spec.Agents, func(name string, ev *protocol.Event) {
+		// ponytail: a firing while the agent still runs is dropped, queue them if agents miss events
+		if _, running := busy.LoadOrStore(name, true); running {
+			return
+		}
+		go func() {
+			defer busy.Delete(name)
+			if err := runAgent(ctx, a, name, ev); err != nil {
+				fmt.Fprintln(os.Stderr, red("✗")+" agent "+name+": "+err.Error())
+			}
+		}()
+	})
 }
 
 func runAgent(ctx context.Context, a *engine.App, name string, ev *protocol.Event) error {

@@ -75,9 +75,19 @@ type Runner struct {
 	// Audit, when set, logs every action that is not a read.
 	Audit *audit.Log
 	// Ask settles a confirm or reauth decision: nil to go ahead, else why not.
-	Ask func(ctx context.Context, d policy.Decision, why string) error
+	Ask AskFunc
 	// Inbox, when set, keeps writes that need approval until another person decides.
 	Inbox *inbox.Inbox
+}
+
+type AskFunc func(ctx context.Context, d policy.Decision, why string) error
+
+type askKey struct{}
+
+// WithAsk settles confirm and reauth for calls run with ctx instead of the runner's Ask: a server
+// request answers for its own caller.
+func WithAsk(ctx context.Context, f AskFunc) context.Context {
+	return context.WithValue(ctx, askKey{}, f)
 }
 
 type Call struct {
@@ -113,7 +123,9 @@ func (r *Runner) Run(ctx context.Context, c Call) (_ *jobs.Job, _ *protocol.RunR
 		err = &protocol.Error{Code: protocol.CodeDenied, Message: fmt.Sprintf("%s: %s (%s)", c.Action, d, why)}
 	case policy.Confirm, policy.Reauth:
 		err = ErrDeclined
-		if r.Ask != nil {
+		if ask, ok := ctx.Value(askKey{}).(AskFunc); ok {
+			err = ask(ctx, d, why)
+		} else if r.Ask != nil {
 			err = r.Ask(ctx, d, why)
 		}
 	}
@@ -171,6 +183,9 @@ func (r *Runner) Decide(ctx context.Context, id string, approve bool, by identit
 	a, ok := r.Actions.Get(it.Action)
 	if !ok {
 		return nil, &protocol.Error{Code: protocol.CodeNotFound, Message: "no action " + it.Action}
+	}
+	if d, why := r.Policy.Decide(policy.Request{Subject: by, Action: it.Action, Effect: a.Effect, Env: it.Env}, r.Envs); d == policy.Deny || d == policy.Approve {
+		return nil, &protocol.Error{Code: protocol.CodeDenied, Message: by.String() + " may not approve " + it.Action + " (" + why + ")"}
 	}
 	it.By = by.String()
 	entry := audit.Entry{Subject: it.Subject, Action: it.Action, Args: it.Args, Effect: a.Effect, Env: it.Env, Decision: string(policy.Approve), Approver: it.By}

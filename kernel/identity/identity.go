@@ -2,6 +2,7 @@
 package identity
 
 import (
+	"context"
 	"os"
 	"os/user"
 )
@@ -44,4 +45,14 @@ func AI(on Subject) Subject {
 // Agent is a jig.yaml agent acting for on, with on's roles.
 func Agent(name string, approve []string, on Subject) Subject {
 	return Subject{Kind: KindAgent, Name: name, Roles: on.Roles, Approve: approve}
+}
+
+type ctxKey struct{}
+
+// With makes s the caller for everything run with ctx: a server request's account.
+func With(ctx context.Context, s Subject) context.Context { return context.WithValue(ctx, ctxKey{}, s) }
+
+func From(ctx context.Context) (Subject, bool) {
+	s, ok := ctx.Value(ctxKey{}).(Subject)
+	return s, ok
 }
