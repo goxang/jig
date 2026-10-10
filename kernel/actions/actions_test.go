@@ -27,7 +27,7 @@ func TestRunGoesThroughPolicyJobAndAudit(t *testing.T) {
 	asked := false
 	r := &Runner{Actions: reg, Jobs: &jobs.Manager{}, Audit: audit.Open(log),
 		Envs: map[string]policy.Env{"lt": {Protected: true}, "prod": {Readonly: true}},
-		Ask:  func(context.Context, policy.Decision, string) bool { asked = true; return false }}
+		Ask:  func(context.Context, policy.Decision, string) error { asked = true; return ErrDeclined }}
 	me := identity.Local()
 
 	j, res, err := r.Run(context.Background(), Call{Subject: me, Env: "local", Action: "runtime.restart"})

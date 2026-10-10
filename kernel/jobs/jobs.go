@@ -27,6 +27,8 @@ type Job struct {
 	// reopened later follows it again.
 	Log string
 	PID int
+	// Echo, when set, also gets everything written to the job, as written: a CLI's stdout.
+	Echo io.Writer
 
 	mu      sync.Mutex
 	cancel  context.CancelFunc
@@ -64,6 +66,9 @@ func (j *Job) Cancel() {
 }
 
 func (j *Job) Write(p []byte) (int, error) {
+	if j.Echo != nil {
+		_, _ = j.Echo.Write(p)
+	}
 	j.mu.Lock()
 	defer j.mu.Unlock()
 	s := j.partial + strings.ReplaceAll(string(p), "\r\n", "\n")

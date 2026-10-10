@@ -656,8 +656,9 @@ func (t *loadTab) configure(m *model, op, n string, lc core.LoadConfigured) tea.
 			return loadConfigMsg{comp: store, key: key, value: v, err: err}
 		}
 	case "b":
+		e := m.eng()
 		return m.act(label("restart", svcs), false, func(ctx context.Context) error {
-			return each(svcs, func(s string) error { return a.Restart(ctx, s) })
+			return each(svcs, func(s string) error { return e.Service(ctx, "runtime.restart", s) })
 		})
 	}
 	var cur []string

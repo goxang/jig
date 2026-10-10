@@ -102,6 +102,7 @@ type model struct {
 	specNoted bool
 	// jobs are the operations started this session (act, do, tasks), shown with their output under !
 	jobs      jobs.Manager
+	local     *engine.Local
 	jobSel    int
 	jobScroll int
 	actErrors bool
@@ -577,6 +578,14 @@ func (m *model) runJob(ctx context.Context, label string, f func(ctx context.Con
 		return failed(ctx, label, err)
 	}
 	return statusMsg{}
+}
+
+// eng is the Engine over the current app; actions it runs show as the model's jobs.
+func (m *model) eng() *engine.Local {
+	if m.local == nil || m.local.App != m.app {
+		m.local = engine.NewLocal(m.app, &m.jobs)
+	}
+	return m.local
 }
 
 // do runs a slow operation off the UI loop; it shows above the keys while it runs.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/goxang/jig/protocol"
 	"os"
 	"strconv"
 	"strings"
@@ -25,7 +26,7 @@ func serviceCommands() []*cobra.Command {
 		RunE: withApp(func(ctx context.Context, a *engine.App, args []string) error {
 			up.Out = os.Stdout
 			fmt.Printf("%s %s on %s\n", bold("jig up"), strings.Join(args, " "), envLabel(a))
-			return a.Up(ctx, args, up)
+			return runEcho(ctx, a, "env.up", protocol.Args{"targets": args, "options": up})
 		}),
 	}
 	upCmd.Flags().BoolVarP(&up.Build, "build", "b", false, "build images first (container runtimes)")
@@ -40,11 +41,11 @@ func serviceCommands() []*cobra.Command {
 		Use:   "down [service|group...]",
 		Short: "stop services in reverse dependency order (every app when none given; infra only when named)",
 		RunE: withApp(func(ctx context.Context, a *engine.App, args []string) error {
-			return a.Down(ctx, args, os.Stdout)
+			return runEcho(ctx, a, "env.down", protocol.Args{"targets": args})
 		}),
 	}
 
-	each := func(use, short string, f func(ctx context.Context, a *engine.App, s string) error) *cobra.Command {
+	each := func(use, short, action string) *cobra.Command {
 		return &cobra.Command{
 			Use: use + " <service|group...>", Short: short, Args: cobra.MinimumNArgs(1),
 			RunE: withApp(func(ctx context.Context, a *engine.App, args []string) error {
@@ -55,8 +56,9 @@ func serviceCommands() []*cobra.Command {
 				if err != nil {
 					return err
 				}
+				e := engine.NewLocal(a, nil)
 				return parallelNames(names, func(n string) error {
-					if err := f(ctx, a, n); err != nil {
+					if err := e.Service(ctx, action, n); err != nil {
 						return fmt.Errorf("%s: %w", n, err)
 					}
 					fmt.Printf("  %s %s\n", green("✓"), n)
@@ -65,15 +67,9 @@ func serviceCommands() []*cobra.Command {
 			}),
 		}
 	}
-	start := each("start", "start services (deploying what is not there yet)", func(ctx context.Context, a *engine.App, n string) error {
-		return a.Start(ctx, n)
-	})
-	stop := each("stop", "stop services, keeping their definitions", func(ctx context.Context, a *engine.App, n string) error {
-		return a.Stop(ctx, n)
-	})
-	restart := each("restart", "restart services (e.g. to reload their configuration)", func(ctx context.Context, a *engine.App, n string) error {
-		return a.Restart(ctx, n)
-	})
+	start := each("start", "start services (deploying what is not there yet)", "runtime.start")
+	stop := each("stop", "stop services, keeping their definitions", "runtime.stop")
+	restart := each("restart", "restart services (e.g. to reload their configuration)", "runtime.restart")
 
 	var tag, ref string
 	var noPush bool

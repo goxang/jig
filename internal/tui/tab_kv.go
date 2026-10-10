@@ -562,10 +562,10 @@ func (t *kvTab) update(m *model, msg tea.Msg) tea.Cmd {
 			return nil
 		case "R":
 			if len(t.related) > 0 {
-				names, a := t.related, m.app
+				names, e := t.related, m.eng()
 				t.related = nil
 				return m.act(label("restart", names), false, func(ctx context.Context) error {
-					return each(names, func(n string) error { return a.Restart(ctx, n) })
+					return each(names, func(n string) error { return e.Service(ctx, "runtime.restart", n) })
 				})
 			}
 		case "/":

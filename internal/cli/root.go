@@ -5,6 +5,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/goxang/jig/api"
+	"github.com/goxang/jig/kernel/jobs"
+	"github.com/goxang/jig/protocol"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -216,6 +219,16 @@ func open() (*engine.App, error) {
 		a.Ask = askYes
 	}
 	return a, nil
+}
+
+// runEcho runs action through the Engine, its output on stdout as it comes.
+func runEcho(ctx context.Context, a *engine.App, action string, args protocol.Args) error {
+	var jm jobs.Manager
+	ctx, j := jm.Start(ctx, action)
+	j.Echo = os.Stdout
+	_, _, err := engine.NewLocal(a, &jm).Run(ctx, action, args, api.RunOpts{})
+	j.Finish(err)
+	return err
 }
 
 // withApp wraps a command body that needs the project and environment.

@@ -63,7 +63,7 @@ func (r *Registry) Names() []string {
 	return out
 }
 
-// ErrDeclined is a confirm or reauth the user said no to.
+// ErrDeclined is a confirm or reauth no one was asked about.
 var ErrDeclined = errors.New("declined")
 
 type Runner struct {
@@ -73,8 +73,8 @@ type Runner struct {
 	Jobs    *jobs.Manager
 	// Audit, when set, logs every action that is not a read.
 	Audit *audit.Log
-	// Ask settles a confirm or reauth decision: true to go ahead.
-	Ask func(ctx context.Context, d policy.Decision, why string) bool
+	// Ask settles a confirm or reauth decision: nil to go ahead, else why not.
+	Ask func(ctx context.Context, d policy.Decision, why string) error
 }
 
 type Call struct {
@@ -86,7 +86,7 @@ type Call struct {
 }
 
 // Run runs c as a job and waits for it.
-func (r *Runner) Run(ctx context.Context, c Call) (*jobs.Job, *protocol.RunResult, error) {
+func (r *Runner) Run(ctx context.Context, c Call) (_ *jobs.Job, _ *protocol.RunResult, err error) {
 	a, ok := r.Actions.Get(c.Action)
 	if !ok {
 		return nil, nil, &protocol.Error{Code: protocol.CodeNotFound, Message: "no action " + c.Action}
@@ -100,28 +100,33 @@ func (r *Runner) Run(ctx context.Context, c Call) (*jobs.Job, *protocol.RunResul
 	}
 	d, why := r.Policy.Decide(policy.Request{Subject: c.Subject, Action: c.Action, Effect: a.Effect, Env: c.Env}, r.Envs)
 	entry := audit.Entry{Subject: c.Subject, Action: c.Action, Args: c.Args, Effect: a.Effect, Env: c.Env, Decision: string(d)}
-	var err error
 	switch d {
 	case policy.Deny, policy.Approve:
 		err = &protocol.Error{Code: protocol.CodeDenied, Message: fmt.Sprintf("%s: %s (%s)", c.Action, d, why)}
 	case policy.Confirm, policy.Reauth:
-		if r.Ask == nil || !r.Ask(ctx, d, why) {
-			err = ErrDeclined
+		err = ErrDeclined
+		if r.Ask != nil {
+			err = r.Ask(ctx, d, why)
 		}
 	}
 	if err != nil {
 		entry.Error = err.Error()
 		return nil, nil, errors.Join(err, r.log(a, entry))
 	}
-	ctx, j := r.Jobs.Start(ctx, c.Action)
+	// a caller already running a job (the TUI's act) keeps it, and finishes it itself
+	j := jobs.From(ctx)
+	if j == nil {
+		ctx, j = r.Jobs.Start(ctx, c.Action)
+		defer func() { j.Finish(err) }()
+	}
 	res, err := a.Run(ctx, c.Args)
-	j.Finish(err)
 	if err != nil {
 		entry.Error = err.Error()
 	} else if res != nil {
 		entry.Result = res.Message
 	}
-	return j, res, errors.Join(err, r.log(a, entry))
+	err = errors.Join(err, r.log(a, entry))
+	return j, res, err
 }
 
 func (r *Runner) log(a Action, e audit.Entry) error {

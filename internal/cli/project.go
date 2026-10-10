@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/goxang/jig/protocol"
 	"io"
 	"os"
 	"slices"
@@ -274,7 +275,10 @@ Ingress→Service, HPA→workload, workload→ConfigMap/Secret/PVC/ServiceAccoun
 				}
 				a.Confirmed = true
 			}
-			return a.RunTask(ctx, args[0], rest, os.Stdout)
+			if !ok {
+				return a.RunTask(ctx, args[0], rest, os.Stdout)
+			}
+			return runEcho(ctx, a, "task."+args[0], protocol.Args{"args": rest})
 		}),
 	}
 

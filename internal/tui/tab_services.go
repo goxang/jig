@@ -290,7 +290,7 @@ func (t *servicesTab) ops(m *model, key string, names []string) tea.Cmd {
 	if len(names) == 0 {
 		return nil
 	}
-	a := m.app
+	a, e := m.app, m.eng()
 	switch key {
 	case "s":
 		return m.act(label("start", names), false, func(ctx context.Context) error {
@@ -298,11 +298,11 @@ func (t *servicesTab) ops(m *model, key string, names []string) tea.Cmd {
 		})
 	case "x":
 		return m.act(label("stop", names), true, func(ctx context.Context) error {
-			return each(names, func(n string) error { return a.Stop(ctx, n) })
+			return each(names, func(n string) error { return e.Service(ctx, "runtime.stop", n) })
 		})
 	case "r":
 		return m.act(label("restart", names), false, func(ctx context.Context) error {
-			return each(names, func(n string) error { return a.Restart(ctx, n) })
+			return each(names, func(n string) error { return e.Service(ctx, "runtime.restart", n) })
 		})
 	case "+", "=":
 		return t.scale(m, names, 1)
