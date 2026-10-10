@@ -1,0 +1,11 @@
+{
+  "name": "@goxang/jig",
+  "version": "0.1.0",
+  "description": "Write jig plugins in TypeScript or JavaScript",
+  "type": "module",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "files": ["index.js", "index.d.ts", "protocol.js", "protocol.d.ts"],
+  "engines": { "node": ">=18" },
+  "license": "Apache-2.0"
+}

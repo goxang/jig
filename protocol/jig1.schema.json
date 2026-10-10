@@ -1,0 +1,611 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/goxang/jig/protocol/jig1.schema.json",
+  "title": "jig/1",
+  "description": "The jig plugin protocol: newline-delimited JSON-RPC 2.0 over stdio. Append-only: never remove, rename or retype anything here.",
+  "methods": {
+    "initialize": { "from": "host", "params": "InitializeParams", "result": "InitializeResult" },
+    "configure": { "from": "host", "params": "ConfigureParams", "result": "Empty" },
+    "query": { "from": "host", "params": "QueryParams", "result": "Frame" },
+    "stream": { "from": "host", "params": "StreamParams", "result": "Empty" },
+    "run": { "from": "host", "params": "RunParams", "result": "RunResult" },
+    "plan": { "from": "host", "params": "RunParams", "result": "RunResult" },
+    "import": { "from": "host", "params": "ImportParams", "result": "ImportResult" },
+    "complete": { "from": "host", "params": "CompleteParams", "result": "CompleteResult" },
+    "render": { "from": "host", "params": "RenderParams", "result": "Node" },
+    "view.event": { "from": "host", "params": "ViewEventParams", "result": "Node" },
+    "widget.render": { "from": "host", "params": "WidgetRenderParams", "result": "WidgetRenderResult" },
+    "resolve": { "from": "host", "params": "ResolveParams", "result": "Resolved" },
+    "search": { "from": "host", "params": "SearchParams", "result": "SearchResult" },
+    "doctor": { "from": "host", "params": "DoctorParams", "result": "DoctorResult" },
+    "event": { "from": "host", "params": "Event", "result": "Empty" },
+    "shutdown": { "from": "host", "params": "Empty", "result": "Empty" },
+    "host/query": { "from": "plugin", "params": "QueryParams", "result": "Frame" },
+    "host/run": { "from": "plugin", "params": "RunParams", "result": "RunResult" },
+    "host/ask": { "from": "plugin", "params": "AskParams", "result": "AskResult" },
+    "host/ai": { "from": "plugin", "params": "AIParams", "result": "AIResult" },
+    "host/state.get": { "from": "plugin", "params": "StateGetParams", "result": "StateValue" },
+    "host/state.set": { "from": "plugin", "params": "StateSetParams", "result": "Empty" },
+    "host/secret": { "from": "plugin", "params": "SecretParams", "result": "SecretValue" },
+    "host/emit": { "from": "plugin", "params": "Event", "result": "Empty" },
+    "host/log": { "from": "plugin", "params": "LogParams", "notify": true },
+    "$/cancel": { "from": "any", "params": "CancelParams", "notify": true },
+    "$/progress": { "from": "plugin", "params": "Progress", "notify": true },
+    "$/stream": { "from": "plugin", "params": "StreamBatch", "notify": true },
+    "$/ack": { "from": "host", "params": "Ack", "notify": true }
+  },
+  "errors": {
+    "ParseError": -32700,
+    "InvalidRequest": -32600,
+    "MethodNotFound": -32601,
+    "InvalidParams": -32602,
+    "Internal": -32603,
+    "Denied": -32001,
+    "NotFound": -32002,
+    "Unavailable": -32003,
+    "Conflict": -32004,
+    "NeedsInput": -32005
+  },
+  "$defs": {
+    "Empty": { "type": "object", "description": "No fields." },
+    "Ref": { "type": "string", "description": "A URI whose scheme a plugin or core owns: svc://api, k8s://ns/deployment/api." },
+    "Args": { "type": "object", "additionalProperties": {}, "description": "Arguments, validated by the source's or action's args schema." },
+    "Schema": { "type": "object", "additionalProperties": {}, "description": "A JSON Schema." },
+    "Message": {
+      "type": "object",
+      "description": "One JSON-RPC 2.0 message: a request (id and method), a notification (method only) or a response (id and result or error).",
+      "required": ["jsonrpc"],
+      "properties": {
+        "jsonrpc": { "type": "string", "enum": ["2.0"] },
+        "id": { "description": "A number or a string; absent on notifications." },
+        "method": { "type": "string" },
+        "params": {},
+        "result": {},
+        "error": { "$ref": "#/$defs/Error" }
+      }
+    },
+    "Error": {
+      "type": "object",
+      "required": ["code", "message"],
+      "properties": {
+        "code": { "type": "integer" },
+        "message": { "type": "string" },
+        "data": { "$ref": "#/$defs/ErrorData" }
+      }
+    },
+    "ErrorData": {
+      "type": "object",
+      "properties": {
+        "hint": { "type": "string", "description": "What to do about it, such as the tool to install." }
+      }
+    },
+    "Context": {
+      "type": "object",
+      "description": "Travels with every call.",
+      "properties": {
+        "project": { "type": "string" },
+        "env": { "type": "string" },
+        "user": { "type": "string" },
+        "roles": { "type": "array", "items": { "type": "string" } },
+        "scope": { "$ref": "#/$defs/Scope" },
+        "trace_id": { "type": "string" },
+        "deadline": { "type": "string", "description": "RFC 3339." },
+        "dry_run": { "type": "boolean" }
+      }
+    },
+    "Scope": {
+      "type": "object",
+      "properties": {
+        "service": { "type": "string" },
+        "selection": { "type": "array", "items": { "$ref": "#/$defs/Ref" } },
+        "range": { "$ref": "#/$defs/TimeRange" }
+      }
+    },
+    "TimeRange": {
+      "type": "object",
+      "properties": {
+        "from": { "type": "string", "description": "RFC 3339 or relative, such as -15m." },
+        "to": { "type": "string" },
+        "step": { "type": "string" }
+      }
+    },
+    "HostInfo": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" }
+      }
+    },
+    "InitializeParams": {
+      "type": "object",
+      "required": ["host", "protocols"],
+      "properties": {
+        "host": { "$ref": "#/$defs/HostInfo" },
+        "protocols": { "type": "array", "items": { "type": "string" }, "description": "Protocol versions the host speaks, such as jig/1." },
+        "capabilities": { "$ref": "#/$defs/HostCapabilities" }
+      }
+    },
+    "HostCapabilities": {
+      "type": "object",
+      "properties": {
+        "widgets": { "type": "object", "additionalProperties": { "type": "integer" }, "description": "Widget kind to the highest version the host renders." },
+        "features": { "type": "array", "items": { "type": "string" } },
+        "contracts": { "type": "array", "items": { "type": "string" }, "description": "Contract versions the host has views for, such as metrics/1." }
+      }
+    },
+    "InitializeResult": {
+      "type": "object",
+      "required": ["name", "protocol"],
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" },
+        "protocol": { "type": "string", "description": "The protocol version chosen from the host's list." },
+        "provides": { "$ref": "#/$defs/Provides" },
+        "capabilities": { "type": "array", "items": { "type": "string" }, "description": "Optional methods and features the plugin supports, such as stream or plan." }
+      }
+    },
+    "Provides": {
+      "type": "object",
+      "properties": {
+        "sources": { "type": "object", "additionalProperties": { "$ref": "#/$defs/SourceSpec" } },
+        "actions": { "type": "object", "additionalProperties": { "$ref": "#/$defs/ActionSpec" } },
+        "importers": { "type": "object", "additionalProperties": { "$ref": "#/$defs/ImporterSpec" } },
+        "views": { "type": "object", "additionalProperties": { "$ref": "#/$defs/ViewSpec" } },
+        "widgets": { "type": "array", "items": { "type": "string" } },
+        "schemes": { "type": "array", "items": { "type": "string" } },
+        "languages": { "type": "array", "items": { "type": "string" } },
+        "implements": { "type": "array", "items": { "type": "string" } },
+        "events": { "type": "array", "items": { "type": "string" } },
+        "search": { "type": "boolean" }
+      }
+    },
+    "SourceSpec": {
+      "type": "object",
+      "properties": {
+        "description": { "type": "string" },
+        "args": { "$ref": "#/$defs/Schema" },
+        "cache": { "type": "string", "description": "How long a result stays fresh, such as 30s." },
+        "stream": { "type": "boolean" },
+        "language": { "type": "string" }
+      }
+    },
+    "ActionSpec": {
+      "type": "object",
+      "required": ["effect"],
+      "properties": {
+        "description": { "type": "string" },
+        "effect": { "type": "string", "enum": ["read", "write", "danger"] },
+        "args": { "$ref": "#/$defs/Schema" },
+        "plan": { "type": "boolean", "description": "Supports a dry run." },
+        "keys": { "type": "array", "items": { "type": "string" } },
+        "on": { "type": "array", "items": { "type": "string" }, "description": "Schemes, kinds or sources whose menus list it." }
+      }
+    },
+    "ImporterSpec": {
+      "type": "object",
+      "properties": {
+        "description": { "type": "string" },
+        "files": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "ViewSpec": {
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "slot": { "type": "string", "description": "tab, subtab:<view>, service.section, detail:<scheme>, panel or home." },
+        "key": { "type": "string" }
+      }
+    },
+    "ConfigureParams": {
+      "type": "object",
+      "properties": {
+        "config": { "$ref": "#/$defs/Args" },
+        "components": { "type": "object", "additionalProperties": { "$ref": "#/$defs/Args" } },
+        "secrets": { "type": "object", "additionalProperties": { "type": "string" } },
+        "context": { "$ref": "#/$defs/Context" }
+      }
+    },
+    "Field": {
+      "type": "object",
+      "required": ["name", "type"],
+      "properties": {
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["string", "number", "int", "bool", "time", "duration", "bytes", "json", "ref"] },
+        "unit": { "type": "string" },
+        "ref": { "type": "string", "description": "A ref template over the row, such as svc://{service}." }
+      }
+    },
+    "FrameMeta": {
+      "type": "object",
+      "properties": {
+        "total": { "type": "integer" },
+        "next": { "type": "string", "description": "Cursor for the next page; empty when there is none." },
+        "notice": { "type": "string" }
+      }
+    },
+    "Frame": {
+      "type": "object",
+      "description": "Columnar, typed, renderer-neutral data. columns[i] holds every value of fields[i]. time is Unix seconds, duration is seconds.",
+      "required": ["fields", "columns"],
+      "properties": {
+        "name": { "type": "string" },
+        "fields": { "type": "array", "items": { "$ref": "#/$defs/Field" } },
+        "columns": { "type": "array", "items": { "type": "array", "items": {} } },
+        "meta": { "$ref": "#/$defs/FrameMeta" }
+      }
+    },
+    "QueryParams": {
+      "type": "object",
+      "required": ["source"],
+      "properties": {
+        "source": { "type": "string" },
+        "component": { "type": "string" },
+        "args": { "$ref": "#/$defs/Args" },
+        "cursor": { "type": "string" },
+        "context": { "$ref": "#/$defs/Context" }
+      }
+    },
+    "StreamParams": {
+      "type": "object",
+      "required": ["id", "source"],
+      "properties": {
+        "id": { "type": "string", "description": "Names the stream in $/stream, $/ack and $/cancel." },
+        "source": { "type": "string" },
+        "component": { "type": "string" },
+        "args": { "$ref": "#/$defs/Args" },
+        "context": { "$ref": "#/$defs/Context" }
+      }
+    },
+    "StreamBatch": {
+      "type": "object",
+      "required": ["id", "seq"],
+      "properties": {
+        "id": { "type": "string" },
+        "seq": { "type": "integer", "description": "Starts at 1; $/ack names the last seq the host consumed." },
+        "frame": { "$ref": "#/$defs/Frame" },
+        "lines": { "type": "array", "items": { "type": "string" } },
+        "done": { "type": "boolean" },
+        "error": { "$ref": "#/$defs/Error" }
+      }
+    },
+    "Ack": {
+      "type": "object",
+      "required": ["id", "seq"],
+      "properties": {
+        "id": { "type": "string" },
+        "seq": { "type": "integer" }
+      }
+    },
+    "RunParams": {
+      "type": "object",
+      "required": ["action"],
+      "properties": {
+        "action": { "type": "string" },
+        "component": { "type": "string" },
+        "args": { "$ref": "#/$defs/Args" },
+        "job": { "type": "string", "description": "The job id progress is reported against." },
+        "context": { "$ref": "#/$defs/Context" }
+      }
+    },
+    "RunResult": {
+      "type": "object",
+      "properties": {
+        "message": { "type": "string" },
+        "frame": { "$ref": "#/$defs/Frame" },
+        "refs": { "type": "array", "items": { "$ref": "#/$defs/Ref" } },
+        "outputs": { "$ref": "#/$defs/Args" },
+        "changes": { "type": "array", "items": { "$ref": "#/$defs/Change" }, "description": "What a plan would do, or what a run did." }
+      }
+    },
+    "Change": {
+      "type": "object",
+      "required": ["op", "target"],
+      "properties": {
+        "op": { "type": "string", "enum": ["create", "update", "delete", "run"] },
+        "target": { "$ref": "#/$defs/Ref" },
+        "detail": { "type": "string" }
+      }
+    },
+    "Progress": {
+      "type": "object",
+      "required": ["job"],
+      "properties": {
+        "job": { "type": "string" },
+        "message": { "type": "string" },
+        "line": { "type": "string", "description": "One line of output." },
+        "done": { "type": "integer" },
+        "total": { "type": "integer" }
+      }
+    },
+    "CancelParams": {
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": { "description": "The request id, or a stream id." }
+      }
+    },
+    "ImportParams": {
+      "type": "object",
+      "required": ["importer"],
+      "properties": {
+        "importer": { "type": "string" },
+        "files": { "type": "array", "items": { "type": "string" } },
+        "dir": { "type": "string" },
+        "config": { "$ref": "#/$defs/Args" }
+      }
+    },
+    "ImportResult": {
+      "type": "object",
+      "required": ["fragment"],
+      "properties": {
+        "fragment": { "$ref": "#/$defs/Args", "description": "A jig.yaml fragment." },
+        "watch": { "type": "array", "items": { "type": "string" }, "description": "Files whose change re-runs the import." },
+        "warnings": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "CompleteParams": {
+      "type": "object",
+      "required": ["language", "text", "pos"],
+      "properties": {
+        "language": { "type": "string" },
+        "text": { "type": "string" },
+        "pos": { "type": "integer", "description": "Byte offset of the cursor." },
+        "context": { "$ref": "#/$defs/Context" }
+      }
+    },
+    "Completion": {
+      "type": "object",
+      "required": ["label"],
+      "properties": {
+        "label": { "type": "string" },
+        "insert": { "type": "string" },
+        "detail": { "type": "string" },
+        "kind": { "type": "string" }
+      }
+    },
+    "CompleteResult": {
+      "type": "object",
+      "required": ["items"],
+      "properties": {
+        "items": { "type": "array", "items": { "$ref": "#/$defs/Completion" } }
+      }
+    },
+    "Node": {
+      "type": "object",
+      "description": "A widget tree node.",
+      "required": ["widget"],
+      "properties": {
+        "widget": { "type": "string", "description": "A widget kind, optionally versioned: table@1." },
+        "id": { "type": "string" },
+        "props": { "$ref": "#/$defs/Args" },
+        "bind": { "$ref": "#/$defs/Binding" },
+        "children": { "type": "array", "items": { "$ref": "#/$defs/Node" } },
+        "fallback": { "$ref": "#/$defs/Node", "description": "What a host without this widget renders." }
+      }
+    },
+    "Binding": {
+      "type": "object",
+      "properties": {
+        "source": { "type": "string" },
+        "args": { "$ref": "#/$defs/Args" },
+        "every": { "type": "string" }
+      }
+    },
+    "RenderParams": {
+      "type": "object",
+      "required": ["view"],
+      "properties": {
+        "view": { "type": "string" },
+        "args": { "$ref": "#/$defs/Args" },
+        "context": { "$ref": "#/$defs/Context" }
+      }
+    },
+    "ViewEventParams": {
+      "type": "object",
+      "required": ["view", "event"],
+      "properties": {
+        "view": { "type": "string" },
+        "node": { "type": "string" },
+        "event": { "type": "string" },
+        "value": {},
+        "context": { "$ref": "#/$defs/Context" }
+      }
+    },
+    "Size": {
+      "type": "object",
+      "required": ["w", "h"],
+      "properties": {
+        "w": { "type": "integer" },
+        "h": { "type": "integer" }
+      }
+    },
+    "WidgetRenderParams": {
+      "type": "object",
+      "required": ["widget", "size"],
+      "properties": {
+        "widget": { "type": "string" },
+        "props": { "$ref": "#/$defs/Args" },
+        "frame": { "$ref": "#/$defs/Frame" },
+        "size": { "$ref": "#/$defs/Size" },
+        "theme": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Theme token to colour." }
+      }
+    },
+    "WidgetRenderResult": {
+      "type": "object",
+      "required": ["lines"],
+      "properties": {
+        "lines": { "type": "array", "items": { "type": "string" }, "description": "At most size.h lines of at most size.w cells; ANSI SGR allowed." }
+      }
+    },
+    "ResolveParams": {
+      "type": "object",
+      "required": ["ref"],
+      "properties": {
+        "ref": { "$ref": "#/$defs/Ref" },
+        "context": { "$ref": "#/$defs/Context" }
+      }
+    },
+    "Link": {
+      "type": "object",
+      "required": ["ref"],
+      "properties": {
+        "ref": { "$ref": "#/$defs/Ref" },
+        "rel": { "type": "string" },
+        "title": { "type": "string" }
+      }
+    },
+    "Resolved": {
+      "type": "object",
+      "required": ["ref"],
+      "properties": {
+        "ref": { "$ref": "#/$defs/Ref" },
+        "kind": { "type": "string" },
+        "title": { "type": "string" },
+        "view": { "type": "string" },
+        "url": { "type": "string" },
+        "fields": { "$ref": "#/$defs/Args" },
+        "actions": { "type": "array", "items": { "type": "string" } },
+        "links": { "type": "array", "items": { "$ref": "#/$defs/Link" } }
+      }
+    },
+    "SearchParams": {
+      "type": "object",
+      "required": ["query"],
+      "properties": {
+        "query": { "type": "string" },
+        "limit": { "type": "integer" },
+        "context": { "$ref": "#/$defs/Context" }
+      }
+    },
+    "Hit": {
+      "type": "object",
+      "required": ["ref", "title"],
+      "properties": {
+        "ref": { "$ref": "#/$defs/Ref" },
+        "title": { "type": "string" },
+        "kind": { "type": "string" },
+        "detail": { "type": "string" }
+      }
+    },
+    "SearchResult": {
+      "type": "object",
+      "required": ["hits"],
+      "properties": {
+        "hits": { "type": "array", "items": { "$ref": "#/$defs/Hit" } }
+      }
+    },
+    "DoctorParams": {
+      "type": "object",
+      "properties": {
+        "context": { "$ref": "#/$defs/Context" }
+      }
+    },
+    "Check": {
+      "type": "object",
+      "required": ["name", "ok"],
+      "properties": {
+        "name": { "type": "string" },
+        "ok": { "type": "boolean" },
+        "message": { "type": "string" },
+        "hint": { "type": "string" }
+      }
+    },
+    "DoctorResult": {
+      "type": "object",
+      "required": ["checks"],
+      "properties": {
+        "checks": { "type": "array", "items": { "$ref": "#/$defs/Check" } }
+      }
+    },
+    "Event": {
+      "type": "object",
+      "required": ["topic"],
+      "properties": {
+        "topic": { "type": "string", "description": "Such as deploy.finished or alert.firing." },
+        "time": { "type": "string" },
+        "source": { "type": "string" },
+        "refs": { "type": "array", "items": { "$ref": "#/$defs/Ref" } },
+        "data": { "$ref": "#/$defs/Args" }
+      }
+    },
+    "AskParams": {
+      "type": "object",
+      "required": ["kind", "prompt"],
+      "properties": {
+        "kind": { "type": "string", "enum": ["input", "confirm", "pick", "secret"] },
+        "prompt": { "type": "string" },
+        "options": { "type": "array", "items": { "type": "string" } },
+        "default": { "type": "string" }
+      }
+    },
+    "AskResult": {
+      "type": "object",
+      "required": ["ok"],
+      "properties": {
+        "ok": { "type": "boolean", "description": "False when the user cancelled." },
+        "value": { "type": "string" }
+      }
+    },
+    "AIParams": {
+      "type": "object",
+      "required": ["prompt"],
+      "properties": {
+        "prompt": { "type": "string" },
+        "system": { "type": "string" },
+        "max_tokens": { "type": "integer" }
+      }
+    },
+    "AIResult": {
+      "type": "object",
+      "required": ["text"],
+      "properties": {
+        "text": { "type": "string" }
+      }
+    },
+    "StateGetParams": {
+      "type": "object",
+      "required": ["key"],
+      "properties": {
+        "key": { "type": "string" }
+      }
+    },
+    "StateValue": {
+      "type": "object",
+      "properties": {
+        "value": {},
+        "found": { "type": "boolean" }
+      }
+    },
+    "StateSetParams": {
+      "type": "object",
+      "required": ["key"],
+      "properties": {
+        "key": { "type": "string" },
+        "value": {}
+      }
+    },
+    "SecretParams": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string" }
+      }
+    },
+    "SecretValue": {
+      "type": "object",
+      "required": ["value"],
+      "properties": {
+        "value": { "type": "string" }
+      }
+    },
+    "LogParams": {
+      "type": "object",
+      "required": ["level", "message"],
+      "properties": {
+        "level": { "type": "string", "enum": ["debug", "info", "warn", "error"] },
+        "message": { "type": "string" }
+      }
+    }
+  }
+}
