@@ -217,7 +217,9 @@ func (in *Installer) resolve(ctx context.Context, lock *Lock, roots map[string]s
 	g.SetLimit(4)
 	var mu sync.Mutex
 	for n, v := range chosen {
+		mu.Lock()
 		old := lock.Plugins[n]
+		mu.Unlock()
 		if old != nil && old.Version == v && exists(filepath.Join(storePath(n, v), ManifestFile)) {
 			continue
 		}
