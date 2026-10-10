@@ -1,9 +1,10 @@
 package tui
 
 import (
-	"github.com/goxang/rig/core"
 	"strings"
 	"testing"
+
+	"github.com/goxang/jig/core"
 )
 
 func TestSelectionStaysInItsBox(t *testing.T) {

@@ -7,8 +7,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/goxang/rig/ai"
-	"github.com/goxang/rig/spec"
+	"github.com/goxang/jig/ai"
+	"github.com/goxang/jig/spec"
 )
 
 // AI is the assistant's runner for this project and environment; sock is the bridge that answers
@@ -45,7 +45,7 @@ func (a *App) AuditFile() string { return filepath.Join(a.StateDir(), "ai-audit.
 // Redactor takes this project's secrets out of text bound for a model (ai.Redactor).
 func (a *App) Redactor() *ai.Redactor { return ai.NewRedactor(a.KnownSecrets()) }
 
-// KnownSecrets are the values rig knows to be secret, by name: secrets:, the ${NAME}s with a secret's
+// KnownSecrets are the values jig knows to be secret, by name: secrets:, the ${NAME}s with a secret's
 // name taken from the environment, and the env vars, variables and component fields named like one.
 func (a *App) KnownSecrets() map[string]string {
 	out := a.Spec.SecretValues()

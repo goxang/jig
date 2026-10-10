@@ -3,8 +3,8 @@ package engine
 import (
 	"testing"
 
-	"github.com/goxang/rig/core"
-	"github.com/goxang/rig/spec"
+	"github.com/goxang/jig/core"
+	"github.com/goxang/jig/spec"
 )
 
 func TestAlertLevels(t *testing.T) {

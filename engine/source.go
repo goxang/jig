@@ -13,12 +13,12 @@ import (
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 
-	"github.com/goxang/rig/internal/sh"
+	"github.com/goxang/jig/internal/sh"
 )
 
 var sourceMu sync.Mutex
 
-// Source exports a git ref of the project's repository into the user cache (rig/src/<commit>, once
+// Source exports a git ref of the project's repository into the user cache (jig/src/<commit>, once
 // per commit) and returns the directory that corresponds to the project directory inside it.
 func (a *App) Source(ctx context.Context, ref string) (string, error) {
 	sourceMu.Lock()
@@ -47,7 +47,7 @@ func (a *App) Source(ctx context.Context, ref string) (string, error) {
 	if err != nil {
 		cache = os.TempDir()
 	}
-	root := filepath.Join(cache, "rig", "src", commit[:12])
+	root := filepath.Join(cache, "jig", "src", commit[:12])
 	if _, err := os.Stat(filepath.Join(root, ".complete")); err == nil {
 		return filepath.Join(root, rel), nil
 	}
@@ -55,7 +55,7 @@ func (a *App) Source(ctx context.Context, ref string) (string, error) {
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		return "", err
 	}
-	c := sh.New(sh.Shell(), "-c", "git archive --format=tar "+commit+" | tar -x -C "+shellQuote(root))
+	c := sh.New("sh", "-c", "git archive --format=tar "+commit+" | tar -x -C "+shellQuote(root))
 	c.Dir = top
 	if err := c.Run(ctx); err != nil {
 		return "", fmt.Errorf("export %s: %w", ref, err)

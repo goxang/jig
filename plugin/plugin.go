@@ -9,8 +9,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/goxang/rig/core"
-	"github.com/goxang/rig/spec"
+	"github.com/goxang/jig/core"
+	"github.com/goxang/jig/spec"
 )
 
 type Factory func(env core.Env, c *spec.Component) (any, error)
@@ -81,7 +81,7 @@ func Resolve(c *spec.Component) (Adapter, error) {
 	case 1:
 		return found[0], nil
 	case 0:
-		return Adapter{}, fmt.Errorf("component %s: unknown type %q (see `rig plugins`)", c.Name, c.Type)
+		return Adapter{}, fmt.Errorf("component %s: unknown type %q (see `jig plugins`)", c.Name, c.Type)
 	}
 	var kinds []string
 	for _, a := range found {

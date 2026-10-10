@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/goxang/rig/internal/sh"
 )
 
 // kvSourceFiles are the files a kv component names in files: (globs from the project directory):
@@ -106,7 +105,7 @@ func fieldLine(raw []byte, path string) int {
 func (t *kvTab) openSource(m *model, key, path string) tea.Cmd {
 	files := kvSourceFiles(m, t.comp)
 	if len(files) == 0 {
-		m.setStatus("no source files: give the "+t.comp+" component files: [globs] in rig.yaml", true)
+		m.setStatus("no source files: give the "+t.comp+" component files: [globs] in jig.yaml", true)
 		return nil
 	}
 	found, line := locateKey(files, key, path)
@@ -145,6 +144,6 @@ func openFileAt(file string, line int) tea.Cmd {
 		file += ":" + strconv.Itoa(line)
 		arg = " -g"
 	}
-	c := exec.Command(sh.Shell(), "-c", ed+arg+` "$1"`, "rig-edit", file)
+	c := exec.Command("sh", "-c", ed+arg+` "$1"`, "jig-edit", file)
 	return execProcess(c, func(error) tea.Msg { return nil })
 }

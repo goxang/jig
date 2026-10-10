@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/goxang/rig/core"
+	"github.com/goxang/jig/core"
 )
 
 var Default = &http.Client{Timeout: 30 * time.Second}

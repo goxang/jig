@@ -7,7 +7,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/goxang/rig/core"
+	"github.com/goxang/jig/core"
 )
 
 func TestLineChartFitsItsBox(t *testing.T) {

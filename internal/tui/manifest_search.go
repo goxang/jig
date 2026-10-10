@@ -7,7 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"gopkg.in/yaml.v3"
 
-	"github.com/goxang/rig/manifest"
+	"github.com/goxang/jig/manifest"
 )
 
 // manifestHit is one search row: an object, the path of one of its fields (empty for the object

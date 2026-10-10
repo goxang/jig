@@ -11,10 +11,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/goxang/rig/core"
-	"github.com/goxang/rig/internal/kubectx"
-	"github.com/goxang/rig/internal/sh"
-	"github.com/goxang/rig/spec"
+	"github.com/goxang/jig/core"
+	"github.com/goxang/jig/internal/kubectx"
+	"github.com/goxang/jig/internal/sh"
+	"github.com/goxang/jig/spec"
 )
 
 type CheckStatus string
@@ -25,7 +25,7 @@ const (
 	CheckFail CheckStatus = "fail"
 )
 
-// Check is one line of `rig doctor`.
+// Check is one line of `jig doctor`.
 type Check struct {
 	Name   string      `json:"name"`
 	Status CheckStatus `json:"status"`
@@ -53,10 +53,10 @@ var toolFix = map[string]string{
 func (a *App) Doctor(ctx context.Context) []Check {
 	var out []Check
 	add := func(c Check) { out = append(out, c) }
-	add(Check{Name: "rig.yaml", Status: CheckOK, Detail: a.Spec.File})
+	add(Check{Name: "jig.yaml", Status: CheckOK, Detail: a.Spec.File})
 	if len(a.Spec.Unset) > 0 {
 		add(Check{Name: "variables", Status: CheckFail, Detail: "unset: " + strings.Join(a.Spec.Unset, ", "),
-			Fix: "export them, rig secret set NAME, or give them a default (${NAME:-value}, secrets:, vars:)"})
+			Fix: "export them, jig secret set NAME, or give them a default (${NAME:-value}, secrets:, vars:)"})
 	} else {
 		add(Check{Name: "variables", Status: CheckOK, Detail: "every ${NAME} is set"})
 	}
@@ -81,7 +81,7 @@ func (a *App) Doctor(ctx context.Context) []Check {
 	c, cancel := context.WithTimeout(ctx, 20*time.Second)
 	_, err := a.runtime.Discover(c)
 	cancel()
-	fix := "is it running? rig -e " + a.Env.Name + " up; else check its address in rig.yaml"
+	fix := "is it running? jig -e " + a.Env.Name + " up; else check its address in jig.yaml"
 	if err != nil {
 		add(Check{Name: "runtime " + typ, Status: CheckFail, Detail: firstLine(err), Fix: runtimeFix(typ)})
 		fix = "fix the runtime first: most components are reached through it"
@@ -97,9 +97,9 @@ func runtimeFix(typ string) string {
 	case "docker":
 		return "start the Docker daemon (Docker Desktop, or: sudo systemctl start docker)"
 	case "kind":
-		return "start Docker, then create the cluster: rig do runtime create"
+		return "start Docker, then create the cluster: jig do runtime create"
 	case "kubernetes":
-		return "check the cluster is up and your kubeconfig can reach it (kubectl --context <context> get ns); an expired one: rig kubeconfig"
+		return "check the cluster is up and your kubeconfig can reach it (kubectl --context <context> get ns); an expired one: jig kubeconfig"
 	}
 	return ""
 }
@@ -124,7 +124,7 @@ func (a *App) contextCheck(ctx context.Context) Check {
 	c, err := kubectx.Resolve(opt.Context, opt.Server)
 	if err != nil {
 		return Check{Name: "kube context", Status: CheckFail, Detail: firstLine(err),
-			Fix: "rig kubeconfig fetches the cluster's kubeconfig, or rename yours: kubectl config rename-context <yours> " + opt.Context}
+			Fix: "jig kubeconfig fetches the cluster's kubeconfig, or rename yours: kubectl config rename-context <yours> " + opt.Context}
 	}
 	return Check{Name: "kube context", Status: CheckOK, Detail: c}
 }
@@ -161,7 +161,7 @@ func (a *App) portChecks(ctx context.Context) []Check {
 	}
 	if len(busy) > 0 {
 		return []Check{{Name: "ports", Status: CheckWarn, Detail: "taken by something else: " + strings.Join(busy, ", "),
-			Fix: "stop what holds them (ss -ltnp | grep :<port>), or change the port in rig.yaml"}}
+			Fix: "stop what holds them (ss -ltnp | grep :<port>), or change the port in jig.yaml"}}
 	}
 	return []Check{{Name: "ports", Status: CheckOK, Detail: "free for every service not running"}}
 }
@@ -240,7 +240,7 @@ func (a *App) Reach(ctx context.Context, name string) error {
 	case core.Messaging:
 		_, err = c.Queues(ctx)
 	case core.KV:
-		_, _, err = c.Get(ctx, "rig-doctor")
+		_, _, err = c.Get(ctx, "jig-doctor")
 	case core.Tracing:
 		_, err = c.Services(ctx)
 	case core.Metrics:

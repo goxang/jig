@@ -1,5 +1,5 @@
 // Package ide writes the project's services into GoLand and VS Code, so they can be watched, stopped
-// and debugged from the IDE while rig runs them.
+// and debugged from the IDE while jig runs them.
 package ide
 
 import (
@@ -13,10 +13,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/goxang/rig/core"
-	"github.com/goxang/rig/engine"
-	"github.com/goxang/rig/internal/sh"
-	"github.com/goxang/rig/spec"
+	"github.com/goxang/jig/core"
+	"github.com/goxang/jig/engine"
+	"github.com/goxang/jig/internal/sh"
+	"github.com/goxang/jig/spec"
 )
 
 // Result says what Write wrote.
@@ -37,12 +37,12 @@ func Write(a *engine.App, names []string) (Result, error) {
 	if err != nil {
 		return r, err
 	}
-	rig := shellQuote(self) + " -f " + shellQuote(a.Spec.File) + " -e " + shellQuote(a.Env.Name)
+	jig := shellQuote(self) + " -f " + shellQuote(a.Spec.File) + " -e " + shellQuote(a.Env.Name)
 	dir := filepath.Join(a.Spec.Dir, ".idea", "runConfigurations")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return r, err
 	}
-	old, _ := filepath.Glob(filepath.Join(dir, "rig_*.xml"))
+	old, _ := filepath.Glob(filepath.Join(dir, "jig_*.xml"))
 	for _, f := range old {
 		_ = os.Remove(f)
 	}
@@ -51,14 +51,14 @@ func Write(a *engine.App, names []string) (Result, error) {
 	var goSvcs []string
 	for _, n := range names {
 		s := a.Spec.Services[n]
-		folder := "rig · " + sections[n]
-		attach := "exec " + rig + " attach " + shellQuote(n)
+		folder := "jig · " + sections[n]
+		attach := "exec " + jig + " attach " + shellQuote(n)
 		switch {
 		case s.Role == spec.RoleInfra:
 			// shared with other environments: GoLand's stop only stops following it
-			folder, attach = "rig · infra", attach+" --keep"
+			folder, attach = "jig · infra", attach+" --keep"
 		case sections[n] == "":
-			folder = "rig · other"
+			folder = "jig · other"
 		}
 		folders[folder] = true
 		isGo := s.Build != nil && s.Build.Go != ""
@@ -68,8 +68,8 @@ func Write(a *engine.App, names []string) (Result, error) {
 			// the Go Remote config runs the starter first: it starts the service when it is down and
 			// leaves its debugger in the background on the stable port, on any runtime
 			helper := n + " · dlv"
-			files[helper] = shConfig(helper, "rig · debugger starters", "exec "+rig+" debug --detach --start "+shellQuote(n))
-			files[n+" · stop debugger"] = shConfig(n+" · stop debugger", "rig · debugger starters", "exec "+rig+" debug --stop "+shellQuote(n))
+			files[helper] = shConfig(helper, "jig · debugger starters", "exec "+jig+" debug --detach --start "+shellQuote(n))
+			files[n+" · stop debugger"] = shConfig(n+" · stop debugger", "jig · debugger starters", "exec "+jig+" debug --stop "+shellQuote(n))
 			files[n+" · debug"] = remoteConfig(n+" · debug", folder, core.DebugPort(n), helper)
 		}
 		for name, xml := range files {
@@ -94,7 +94,7 @@ func Write(a *engine.App, names []string) (Result, error) {
 }
 
 func fileName(config string) string {
-	return "rig_" + strings.NewReplacer("-", "_", ".", "_", " ", "_", "·", "", "/", "_").Replace(config) + ".xml"
+	return "jig_" + strings.NewReplacer("-", "_", ".", "_", " ", "_", "·", "", "/", "_").Replace(config) + ".xml"
 }
 
 func shellQuote(s string) string {
@@ -203,18 +203,18 @@ func showInServices(path string) error {
 	return os.WriteFile(path, []byte(text), 0o644)
 }
 
-// vscode writes the configs between "// rig:begin" and "// rig:end" at the top of launch.json's
+// vscode writes the configs between "// jig:begin" and "// jig:end" at the top of launch.json's
 // configurations, as text: launch.json is JSONC (comments, trailing commas), which VS Code reads and
 // encoding/json does not, so the rest of the file is left byte for byte.
 func vscode(dir string, svcs []string) (string, error) {
 	path := filepath.Join(dir, ".vscode", "launch.json")
 	var block strings.Builder
-	block.WriteString("\n    // rig:begin (rig ide rewrites this block)\n")
+	block.WriteString("\n    // jig:begin (jig ide rewrites this block)\n")
 	for _, s := range svcs {
-		c, _ := json.Marshal(map[string]any{"name": "rig: " + s, "type": "go", "request": "attach", "mode": "remote", "host": "127.0.0.1", "port": core.DebugPort(s)})
+		c, _ := json.Marshal(map[string]any{"name": "jig: " + s, "type": "go", "request": "attach", "mode": "remote", "host": "127.0.0.1", "port": core.DebugPort(s)})
 		block.WriteString("    " + string(c) + ",\n")
 	}
-	block.WriteString("    // rig:end")
+	block.WriteString("    // jig:end")
 	raw, err := os.ReadFile(path)
 	text := string(raw)
 	switch {
@@ -223,8 +223,8 @@ func vscode(dir string, svcs []string) (string, error) {
 	case err != nil:
 		return "", err
 	default:
-		if b, e := strings.Index(text, "\n    // rig:begin"), strings.Index(text, "// rig:end"); b >= 0 && e > b {
-			text = text[:b] + text[e+len("// rig:end"):]
+		if b, e := strings.Index(text, "\n    // jig:begin"), strings.Index(text, "// jig:end"); b >= 0 && e > b {
+			text = text[:b] + text[e+len("// jig:end"):]
 		}
 		i := strings.Index(text, `"configurations"`)
 		j := strings.Index(text[max(i, 0):], "[")
@@ -241,9 +241,9 @@ func vscode(dir string, svcs []string) (string, error) {
 	return rel, os.WriteFile(path, []byte(text), 0o644)
 }
 
-// GoLand finds the GoLand launcher: $RIG_GOLAND, PATH, then where JetBrains Toolbox and snap put it.
+// GoLand finds the GoLand launcher: $JIG_GOLAND, PATH, then where JetBrains Toolbox and snap put it.
 func GoLand() string {
-	if p := os.Getenv("RIG_GOLAND"); p != "" {
+	if p := os.Getenv("JIG_GOLAND"); p != "" {
 		return p
 	}
 	for _, n := range []string{"goland", "goland.sh"} {
@@ -266,11 +266,11 @@ func GoLand() string {
 	return ""
 }
 
-// Open brings the project up in GoLand (a running GoLand just focuses it), detached from rig.
+// Open brings the project up in GoLand (a running GoLand just focuses it), detached from jig.
 func Open(dir string) error {
 	bin := GoLand()
 	if bin == "" {
-		return errors.New("GoLand not found: put goland on PATH or set RIG_GOLAND")
+		return errors.New("GoLand not found: put goland on PATH or set JIG_GOLAND")
 	}
 	cmd := exec.Command(bin, dir)
 	sh.Detach(cmd)

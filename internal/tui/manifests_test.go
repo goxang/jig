@@ -8,7 +8,7 @@ import (
 )
 
 func TestAddService(t *testing.T) {
-	f := filepath.Join(t.TempDir(), "rig.yaml")
+	f := filepath.Join(t.TempDir(), "jig.yaml")
 	in := "project: x\nservices:\n  api: { image: a }\n\n# envs\nenvironments:\n  k: {}\n"
 	if err := os.WriteFile(f, []byte(in), 0o644); err != nil {
 		t.Fatal(err)

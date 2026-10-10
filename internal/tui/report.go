@@ -7,7 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/goxang/rig/engine"
+	"github.com/goxang/jig/engine"
 )
 
 // saveReport measures a reports: entry: over a window until now, or by its reporter (start now,

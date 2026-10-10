@@ -10,13 +10,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/goxang/rig/spec"
+	"github.com/goxang/jig/spec"
 )
 
 func migrateCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "migrate",
-		Short: fmt.Sprintf("rewrite the project file to the version this rig understands (%d)", spec.CurrentVersion),
+		Short: fmt.Sprintf("rewrite the project file to the version this jig understands (%d)", spec.CurrentVersion),
 		RunE: func(*cobra.Command, []string) error {
 			file := g.file
 			if file == "" {
@@ -42,19 +42,19 @@ func migrateCommand() *cobra.Command {
 func upgradeCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "upgrade",
-		Short: "update rig to the latest release (or $RIG_VERSION), using the same installer as the install script",
+		Short: "update jig to the latest release (or $JIG_VERSION), using the same installer as the install script",
 		RunE: func(*cobra.Command, []string) error {
 			sh, err := exec.LookPath("sh")
 			if err != nil {
 				return fmt.Errorf("upgrade needs sh: %w", err)
 			}
-			if os.Getenv("RIG_VERSION") == "" && os.Getenv("RIG_DOWNLOAD_URL") == "" {
+			if os.Getenv("JIG_VERSION") == "" && os.Getenv("JIG_DOWNLOAD_URL") == "" {
 				if latest := latestRelease(); latest != "" && latest == Version {
-					fmt.Printf("rig %s is already the latest version\n", Version)
+					fmt.Printf("jig %s is already the latest version\n", Version)
 					return nil
 				}
 			}
-			cmd := exec.Command(sh, "-c", "curl -fsSL https://raw.githubusercontent.com/goxang/rig/main/install.sh | sh")
+			cmd := exec.Command(sh, "-c", "curl -fsSL https://raw.githubusercontent.com/goxang/jig/main/install.sh | sh")
 			cmd.Stdout, cmd.Stderr, cmd.Stdin = os.Stdout, os.Stderr, os.Stdin
 			cmd.Env = os.Environ()
 			return cmd.Run()
@@ -65,7 +65,7 @@ func upgradeCommand() *cobra.Command {
 // latestRelease reads the tag GitHub's releases/latest redirects to; "" when it cannot tell.
 func latestRelease() string {
 	c := http.Client{Timeout: 10 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	resp, err := c.Head("https://github.com/goxang/rig/releases/latest")
+	resp, err := c.Head("https://github.com/goxang/jig/releases/latest")
 	if err != nil {
 		return ""
 	}
@@ -79,16 +79,16 @@ func latestRelease() string {
 func uninstallCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "uninstall",
-		Short: "remove the rig binary (add --config to also drop ~/.config/rig)",
+		Short: "remove the jig binary (add --config to also drop ~/.config/jig)",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			dropConfig, _ := cmd.Flags().GetBool("config")
 			bin, err := os.Executable()
 			if err != nil {
-				return fmt.Errorf("locate rig binary: %w", err)
+				return fmt.Errorf("locate jig binary: %w", err)
 			}
 			cfgDir, cfgErr := os.UserConfigDir()
 			if cfgErr == nil {
-				cfgDir = cfgDir + "/rig"
+				cfgDir = cfgDir + "/jig"
 			}
 			fmt.Println("this removes:")
 			fmt.Println("  " + bin)
@@ -106,10 +106,10 @@ func uninstallCommand() *cobra.Command {
 					return fmt.Errorf("remove %s: %w", cfgDir, err)
 				}
 			}
-			fmt.Println("rig: uninstalled")
+			fmt.Println("jig: uninstalled")
 			return nil
 		},
 	}
-	cmd.Flags().Bool("config", false, "also remove ~/.config/rig (AI setup, keys)")
+	cmd.Flags().Bool("config", false, "also remove ~/.config/jig (AI setup, keys)")
 	return cmd
 }

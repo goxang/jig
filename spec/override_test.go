@@ -7,7 +7,7 @@ import (
 )
 
 func TestLoadWithOverridesBeatFileVars(t *testing.T) {
-	f := filepath.Join(t.TempDir(), "rig.yaml")
+	f := filepath.Join(t.TempDir(), "jig.yaml")
 	os.WriteFile(f, []byte(`project: p
 environments:
   e:

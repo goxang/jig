@@ -17,10 +17,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/goxang/rig/adapters/metrics/prometheus"
-	"github.com/goxang/rig/core"
-	"github.com/goxang/rig/plugin"
-	"github.com/goxang/rig/spec"
+	"github.com/goxang/jig/adapters/metrics/prometheus"
+	"github.com/goxang/jig/core"
+	"github.com/goxang/jig/plugin"
+	"github.com/goxang/jig/spec"
 )
 
 func init() {

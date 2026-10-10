@@ -18,13 +18,13 @@ environments:
   test: { runtime: { type: fake } }
 tasks:
   greet:
-    steps: ['echo args=$1 rest=$RIG_ARGS ref=$RIG_REF tag=$TAG']
+    steps: ['echo args=$1 rest=$JIG_ARGS ref=$JIG_REF tag=$TAG']
 `
 
 func openTask(t *testing.T) *App {
 	t.Helper()
 	dir := t.TempDir()
-	p := filepath.Join(dir, "rig.yaml")
+	p := filepath.Join(dir, "jig.yaml")
 	if err := os.WriteFile(p, []byte(taskFile), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -36,11 +36,11 @@ func openTask(t *testing.T) *App {
 }
 
 // NAME=value args become env vars for the task's steps instead of requiring them pre-exported,
-// while plain words keep reaching the steps positionally as $1... and $RIG_ARGS.
+// while plain words keep reaching the steps positionally as $1... and $JIG_ARGS.
 func TestRunTaskNamedParams(t *testing.T) {
 	a := openTask(t)
 	var out bytes.Buffer
-	if err := a.RunTask(context.Background(), "greet", []string{"RIG_REF=feature-x", "core", "TAG=v3"}, &out); err != nil {
+	if err := a.RunTask(context.Background(), "greet", []string{"JIG_REF=feature-x", "core", "TAG=v3"}, &out); err != nil {
 		t.Fatal(err)
 	}
 	got := out.String()

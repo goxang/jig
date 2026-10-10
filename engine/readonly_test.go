@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/goxang/rig/core"
+	"github.com/goxang/jig/core"
 )
 
 func TestReadOnlyRefusesEveryChange(t *testing.T) {

@@ -1,11 +1,11 @@
-# rig
+# jig
 
-[![ci](https://github.com/goxang/rig/actions/workflows/ci.yml/badge.svg)](https://github.com/goxang/rig/actions/workflows/ci.yml)
-[![release](https://img.shields.io/github/v/release/goxang/rig)](https://github.com/goxang/rig/releases/latest)
+[![ci](https://github.com/goxang/jig/actions/workflows/ci.yml/badge.svg)](https://github.com/goxang/jig/actions/workflows/ci.yml)
+[![release](https://img.shields.io/github/v/release/goxang/jig)](https://github.com/goxang/jig/releases/latest)
 
 **The AI-integrated pilot for every service you run.** Manage every part of your software from the terminal:
 services, infrastructure, data, Kubernetes, logs, metrics, tests. Local processes, docker or Kubernetes;
-Go, Python, Node, Java, Rust or anything that runs. Describe it once in `rig.yaml`, then run, watch and tune
+Go, Python, Node, Java, Rust or anything that runs. Describe it once in `jig.yaml`, then run, watch and tune
 it all from one CLI and one terminal UI.
 
 - **Plugin-based**: every runtime, database, broker, metrics or logs backend is an adapter behind one
@@ -29,35 +29,35 @@ it all from one CLI and one terminal UI.
 - **Data**: browse and edit databases, Redis, RabbitMQ, Kafka, key-value config; saved queries on a schedule
 - **Kubernetes**: manifests as a graph, edited field by field, synced from the cluster; HPAs, namespaces
 - **Test and load**: test suites with live results, load generators with rate and instances
-- **AI**: `@` chat on every screen, inline query completions, `@?` plain-language queries; `rig mcp` gives
+- **AI**: `@` chat on every screen, inline query completions, `@?` plain-language queries; `jig mcp` gives
   agents every tool
-- **Any stack**: not just Go; Python, Node, Java, Rust, any image or binary; `rig init` reads compose files,
+- **Any stack**: not just Go; Python, Node, Java, Rust, any image or binary; `jig init` reads compose files,
   manifests and sources
 
 ## Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/goxang/rig/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/goxang/jig/main/install.sh | sh
 ```
 
-Linux and macOS (amd64, arm64). Windows: the `.zip` on the [releases page](https://github.com/goxang/rig/releases).
-With Go 1.23+: `go install github.com/goxang/rig/cmd/rig@latest`.
+Linux and macOS (amd64, arm64). Windows: the `.zip` on the [releases page](https://github.com/goxang/jig/releases).
+With Go 1.23+: `go install github.com/goxang/jig/cmd/jig@latest`.
 
 ## Start
 
 ```bash
-rig init      # rig.yaml from what the project has: compose, manifests, sources
-rig doctor    # what is missing: tools, cluster or daemon, variables, ports, components
-rig up        # everything, in dependency order
-rig           # the terminal UI; ? lists the keys of every screen
+jig init      # jig.yaml from what the project has: compose, manifests, sources
+jig doctor    # what is missing: tools, cluster or daemon, variables, ports, components
+jig up        # everything, in dependency order
+jig           # the terminal UI; ? lists the keys of every screen
 ```
 
-No `rig.yaml` yet? `rig up && rig` still work: rig infers the project in memory as `rig init` would,
-and writes nothing until you run `rig init`.
+No `jig.yaml` yet? `jig up && jig` still work: jig infers the project in memory as `jig init` would,
+and writes nothing until you run `jig init`.
 
-On a project that already has a `rig.yaml`: `rig env` lists its environments, `-e <name>` picks one.
+On a project that already has a `jig.yaml`: `jig env` lists its environments, `-e <name>` picks one.
 
-A small `rig.yaml`:
+A small `jig.yaml`:
 
 ```yaml
 project: shop
@@ -79,20 +79,20 @@ components:
   db: { type: sql, driver: postgres, addr: "svc://db:5432", user: app, password: "${DB_PASSWORD}" }
 ```
 
-Try one of the [examples](examples): `cd examples/shop && rig up && rig`.
+Try one of the [examples](examples): `cd examples/shop && jig up && jig`.
 
 ## Docs
 
 - [Guide](docs/guide.md): CLI, every screen and its keys, AI, GoLand, agents
-- [Config](docs/config.md): every `rig.yaml` key
-- [Design](docs/design.md): how rig is built, writing an adapter
-- [Manifests](docs/manifests.md): a manifest layout that works well with rig
+- [Config](docs/config.md): every `jig.yaml` key
+- [Design](docs/design.md): how jig is built, writing an adapter
+- [Manifests](docs/manifests.md): a manifest layout that works well with jig
 
-All of it ships in the binary too: `rig docs guide`.
+All of it ships in the binary too: `jig docs guide`.
 
 ## Contributing
 
-rig is open to contributions: new adapters, screens, fixes, docs. [Design](docs/design.md) shows how to
+jig is open to contributions: new adapters, screens, fixes, docs. [Design](docs/design.md) shows how to
 write an adapter. `go vet ./... && go test -race ./...` must pass. Commits follow Conventional Commits; every green push
 to `main` is released (`feat:` minor, anything else patch).
 

@@ -1,4 +1,4 @@
-module github.com/goxang/rig
+module github.com/goxang/jig
 
 go 1.23.8
 

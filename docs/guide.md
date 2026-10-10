@@ -1,48 +1,48 @@
-# rig guide
+# jig guide
 
 Everything the [README](../README.md) leaves out: the CLI, every screen of the terminal UI, the AI
-assistant, GoLand and agents. Every rig.yaml key is in [config.md](config.md).
+assistant, GoLand and agents. Every jig.yaml key is in [config.md](config.md).
 
 ## CLI
 
 ```bash
-rig                           # terminal UI
-rig infra up                  # infrastructure, once
-rig up test                   # every service tagged test, and what they depend on
-rig up --build                # build images and deploy everything, phase by phase
-rig build app -t v1 --ref main && rig deploy app -t v1   # apps only; infrastructure untouched
-rig build app -t v1 --no-push && rig push app -t v1      # build locally, push later
-rig scale core +1             # every service in group core, one more replica
-rig status
-rig -e kind logs -F api worker
-rig query                     # saved queries and queryable components
-rig query db-top-cpu n=5
-rig load rate fleet 200 && rig load scale fleet +2
-rig task bootstrap            # a named list of steps from rig.yaml (rig task <tab> completes)
-rig watch api                 # rebuild and restart as the sources change (ctrl+w in the UI)
-rig why checkout is slow      # incident: logs, traces, metrics, deploys; the AI's root cause and fix; answer "fix"
-rig doctor                    # what this environment lacks: tools, cluster, ${VARS}, ports, components (--json)
-rig vars set MAIN_DB=x        # manifest variables per environment; rig setenv api K=V for env
-rig data db Switch tables     # walk databases and caches
-rig data snapshot db before   # pg_dump/mysqldump/BACKUP into .rig/<env>/snapshots (S on the Data screen)
-rig data restore db before    # put it back; rig data seed db runs the db's seed:
-rig logs -E '(?i)timeout' api # regex over logs
-rig alerts                    # what is over its thresholds
-rig test unit --race          # a test suite; --failed reruns the failures, -o file saves the report
-rig test ./pkg/x/...          # any packages, no suite needed
-rig report load --since 20m   # metrics, traces and queries of a load test (reports: in rig.yaml): md, json or xml
-rig report start load; rig test e2e; rig report stop load   # a report of exactly that run
-rig ns --create me            # Kubernetes: switch the environment to a new namespace (rig ns lists them)
-rig metrics targets -o f.json # services as Prometheus file_sd targets, for a local Prometheus
-rig resume last               # the TUI as a saved session (S) left it
-rig ide --open                # every service into GoLand's Services view by section: live logs, stop, debug
-rig attach api                # start it if down, follow its logs; Ctrl-C stops it (what GoLand's configs run)
-rig mcp                       # MCP server for AI agents
+jig                           # terminal UI
+jig infra up                  # infrastructure, once
+jig up test                   # every service tagged test, and what they depend on
+jig up --build                # build images and deploy everything, phase by phase
+jig build app -t v1 --ref main && jig deploy app -t v1   # apps only; infrastructure untouched
+jig build app -t v1 --no-push && jig push app -t v1      # build locally, push later
+jig scale core +1             # every service in group core, one more replica
+jig status
+jig -e kind logs -F api worker
+jig query                     # saved queries and queryable components
+jig query db-top-cpu n=5
+jig load rate fleet 200 && jig load scale fleet +2
+jig task bootstrap            # a named list of steps from jig.yaml (jig task <tab> completes)
+jig watch api                 # rebuild and restart as the sources change (ctrl+w in the UI)
+jig why checkout is slow      # incident: logs, traces, metrics, deploys; the AI's root cause and fix; answer "fix"
+jig doctor                    # what this environment lacks: tools, cluster, ${VARS}, ports, components (--json)
+jig vars set MAIN_DB=x        # manifest variables per environment; jig setenv api K=V for env
+jig data db Switch tables     # walk databases and caches
+jig data snapshot db before   # pg_dump/mysqldump/BACKUP into .jig/<env>/snapshots (S on the Data screen)
+jig data restore db before    # put it back; jig data seed db runs the db's seed:
+jig logs -E '(?i)timeout' api # regex over logs
+jig alerts                    # what is over its thresholds
+jig test unit --race          # a test suite; --failed reruns the failures, -o file saves the report
+jig test ./pkg/x/...          # any packages, no suite needed
+jig report load --since 20m   # metrics, traces and queries of a load test (reports: in jig.yaml): md, json or xml
+jig report start load; jig test e2e; jig report stop load   # a report of exactly that run
+jig ns --create me            # Kubernetes: switch the environment to a new namespace (jig ns lists them)
+jig metrics targets -o f.json # services as Prometheus file_sd targets, for a local Prometheus
+jig resume last               # the TUI as a saved session (S) left it
+jig ide --open                # every service into GoLand's Services view by section: live logs, stop, debug
+jig attach api                # start it if down, follow its logs; Ctrl-C stops it (what GoLand's configs run)
+jig mcp                       # MCP server for AI agents
 ```
 
-`-e <env>` (or `$RIG_ENV`) picks the environment. A `protected: true` environment refuses changes
+`-e <env>` (or `$JIG_ENV`) picks the environment. A `protected: true` environment refuses changes
 without `--yes`; pushing over an existing image tag needs it too. A `readonly: true` one refuses them
-even with it. In the TUI the confirmation is the `--yes`; `rig --yes` opens it already confirmed, so a
+even with it. In the TUI the confirmation is the `--yes`; `jig --yes` opens it already confirmed, so a
 protected environment asks nothing more.
 
 ## Terminal UI
@@ -64,25 +64,24 @@ or shift+wheel, or by dragging past its edge). Copies go to the system clipboard
 | Queries | saved queries (with parameters), ad hoc ones, schedules with a trend of the first number; `H` every run of the session; `y` copies the query (or, on the result, the row), `Y` the whole result as TSV; `/` on a result filters its rows like the Data screen. Writing a query opens a popup: the whole text wrapped, `ctrl+a` selects it, `ctrl+c` / `ctrl+y` copy it |
 | KV | browse, edit and delete keys right in the store; `/` searches every key, field and value as you type and opens the hit with its field selected; `enter` edits a JSON value field by field; `o` picks the editor; `R` restarts the services that read the edited key; `F` loads the config files into it (`kv-*` tasks) |
 | Data | databases (objects, rows, definitions, running queries), caches (keys, values), queues; `e` edits a cell, `space` marks rows, `D` deletes them (table rows by primary key, Redis keys and entries); `Q` queries where you stand (on a table row: that row by its primary key; on a Redis key: the read for its type); going back (`esc` or ‹ back) lands on the row you opened; `y`/`Y` copy the row/all as TSV; `/` filters rows: words match any cell fuzzily, `*glob*` whole cells, `Destination=Pos` (any case, `*` globs), `col!=x` and `col~text` one column (a unique part of its name will do); `@?` turns plain words into such a filter |
-| Flow | `flow:` in rig.yaml as a live map: every node with its full name, each starting node and its packets in their own colour, packets moving along each link at its rate, failed ones red; caches and databases many nodes use sit on a row underneath, reached over a bus; nodes go amber when hot and red when overloaded (rate past `hot`/`over`, latency past `slow`, errors, a growing backlog, a service down) and dim below `low`; `t` sets a node's low/hot/over, `+` `-` zoom, `z` fits, `H` `J` `K` `L`, the wheel (shift for sideways) or a drag scroll a big flow; `e` turns live data off (no queries at all, for load tests) and on, remembered per project; arrows pick a node, `enter` or a click selects a service on Services or opens a component, dashboard or screen, and `esc` or `⌫` comes straight back; `p` pauses the packets |
 | Load | generators, each asked on its own so the running ones (●, selected first) show at once, with target and actual rate and error share, and the total being sent; rate and config shared by every instance, instance count, `i` (or a click) one instance's charts or all, `c` their KV config, `v` their env, `W` saves a metrics report; `z` or a click shows a chart full size, with the Metrics panel view's legend, filter, range and drag to zoom |
 | Manifests | on Kubernetes it opens on what runs in the namespace (`c` switches to the files and back): field edits there apply to the cluster at once, `L` edits with kubectl, `s` writes the running object into the file that holds it; on the files: objects or folders (`t`), relations, a file's issues (`i`), apply (`a`), make a service (`n`); `→` (or a click) walks the object field by field like the KV screen: `enter` edits a value, `a` adds a field, `D` deletes one, each saved into the file at once with its comments kept; `/` searches every field and value and lands on the field; `e` edits an object in your editor and saves it into its file, `s` writes what the cluster runs into the file (only fields someone set, `$VARS` kept), `L` edits it on the cluster; `d` picks among every manifest folder of the project |
 | Hosts | nodes as htop-style CPU, memory and disk bars, the selected one's CPU history, a shell (double-click), and `p` the pods on a node, sortable by CPU, memory or age |
 | Tests | suites as tabs and the `go test` command they run; `r` runs, `f` reruns failures, `.` the selected test, `O` sets flags (race, cover, -run, …); a tree of packages and tests (`i` cycles failed/passed/skipped/running), its output beside it, benchmarks with the change since the last run, saved runs (`h`) |
 
-`rig` opens on the environment it last showed (`-e` or `$RIG_ENV` picks another). Screens switch with
+`jig` opens on the environment it last showed (`-e` or `$JIG_ENV` picks another). Screens switch with
 `1`-`0` and `` ` `` (the eleventh), `shift+←→` or `alt+←→`, or a click on their name; tabs inside a screen
 (dashboards, apps/infra, objects/folders, saved/history, suites, filters) switch with `ctrl+←→` and are clickable too. A screen
-shows only when rig.yaml gives it something (no `kv` component, no KV screen); `ui: { tabs: [services,
+shows only when jig.yaml gives it something (no `kv` component, no KV screen); `ui: { tabs: [services,
 logs, data, tests] }` picks the screens and their order, and the number keys follow it.
-`T` runs a task from rig.yaml in the background (`ctrl+o` on one shows its args and steps); a task keeps
-running when you quit rig, and a saved session reopened later follows it again or shows how it ended. `ctrl+e` shows the environment (variables with secrets hidden, each
+`T` runs a task from jig.yaml in the background (`ctrl+o` on one shows its args and steps); a task keeps
+running when you quit jig, and a saved session reopened later follows it again or shows how it ended. `ctrl+e` shows the environment (variables with secrets hidden, each
 component's address and database; `/` searches it, `e` edits a variable), `N` switches or creates a Kubernetes namespace, and the Metrics screen's
-`m` points the dashboards at another metrics source. `S` saves the session (screens, query results and history) and pins it: from then on `rig` opens on it as you left it
-(`rig --fresh` starts clean and unpins; `rig resume` picks another),
-under the user's config directory (`~/.config/rig/projects/...`); `M` frees the mouse so
+`m` points the dashboards at another metrics source. `S` saves the session (screens, query results and history) and pins it: from then on `jig` opens on it as you left it
+(`jig --fresh` starts clean and unpins; `jig resume` picks another),
+under the user's config directory (`~/.config/jig/projects/...`); `M` frees the mouse so
 the terminal can select text; the header shows alerts (`A`). `q q` (or `ctrl+c ctrl+c`) quits, at once unless a test run or an
-operation is still going, or load generators are sending: those stop with rig (tests, queries, port
+operation is still going, or load generators are sending: those stop with jig (tests, queries, port
 forwards) or keep going without it (generators, services), and it asks.
 
 On the Services screen, `d` deploys a tag or a whole image (the running one is filled in), `$` edits a
@@ -106,18 +105,18 @@ to walk back, `esc` goes home: the Services list, every service. An input left w
 typed as a draft the next time it opens. `S` saves the session (and pins it): the screen, each grid's
 sort, each screen's filters (services, KV, manifests, traces, the metrics range, tests), drafts, query
 history and results, the activity view and the errors come back with it; it saves again as you switch
-screens and when you quit. `ctrl+r` reloads `rig.yaml` in place, keeping the filters, after you or the
+screens and when you quit. `ctrl+r` reloads `jig.yaml` in place, keeping the filters, after you or the
 assistant edited it (the status line says when the file changed). The help
 (`?`) filters as you type. A border under the mouse lights up and drags to resize the panes. Errors a
 new setup meets (a tool not installed, Docker not running, no Kubernetes cluster) say what to do.
 
-`ctrl+p` picks a colour theme, previewing each as you move (`rig theme` lists and sets them too):
-default, nord, dracula, gruvbox, catppuccin, clay, ember, mono, or your own. `rig theme --save mine nord` writes
-`~/.config/rig/themes/mine.yaml` to edit; a theme file sets `base:` and only the colours it changes,
+`ctrl+p` picks a colour theme, previewing each as you move (`jig theme` lists and sets them too):
+default, nord, dracula, gruvbox, catppuccin, clay, ember, mono, or your own. `jig theme --save mine nord` writes
+`~/.config/jig/themes/mine.yaml` to edit; a theme file sets `base:` and only the colours it changes,
 with `light:` for light terminals (without it, the default theme's light shades). Any colour too faint
 to read on the terminal, a bar or a cursor line is lightened or darkened just enough, so a theme of
-your own stays legible on dark and light terminals alike. `$RIG_THEME` overrides the choice for one
-run. Fonts belong to the terminal; rig sets colours only.
+your own stays legible on dark and light terminals alike. `$JIG_THEME` overrides the choice for one
+run. Fonts belong to the terminal; jig sets colours only.
 
 A Kubernetes environment can name its cluster by address as well: `runtime: { context: local, server:
 https://rancher.example/k8s/clusters/local }` uses the context called `local` when the kubeconfig has
@@ -130,24 +129,24 @@ Set it up once, in three steps:
 1. Install one backend: [opencode](https://opencode.ai) (`curl -fsSL https://opencode.ai/install | bash`) or
    [Claude Code](https://claude.com/claude-code) (`npm i -g @anthropic-ai/claude-code`), and log in to it.
    No login: opencode's free models work as they are.
-2. `rig ai check` says what rig found and whether a turn works. To use your own key instead,
-   `rig ai config provider=openai url=https://…/v1 api_key=… model=…` (or `deepseek`, `anthropic`, `9router`).
-3. Press `@` on any screen, or run `rig ai why is api failing?` in the terminal.
+2. `jig ai check` says what jig found and whether a turn works. To use your own key instead,
+   `jig ai config provider=openai url=https://…/v1 api_key=… model=…` (or `deepseek`, `anthropic`, `9router`).
+3. Press `@` on any screen, or run `jig ai why is api failing?` in the terminal.
 
-For an agent that edits the project (Claude Code, Codex, Cursor, opencode) instead: `rig skill --install`
-teaches it rig.yaml, and the MCP config under [Agents](#agents) gives it rig's tools.
+For an agent that edits the project (Claude Code, Codex, Cursor, opencode) instead: `jig skill --install`
+teaches it jig.yaml, and the MCP config under [Agents](#agents) gives it jig's tools.
 
 `@` on any screen opens a chat about what the screen shows: the selected service, key, table, the log
-lines in view. It runs your own **opencode** or **Claude Code** (whichever is installed) with rig as its
+lines in view. It runs your own **opencode** or **Claude Code** (whichever is installed) with jig as its
 only tools, so it can do anything you can: change a KV key, restart services, run and schedule queries,
-open screens, explain logs against the code, suggest `rig profile` / `go tool pprof` commands.
+open screens, explain logs against the code, suggest `jig profile` / `go tool pprof` commands.
 Query prompts (Data `Q`, Queries, Metrics, Logs grep, KV values) get inline completions: `tab` takes them,
 `ctrl+t` turns them off or on for good. A suggested query (Data `Q`, a new query) waits behind the empty
 input: type your own and the AI completes it, `tab` takes the suggestion to edit, `enter` runs it as is.
 `@?` then words asks for the rest in plain language: `@?logs slower than 1s`, or
 `SELECT * FROM transactions WHERE @?amount above 100k`; the AI's version shows in its own
 bordered "✦ ai suggests" box above the input, `tab` takes it, `enter` runs it.
-`@?` works in every filter and query prompt (each label says so). Before offering an answer rig tries
+`@?` works in every filter and query prompt (each label says so). Before offering an answer jig tries
 it: a regex or filter must compile and keep some rows, PromQL must run, a reading SQL, LogQL, TraceQL
 or KV query runs once. A failure goes back to the AI with the error, up to three tries; writes,
 kubectl, HTTP and broker queries are never run to check.
@@ -168,100 +167,100 @@ the backend start it every time (seconds); `fast_url` + `fast_api_key` (any Open
 `https://api.anthropic.com/v1` or a router) make them one HTTP request on a kept-alive connection.
 
 ```
-rig ai                                 the UI with the chat open
-rig ai why is parser failing?          one turn in the terminal; rig ai -c "…" continues it
-rig resume                             pick a conversation or saved UI session: enter continues, d closes
-rig ai config                          the setup; rig ai check tests it
-rig ai config provider=deepseek api_key=sk-…
-rig ai config provider=openai url=https://…/v1 api_key=… model=…
-rig ai config proxy=localhost:10808    every AI request goes through it
-rig ai config fast_url=https://…/v1 fast_api_key=… fast_model=…   completions as one direct request
+jig ai                                 the UI with the chat open
+jig ai why is parser failing?          one turn in the terminal; jig ai -c "…" continues it
+jig resume                             pick a conversation or saved UI session: enter continues, d closes
+jig ai config                          the setup; jig ai check tests it
+jig ai config provider=deepseek api_key=sk-…
+jig ai config provider=openai url=https://…/v1 api_key=… model=…
+jig ai config proxy=localhost:10808    every AI request goes through it
+jig ai config fast_url=https://…/v1 fast_api_key=… fast_model=…   completions as one direct request
 ```
 
 **Local models.** `provider=ollama` (http://localhost:11434/v1) or `provider=lmstudio`
 (http://localhost:1234/v1) run everything on this machine with no key and no data leaving it:
-`ollama pull qwen2.5-coder`, then `rig ai config provider=ollama model=qwen2.5-coder` (`rig ai config`
+`ollama pull qwen2.5-coder`, then `jig ai config provider=ollama model=qwen2.5-coder` (`jig ai config`
 lists what a running server serves). Completions go to it directly; the chat runs through opencode,
 which needs to be installed. The tradeoffs: small models (7B and under) complete queries well but
-pick tools badly, so the chat may answer without looking or call rig's tools with wrong arguments;
+pick tools badly, so the chat may answer without looking or call jig's tools with wrong arguments;
 prefer a model trained for tool calling (qwen2.5-coder, llama3.1, mistral-nemo) and 14B or more for the
 chat, and expect a turn to take longer than a hosted model on a laptop GPU.
 
 No setup is needed: an opencode or Claude Code login is used as it is, and without one opencode's free
 models are. Providers: `own`, `opencode`, `openai` (any compatible endpoint), `9router`, `deepseek`,
-`anthropic` (for Claude Code). The key lives in `~/.config/rig/ai.json` (0600).
+`anthropic` (for Claude Code). The key lives in `~/.config/jig/ai.json` (0600).
 
 Secrets never reach the model: every prompt, completion and tool result goes through one redactor that
 puts `<secret:NAME>` in place of `secrets:` values, `${NAME}`s with a secret's name taken from your
 environment, env vars and component fields named like a password, token or key, passwords inside URLs
 and DSNs, and whatever [goxang/scrub](https://github.com/goxang/scrub)'s packs catch in logs: JWTs, cloud
 tokens, bearer headers, private keys, card numbers, PINs. `/redact` in the chat, or
-`rig ai config redact=false|true`, turns it off and on.
+`jig ai config redact=false|true`, turns it off and on.
 
-Guard rails, enforced by rig's MCP server rather than the prompt: a conversation is bound to the
+Guard rails, enforced by jig's MCP server rather than the prompt: a conversation is bound to the
 environment it started on (other `env`s are refused); the project directory is the only workspace, with
-credentials, `ai.deny` paths and `.git` out of reach; files change only through `rig_file` (create, edit, move;
+credentials, `ai.deny` paths and `.git` out of reach; files change only through `jig_file` (create, edit, move;
 deleting asks you), never a shell. Reads run at once; every change (restart, deploy, a KV put, a write
 query, a task, ...) first shows its command and waits for your yes: enter runs it, `a` runs it and
 allows that same command for the rest of the session. With no terminal or UI to ask on, only a change
 your message asked for in so many words runs. A read-only environment refuses changes whoever confirms.
-Secrets and `rig mcp`/`debug` are out of reach.
+Secrets and `jig mcp`/`debug` are out of reach.
 
-`rig why <service or symptom>` (or `/why` in the chat) is incident mode: `rig why api`, or
-`rig why checkout is slow since the deploy`, which looks at the service the words name (by name, image or
-`SERVICE_NAME`) and at every service when they name none. rig gathers the evidence itself, the same way
+`jig why <service or symptom>` (or `/why` in the chat) is incident mode: `jig why api`, or
+`jig why checkout is slow since the deploy`, which looks at the service the words name (by name, image or
+`SERVICE_NAME`) and at every service when they name none. jig gathers the evidence itself, the same way
 every time: the state, restarts and health of the service and everything it depends on, whether the
 components they host answer, error lines in their logs and which services those lines name, failed and
 slow traces, the dashboards' metrics about them (where each started in the window and where it is now),
 firing alerts, recent restarts and changes (deploys, the assistant's own). It ranks the suspects by that
-evidence (down beats unreachable beats named in errors), then the assistant, with rig's tools to look
+evidence (down beats unreachable beats named in errors), then the assistant, with jig's tools to look
 further, writes a summary, hypotheses citing the evidence IDs and a proposed fix. The conversation goes
 on: answer `fix` and it applies the fix (each change waits for your yes) and checks the symptom is gone,
-ask a follow-up, or press enter to leave; `rig ai -s <id>` picks it up later. `--fix` (or `/why --fix`)
+ask a follow-up, or press enter to leave; `jig ai -s <id>` picks it up later. `--fix` (or `/why --fix`)
 applies the fix right after the analysis. `--no-ai` stops at the ranking, `--report` or `-o file` saves a
 Markdown report (summary, timeline, evidence, next steps), `--json` hands it to tools.
 
-Every action the assistant ran or tried is appended to `.rig/<env>/ai-audit.jsonl` (time, environment,
-command, risk, result, who confirmed); `rig ai log` lists the changes and refusals (`--all` adds reads,
+Every action the assistant ran or tried is appended to `.jig/<env>/ai-audit.jsonl` (time, environment,
+command, risk, result, who confirmed); `jig ai log` lists the changes and refusals (`--all` adds reads,
 `--json` for tools), and the chat shows each one as it happens.
 
 ## GoLand
 
-`o` on the Services screen (or `rig ide --open`) writes each service of the environment into GoLand's
-Services view (`alt+8`), one folder per `sections:` entry plus `rig · infra`:
+`o` on the Services screen (or `jig ide --open`) writes each service of the environment into GoLand's
+Services view (`alt+8`), one folder per `sections:` entry plus `jig · infra`:
 
-- `<service>` runs `rig attach`: starts it if it is down and shows its live log; stop stops it (infrastructure
-  only stops following). Started or stopped in rig, GoLand follows: the config ends when the service does.
+- `<service>` runs `jig attach`: starts it if it is down and shows its live log; stop stops it (infrastructure
+  only stops following). Started or stopped in jig, GoLand follows: the config ends when the service does.
 - `<service> · debug` (Go services): press Debug on it and GoLand starts the service if it is down, brings its
-  debugger up in the background (`rig debug --detach --start`, on the service's stable port) and attaches;
+  debugger up in the background (`jig debug --detach --start`, on the service's stable port) and attaches;
   breakpoints work from there, on local processes, docker, kind and Kubernetes alike.
-  `<service> · stop debugger` ends it (or `rig debug --stop <service>`).
+  `<service> · stop debugger` ends it (or `jig debug --stop <service>`).
 
-They are rig commands on the same environment, so the TUI and GoLand show the same processes. GoLand
+They are jig commands on the same environment, so the TUI and GoLand show the same processes. GoLand
 rewrites `.idea/workspace.xml` when it closes: if the Services view does not list them, add Shell Script
 and Go Remote there (`+` › Run Configuration Type).
 
 ## Agents
 
 ```json
-{ "mcpServers": { "rig": { "command": "rig", "args": ["mcp"], "cwd": "/path/to/project" } } }
+{ "mcpServers": { "jig": { "command": "jig", "args": ["mcp"], "cwd": "/path/to/project" } } }
 ```
 
-Agents get terse output (`--brief`, `RIG_BRIEF=1`: tab-separated, no colour, long cells cut). Every
-TUI screen has a CLI twin: `rig logs -E`, `rig metrics`, `rig profile`, `rig query --every 30s --times 10`,
-`rig load`, `rig data`, `rig alerts`.
+Agents get terse output (`--brief`, `JIG_BRIEF=1`: tab-separated, no colour, long cells cut). Every
+TUI screen has a CLI twin: `jig logs -E`, `jig metrics`, `jig profile`, `jig query --every 30s --times 10`,
+`jig load`, `jig data`, `jig alerts`.
 
-Tools: `rig_init` (draft or write rig.yaml for the project, with infrastructure presets), `rig_docs` (every
-rig.yaml key; `search` returns only the sections holding some words), `rig_envs`, `rig_status`, `rig_up`, `rig_down`, `rig_service`, `rig_scale`, `rig_build`, `rig_deploy`,
-`rig_logs`, `rig_query`, `rig_load`, `rig_kv`, `rig_infra`, `rig_task`, `rig_test`, `rig_ui` (acts in a rig UI that
+Tools: `jig_init` (draft or write jig.yaml for the project, with infrastructure presets), `jig_docs` (every
+jig.yaml key; `search` returns only the sections holding some words), `jig_envs`, `jig_status`, `jig_up`, `jig_down`, `jig_service`, `jig_scale`, `jig_build`, `jig_deploy`,
+`jig_logs`, `jig_query`, `jig_load`, `jig_kv`, `jig_infra`, `jig_task`, `jig_test`, `jig_ui` (acts in a jig UI that
 started the agent: opens a screen straight at a row (`select`, Data's `path`, `filter`), shows only some
 Metrics panels, presses keys, and runs several of these in one call (`steps`); each call answers with the
 screen once loaded, so "open redis-atomic db 1" is one call; a change those keys start waits
-for your confirmation, and `O` on Metrics shows every panel again), `rig_file` (list, read, write, edit, move, delete inside the project; credentials and `.git`
-refused, delete needs `"confirm": true`), and `rig` for any other command.
+for your confirmation, and `O` on Metrics shows every panel again), `jig_file` (list, read, write, edit, move, delete inside the project; credentials and `.git`
+refused, delete needs `"confirm": true`), and `jig` for any other command.
 Each runs the CLI, so protections apply: changes to a protected environment need `"confirm": true`.
 
-`rig skill --install` puts a skill into `.claude/skills/rig` and `.agents/skills/rig`, so Claude Code, Codex,
-opencode and others know how to write and extend rig.yaml (services, infrastructure, `otel:`, `ui.tabs`,
-dashboards, tests) and check it with `rig env`; `rig docs config` is the reference they read, and `rig docs <words>`
-prints only the sections that hold them (`rig docs tasks steps`), across every doc.
+`jig skill --install` puts a skill into `.claude/skills/jig` and `.agents/skills/jig`, so Claude Code, Codex,
+opencode and others know how to write and extend jig.yaml (services, infrastructure, `otel:`, `ui.tabs`,
+dashboards, tests) and check it with `jig env`; `jig docs config` is the reference they read, and `jig docs <words>`
+prints only the sections that hold them (`jig docs tasks steps`), across every doc.

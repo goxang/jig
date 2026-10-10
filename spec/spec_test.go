@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -47,13 +46,13 @@ services:
 func write(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "rig.yaml"), []byte(project), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "jig.yaml"), []byte(project), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, ".godev.yaml"), []byte(godev), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	return filepath.Join(dir, "rig.yaml")
+	return filepath.Join(dir, "jig.yaml")
 }
 
 func TestLoadDefaultEnvironment(t *testing.T) {
@@ -113,7 +112,7 @@ func TestRigYAMLMergesOverImport(t *testing.T) {
 	}
 	api := p.Services["api"]
 	if api.Build == nil || api.Build.Go != "./cmd/api" || !reflect.DeepEqual(api.Groups, []string{"core"}) || api.Ports["http"] != 8080 || api.Env["MODE"] != "plain" {
-		t.Fatalf("api = %+v: rig.yaml's keys must win over the import's, the rest of the import kept", api)
+		t.Fatalf("api = %+v: jig.yaml's keys must win over the import's, the rest of the import kept", api)
 	}
 }
 
@@ -181,7 +180,7 @@ func contains(s []string, x string) bool {
 
 func TestDelaySurvivesEnvironmentPatch(t *testing.T) {
 	dir := t.TempDir()
-	f := filepath.Join(dir, "rig.yaml")
+	f := filepath.Join(dir, "jig.yaml")
 	y := "project: x\ndefault: e\nservices:\n  a: { delay: 10s, shared: true }\nenvironments:\n  e: { runtime: { type: local }, services: { a: { replicas: 2 } } }\n"
 	if err := os.WriteFile(f, []byte(y), 0o644); err != nil {
 		t.Fatal(err)
@@ -197,7 +196,7 @@ func TestDelaySurvivesEnvironmentPatch(t *testing.T) {
 
 func TestOnlyByRole(t *testing.T) {
 	dir := t.TempDir()
-	f := filepath.Join(dir, "rig.yaml")
+	f := filepath.Join(dir, "jig.yaml")
 	y := "project: x\ndefault: e\nservices:\n  a: {}\n  db: { role: infra }\nenvironments:\n  e: { runtime: { type: local }, only: [app] }\n"
 	if err := os.WriteFile(f, []byte(y), 0o644); err != nil {
 		t.Fatal(err)
@@ -216,7 +215,7 @@ func TestSecretsResolve(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", cfg)
 	t.Setenv("AppData", cfg) // os.UserConfigDir on Windows
 	dir := t.TempDir()
-	f := filepath.Join(dir, "rig.yaml")
+	f := filepath.Join(dir, "jig.yaml")
 	y := "project: p\nsecrets:\n  PW: { default: dflt }\n  TOKEN: {}\nservices:\n  a: { image: x, env: { P: \"${PW}\", T: \"${TOKEN}\" } }\nenvironments:\n  e: { runtime: { type: local } }\ndefault: e\n"
 	if err := os.WriteFile(f, []byte(y), 0o644); err != nil {
 		t.Fatal(err)
@@ -232,14 +231,14 @@ func TestSecretsResolve(t *testing.T) {
 		t.Fatalf("env %v", env)
 	}
 	// Windows has no mode bits: the user's AppData is what keeps the file private there
-	if st, _ := os.Stat(func() string { s, _ := SecretsFile("p"); return s }()); runtime.GOOS != "windows" && st.Mode().Perm() != 0o600 {
+	if st, _ := os.Stat(func() string { s, _ := SecretsFile("p"); return s }()); st.Mode().Perm() != 0o600 {
 		t.Fatalf("mode %v", st.Mode())
 	}
 }
 
 func TestSections(t *testing.T) {
 	dir := t.TempDir()
-	f := filepath.Join(dir, "rig.yaml")
+	f := filepath.Join(dir, "jig.yaml")
 	y := `version: 1
 project: p
 services:

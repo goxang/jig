@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/goxang/rig/spec"
+	"github.com/goxang/jig/spec"
 )
 
 type Kind string
@@ -41,8 +41,8 @@ var Kinds = []Kind{KindRuntime, KindBuilder, KindMetrics, KindTracing, KindProfi
 
 var ErrUnsupported = errors.New("not supported by this adapter")
 
-// ErrReadOnly refuses a change in an environment rig.yaml marks readonly: true, whatever confirms it.
-var ErrReadOnly = errors.New("environment is read-only (readonly: true in rig.yaml)")
+// ErrReadOnly refuses a change in an environment jig.yaml marks readonly: true, whatever confirms it.
+var ErrReadOnly = errors.New("environment is read-only (readonly: true in jig.yaml)")
 
 // Writable refuses with ErrReadOnly when env's environment is read-only.
 func Writable(env Env) error {
@@ -145,11 +145,11 @@ type EnvReader interface {
 	LiveEnv(ctx context.Context, s *spec.Service) (map[string]string, error)
 }
 
-// Workload is something running in the environment, managed by rig or not.
+// Workload is something running in the environment, managed by jig or not.
 type Workload struct {
 	Name    string
 	Kind    string
-	Service string // the rig service it belongs to, "" when unmanaged
+	Service string // the jig service it belongs to, "" when unmanaged
 	Status  Status
 }
 
@@ -213,7 +213,7 @@ type Builder interface {
 }
 
 // Pusher is a builder that can push an image already in the local Docker daemon; without one,
-// rig runs docker push.
+// jig runs docker push.
 type Pusher interface {
 	Push(ctx context.Context, image string, out io.Writer) error
 }
@@ -510,7 +510,7 @@ type Querier interface {
 	RunQuery(ctx context.Context, q string) (Table, error)
 }
 
-// Action is an adapter-specific operation, exposed as `rig do <component> <action>`.
+// Action is an adapter-specific operation, exposed as `jig do <component> <action>`.
 type Action struct {
 	Name   string
 	Help   string
@@ -609,7 +609,7 @@ type Snapshotter interface {
 }
 
 // Seeder fills a database with its seed (SQL files or commands). Fresh tells whether it holds no
-// tables yet; Host is the rig service it runs in ("" for none), which rig up seeds when it starts empty.
+// tables yet; Host is the jig service it runs in ("" for none), which jig up seeds when it starts empty.
 type Seeder interface {
 	Seed(ctx context.Context, log io.Writer) error
 	Fresh(ctx context.Context) (bool, error)

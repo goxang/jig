@@ -110,18 +110,18 @@ jobs:
           TARGET: ${{ matrix.target }}
           TAG: ${{ needs.version.outputs.tag }}
         run: |
-          os=${TARGET%/*} arch=${TARGET#*/} bin=rig
-          [ "$os" = windows ] && bin=rig.exe
+          os=${TARGET%/*} arch=${TARGET#*/} bin=jig
+          [ "$os" = windows ] && bin=jig.exe
           dir=$(mktemp -d)
-          GOOS=$os GOARCH=$arch CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$TAG" -o "$dir/$bin" ./cmd/rig
+          GOOS=$os GOARCH=$arch CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$TAG" -o "$dir/$bin" ./cmd/jig
           cp README.md "$dir/"
           mkdir -p dist
           if [ "$os" = windows ]; then
-            (cd "$dir" && zip -q "$OLDPWD/dist/rig_${os}_${arch}.zip" "$bin" README.md)
+            (cd "$dir" && zip -q "$OLDPWD/dist/jig_${os}_${arch}.zip" "$bin" README.md)
           else
-            tar -C "$dir" -czf "dist/rig_${os}_${arch}.tar.gz" "$bin" README.md
+            tar -C "$dir" -czf "dist/jig_${os}_${arch}.tar.gz" "$bin" README.md
           fi
-          echo "ASSET=rig_${os}_${arch}" >> "$GITHUB_ENV"
+          echo "ASSET=jig_${os}_${arch}" >> "$GITHUB_ENV"
       - if: needs.version.outputs.skip != '1'
         uses: actions/upload-artifact@v4
         with:
@@ -150,4 +150,4 @@ jobs:
           (cd dist && sha256sum * > checksums.txt)
           git tag "$TAG" "$GITHUB_SHA"
           for i in 1 2 3; do git push origin "$TAG" && break; sleep $((i * 10)); done
-          for i in 1 2 3; do gh release create "$TAG" dist/* --title "rig $TAG" --generate-notes && break; sleep $((i * 10)); done
+          for i in 1 2 3; do gh release create "$TAG" dist/* --title "jig $TAG" --generate-notes && break; sleep $((i * 10)); done

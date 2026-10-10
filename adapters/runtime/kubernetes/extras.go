@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/goxang/rig/core"
-	"github.com/goxang/rig/internal/sh"
+	"github.com/goxang/jig/core"
+	"github.com/goxang/jig/internal/sh"
 )
 
 // ---- hosts: the cluster's nodes ----
@@ -264,7 +264,7 @@ func (r *Runtime) Actions() []core.Action {
 			}
 			return err
 		}},
-		{Name: "prune", Mutate: true, Help: "delete deployments no rig service owns (dry run without --yes)", Run: func(ctx context.Context, args []string, out io.Writer) error {
+		{Name: "prune", Mutate: true, Help: "delete deployments no jig service owns (dry run without --yes)", Run: func(ctx context.Context, args []string, out io.Writer) error {
 			ws, err := r.Discover(ctx)
 			if err != nil {
 				return err

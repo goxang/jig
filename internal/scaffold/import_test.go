@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/goxang/rig/spec"
+	"github.com/goxang/jig/spec"
 )
 
 func TestImportCompose(t *testing.T) {
@@ -26,10 +26,10 @@ func TestImportCompose(t *testing.T) {
   db:
     image: postgres:16
 `), 0o644)
-	os.WriteFile(filepath.Join(dir, "rig.yaml"), []byte(`project: momentz
+	os.WriteFile(filepath.Join(dir, "jig.yaml"), []byte(`project: momentz
 imports: [{compose: deploy/vds/docker-compose.yml}]
 `), 0o644)
-	p, _, err := spec.Load(filepath.Join(dir, "rig.yaml"), "")
+	p, _, err := spec.Load(filepath.Join(dir, "jig.yaml"), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,14 +73,14 @@ spec:
     spec:
       containers: [{ name: redis, image: "redis:7", ports: [{ containerPort: 6379 }] }]
 `), 0o644)
-	os.WriteFile(filepath.Join(dir, "rig.yaml"), []byte(`project: p
+	os.WriteFile(filepath.Join(dir, "jig.yaml"), []byte(`project: p
 imports: [{kubernetes: k8s}]
 services:
   api: { build: { go: ./cmd/api }, groups: [core] }
 environments:
   k: { runtime: { type: kubernetes } }
 `), 0o644)
-	p, _, err := spec.Load(filepath.Join(dir, "rig.yaml"), "")
+	p, _, err := spec.Load(filepath.Join(dir, "jig.yaml"), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,12 +113,12 @@ kind: Deployment
 metadata: { name: hsmmock }
 spec: { template: { spec: { containers: [{ name: h, image: hsm }] } } }
 `), 0o644)
-	os.WriteFile(filepath.Join(dir, "rig.yaml"), []byte(`project: p
+	os.WriteFile(filepath.Join(dir, "jig.yaml"), []byte(`project: p
 imports: [{kubernetes: k8s}]
 services:
   domain: { k8s: { workload: domainsvc } }
 `), 0o644)
-	p, _, err := spec.Load(filepath.Join(dir, "rig.yaml"), "")
+	p, _, err := spec.Load(filepath.Join(dir, "jig.yaml"), "")
 	if err != nil {
 		t.Fatal(err)
 	}

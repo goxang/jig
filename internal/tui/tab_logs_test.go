@@ -6,7 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/goxang/rig/core"
+	"github.com/goxang/jig/core"
 )
 
 func TestInspectWalksLogLines(t *testing.T) {

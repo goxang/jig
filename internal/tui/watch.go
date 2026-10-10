@@ -10,7 +10,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/goxang/rig/engine"
+	"github.com/goxang/jig/engine"
 )
 
 // watching is ctrl+w's live rebuild: the services' last events, while engine.Watch runs.

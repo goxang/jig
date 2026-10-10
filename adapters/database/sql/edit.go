@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/goxang/rig/core"
+	"github.com/goxang/jig/core"
 )
 
 // keySQL lists a table's primary key columns in order (%s: the table, a quoted literal).

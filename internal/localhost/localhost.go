@@ -4,7 +4,6 @@ package localhost
 
 import (
 	"bufio"
-	"cmp"
 	"context"
 	"net/http"
 	"os"
@@ -14,8 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/goxang/rig/core"
-	"github.com/goxang/rig/internal/sh"
+	"github.com/goxang/jig/core"
 )
 
 type Host struct{}
@@ -76,13 +74,11 @@ func darwinStats(ctx context.Context, h *core.Host) {
 
 func (Host) Shell(ctx context.Context, _ string, command []string) (*exec.Cmd, error) {
 	if len(command) > 0 {
-		return exec.CommandContext(ctx, sh.Shell(), "-c", strings.Join(command, " ")), nil
+		return exec.CommandContext(ctx, "sh", "-c", strings.Join(command, " ")), nil
 	}
 	login := os.Getenv("SHELL")
 	switch {
 	case login != "":
-	case runtime.GOOS == "windows":
-		return exec.CommandContext(ctx, cmp.Or(os.Getenv("COMSPEC"), "cmd.exe")), nil
 	default:
 		login = "/bin/sh"
 	}

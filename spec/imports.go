@@ -10,7 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Importer turns another tool's service file into rig services; paths in them are relative to dir,
+// Importer turns another tool's service file into jig services; paths in them are relative to dir,
 // the project's directory.
 type Importer func(path, dir string) (map[string]*Service, error)
 
@@ -20,8 +20,8 @@ func RegisterImporter(name string, f Importer) { importers[name] = f }
 
 func Importers() []string { return keys(importers) }
 
-// applyImports adds imported services. A service rig.yaml also defines is the imported one with
-// rig.yaml's keys merged over it, so rig.yaml only carries what the other tool's file has no word for.
+// applyImports adds imported services. A service jig.yaml also defines is the imported one with
+// jig.yaml's keys merged over it, so jig.yaml only carries what the other tool's file has no word for.
 func (p *Project) applyImports(root *yaml.Node) error {
 	own := mappingValue(root, "services")
 	claimed := map[string]string{}
@@ -46,7 +46,7 @@ func (p *Project) applyImports(root *yaml.Node) error {
 			}
 			for n, s := range svcs {
 				if by, ok := claimed[s.workload(n)]; ok && by != n {
-					continue // rig.yaml names this workload's service differently
+					continue // jig.yaml names this workload's service differently
 				}
 				if _, ok := p.Services[n]; !ok {
 					p.Services[n] = s

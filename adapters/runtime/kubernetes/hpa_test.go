@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/goxang/rig/core"
+	"github.com/goxang/jig/core"
 )
 
 func TestHPAManifest(t *testing.T) {

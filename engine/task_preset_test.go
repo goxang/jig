@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/goxang/rig/spec"
+	"github.com/goxang/jig/spec"
 )
 
 func TestPresetTaskArgs(t *testing.T) {

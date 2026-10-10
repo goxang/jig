@@ -1,4 +1,4 @@
-// Package spec is the rig.yaml schema: services, environments and the components that serve them.
+// Package spec is the jig.yaml schema: services, environments and the components that serve them.
 package spec
 
 import (
@@ -26,37 +26,35 @@ type Project struct {
 	Environments map[string]*Environment `yaml:"environments"`
 	Components   map[string]*Component   `yaml:"components"`
 	Dashboards   map[string]*Dashboard   `yaml:"dashboards"`
-	// Flow is the Flow screen: requests travelling through the system as packets between nodes.
-	Flow *Flow `yaml:"flow"`
-	// Tests are named test suites: `rig test <name>` and the Tests screen.
+	// Tests are named test suites: `jig test <name>` and the Tests screen.
 	Tests     map[string]*TestSuite `yaml:"tests"`
 	Manifests []string              `yaml:"manifests"`
-	// Tasks are named lists of shell steps: `rig task <name>`.
+	// Tasks are named lists of shell steps: `jig task <name>`.
 	Tasks map[string]Task `yaml:"tasks"`
 	// Queries are saved queries: run on demand, or on a schedule while the UI is open.
 	Queries map[string]*Query `yaml:"queries"`
 	// Secrets are names ${NAME} may use whose values live outside the repo: the environment, then
-	// `rig secret set`, then the default written here.
+	// `jig secret set`, then the default written here.
 	Secrets map[string]Secret `yaml:"secrets"`
-	// Alerts are watched while the UI is open and shown in its header; `rig alerts` checks them once.
+	// Alerts are watched while the UI is open and shown in its header; `jig alerts` checks them once.
 	Alerts []Alert `yaml:"alerts"`
-	// Reports name the metrics a run is measured by: `rig report <name>`, a test suite's report:,
+	// Reports name the metrics a run is measured by: `jig report <name>`, a test suite's report:,
 	// the Load screen's W.
 	Reports map[string]*Report `yaml:"reports"`
 	// Sections split the Services screen by business area; services in none fall under "other".
 	Sections map[string]*Section `yaml:"sections"`
 	// OTel points every app and load service at OpenTelemetry backends.
 	OTel *OTel `yaml:"otel"`
-	// UI picks the screens of `rig` and their order.
+	// UI picks the screens of `jig` and their order.
 	UI *UI `yaml:"ui"`
-	// AI tells the assistant (`rig ai`, @ in the UI) about the project: paths it must not read, notes.
+	// AI tells the assistant (`jig ai`, @ in the UI) about the project: paths it must not read, notes.
 	AI *AI `yaml:"ai"`
-	// Help is shown by `rig -h` under the project name: this project's own quick-start for its main
+	// Help is shown by `jig -h` under the project name: this project's own quick-start for its main
 	// CLI workflows (e.g. build/deploy/ship with a target database and image tag). Plain text, a few
-	// example command lines; left out, `rig -h` shows only its own generic help.
+	// example command lines; left out, `jig -h` shows only its own generic help.
 	Help string `yaml:"help"`
 
-	// DashboardOrder, TestOrder and SectionOrder are the names as rig.yaml lists them.
+	// DashboardOrder, TestOrder and SectionOrder are the names as jig.yaml lists them.
 	DashboardOrder []string `yaml:"-"`
 	TestOrder      []string `yaml:"-"`
 	SectionOrder   []string `yaml:"-"`
@@ -93,7 +91,7 @@ type OTel struct {
 }
 
 // Screens are the UI's screens in their default order.
-var Screens = []string{"services", "logs", "metrics", "traces", "queries", "kv", "data", "load", "flow", "manifests", "hosts", "tests"}
+var Screens = []string{"services", "logs", "metrics", "traces", "queries", "kv", "data", "load", "manifests", "hosts", "tests"}
 
 type UI struct {
 	// Tabs are the screens shown, in order (number keys follow it); left out, every screen the
@@ -125,7 +123,7 @@ type AI struct {
 	Deny         []string `yaml:"deny"`
 	Instructions string   `yaml:"instructions"`
 	// Ideas are the questions tab offers in an empty chat, by screen (services, logs, ...) or "all";
-	// they come before rig's own.
+	// they come before jig's own.
 	Ideas map[string][]string `yaml:"ideas"`
 }
 
@@ -155,9 +153,9 @@ type Service struct {
 	// Delay is how long up waits after the service's dependencies are ready before starting it.
 	Delay time.Duration `yaml:"delay"`
 	// Manual services start only when named (or through their group or section), never with "all"
-	// or their role (rig infra up).
+	// or their role (jig infra up).
 	Manual bool `yaml:"manual"`
-	// Watch is what rig watch (ctrl+w in the UI) rebuilds and restarts the service on.
+	// Watch is what jig watch (ctrl+w in the UI) rebuilds and restarts the service on.
 	Watch *Watch `yaml:"watch"`
 
 	// Sections owned by adapters (local:, docker:, k8s:, ...), decoded by the adapter that reads them.
@@ -302,13 +300,13 @@ type Task struct {
 	// ReadOnly marks a task that changes nothing, so it runs in a read-only environment too.
 	ReadOnly bool     `yaml:"readonly"`
 	Steps    []string `yaml:"steps"`
-	// StepHelp says what each step does: the # comment above it in rig.yaml, or its own first # lines.
+	// StepHelp says what each step does: the # comment above it in jig.yaml, or its own first # lines.
 	StepHelp []string `yaml:"-"`
 }
 
-// TaskArg is an input a task asks for before it runs (rig task <name> on a terminal, T in the UI).
+// TaskArg is an input a task asks for before it runs (jig task <name> on a terminal, T in the UI).
 // An UPPER_CASE name reaches the steps as that env var; a lower-case one as positional words ($1...,
-// $RIG_ARGS). Choices, or From (services: every service and group; branches: the git branches;
+// $JIG_ARGS). Choices, or From (services: every service and group; branches: the git branches;
 // hosts), offer a pick list.
 type TaskArg struct {
 	Name    string   `yaml:"name"`
@@ -363,76 +361,12 @@ func stepHelp(comment, step string) string {
 	return strings.TrimSpace(strings.Join(words, " "))
 }
 
-// Flow draws how requests travel: nodes (load generators, services, queues, databases, third
-// parties) in columns, links between them, packets moving at each link's measured rate.
-type Flow struct {
-	Help string `yaml:"help"`
-	// Source is the metrics component the queries ask (default: the first).
-	Source string               `yaml:"source"`
-	Nodes  map[string]*FlowNode `yaml:"nodes"`
-	Links  []FlowLink           `yaml:"links"`
-	// Live false opens the screen without live data (no queries) until it is turned on.
-	Live *bool `yaml:"live"`
-	// NodeOrder is Nodes as rig.yaml lists them: their order down a column.
-	NodeOrder []string `yaml:"-"`
-}
-
-func (f *Flow) UnmarshalYAML(n *yaml.Node) error {
-	type plain Flow
-	if err := n.Decode((*plain)(f)); err != nil {
-		return err
-	}
-	f.NodeOrder = mappingKeys(n, "nodes")
-	return nil
-}
-
-type FlowNode struct {
-	Label string `yaml:"label"`
-	Help  string `yaml:"help"`
-	// Kind picks the icon and colour: load, gateway, service, queue, database, cache, external.
-	Kind string `yaml:"kind"`
-	// Column places the node (0 is the left); left out, it follows the links (one right of its inputs).
-	Column *int `yaml:"column"`
-	// Open is what a click opens: a service, a component (Data, Load, KV...), dashboard:<name>, or a
-	// screen.
-	Open string `yaml:"open"`
-	// Rate, Errors, Latency (ms) and Backlog are instant metrics queries.
-	Rate    string `yaml:"rate"`
-	Errors  string `yaml:"errors"`
-	Latency string `yaml:"latency"`
-	Backlog string `yaml:"backlog"`
-	// Load names load generators: their target rates make the node's offered load.
-	Load []string `yaml:"load"`
-	// Max is what the node handles per second: past 70% it runs hot, past 90% it is overloaded.
-	Max float64 `yaml:"max"`
-	// Slow is a latency (ms) past which the node counts as overloaded.
-	Slow float64 `yaml:"slow"`
-	// Low, Hot and Over are rates (per second): below Low it is barely used, from Hot it runs hot,
-	// from Over it is overloaded. Hot and Over default to 70% and 90% of Max.
-	Low  float64 `yaml:"low"`
-	Hot  float64 `yaml:"hot"`
-	Over float64 `yaml:"over"`
-	// Shared draws the node on the row under the others, reached by every node that links to it (a
-	// cache or database many use). Left out, a cache or database linked from several columns is shared.
-	Shared *bool `yaml:"shared"`
-}
-
-type FlowLink struct {
-	From  string `yaml:"from"`
-	To    string `yaml:"to"`
-	Label string `yaml:"label"`
-	// Rate and Errors are instant queries; Rate left out, the link carries its target's rate shared
-	// over the target's inputs.
-	Rate   string `yaml:"rate"`
-	Errors string `yaml:"errors"`
-}
-
 type Dashboard struct {
 	Help string `yaml:"help"`
 	// Vars are the dashboard's $variables, picked in the UI; queries use them as $name.
 	Vars   map[string]*DashVar `yaml:"vars"`
 	Panels []Panel             `yaml:"panels"`
-	// VarOrder is Vars as rig.yaml lists them.
+	// VarOrder is Vars as jig.yaml lists them.
 	VarOrder []string `yaml:"-"`
 }
 
@@ -509,7 +443,7 @@ type TestSuite struct {
 	Help  string `yaml:"help"`
 	Group string `yaml:"group"`
 	// Command runs the suite through sh instead of go test: pytest, jest, mvn test, cargo test, ...
-	// Writing JUnit XML to $RIG_JUNIT gives the screen one row per test; without it the suite passes
+	// Writing JUnit XML to $JIG_JUNIT gives the screen one row per test; without it the suite passes
 	// or fails as a whole by its exit status.
 	Command  string   `yaml:"command"`
 	Packages []string `yaml:"packages"`
@@ -616,7 +550,7 @@ func (s *Service) Section(name string, v any) (bool, error) {
 	return true, nil
 }
 
-// Count is the replica count rig.yaml asks for, and whether it asks at all.
+// Count is the replica count jig.yaml asks for, and whether it asks at all.
 func (s *Service) Count() (int, bool) {
 	if s.Replicas == nil {
 		return 0, false
@@ -624,7 +558,7 @@ func (s *Service) Count() (int, bool) {
 	return *s.Replicas, true
 }
 
-// CountOr is the replica count rig.yaml asks for, else def.
+// CountOr is the replica count jig.yaml asks for, else def.
 func (s *Service) CountOr(def int) int {
 	if n, ok := s.Count(); ok {
 		return n

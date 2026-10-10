@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/goxang/rig/core"
+	"github.com/goxang/jig/core"
 )
 
 func TestSpansFromTempoJSON(t *testing.T) {

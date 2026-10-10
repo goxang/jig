@@ -12,25 +12,25 @@ import (
 
 //go:generate go test -run TestSchemaUpToDate -update .
 
-// SchemaJSON is the JSON Schema of rig.yaml, generated from these types (Schema) by go generate.
+// SchemaJSON is the JSON Schema of jig.yaml, generated from these types (Schema) by go generate.
 //
-//go:embed rig.schema.json
+//go:embed jig.schema.json
 var SchemaJSON []byte
 
-// SchemaURL is where editors fetch SchemaJSON (the yaml-language-server header rig init writes).
-const SchemaURL = "https://raw.githubusercontent.com/goxang/rig/main/spec/rig.schema.json"
+// SchemaURL is where editors fetch SchemaJSON (the yaml-language-server header jig init writes).
+const SchemaURL = "https://raw.githubusercontent.com/goxang/jig/main/spec/jig.schema.json"
 
-// SchemaHeader is the first line of a rig.yaml that gives editors its schema.
+// SchemaHeader is the first line of a jig.yaml that gives editors its schema.
 const SchemaHeader = "# yaml-language-server: $schema=" + SchemaURL
 
-// Schema builds rig.yaml's JSON Schema from Project by reflection; describe gives a key of a type
+// Schema builds jig.yaml's JSON Schema from Project by reflection; describe gives a key of a type
 // its description ("" for none).
 func Schema(describe func(typ, key string) string) ([]byte, error) {
 	g := &schemaGen{defs: map[string]any{}, describe: describe}
 	root := g.object(reflect.TypeOf(Project{}))
 	root["$schema"] = "http://json-schema.org/draft-07/schema#"
 	root["$id"] = SchemaURL
-	root["title"] = "rig.yaml"
+	root["title"] = "jig.yaml"
 	// x-… keys hold YAML anchors (&name) for the rest of the file to reuse
 	root["patternProperties"] = map[string]any{"^x-": map[string]any{}}
 	root["definitions"] = g.defs

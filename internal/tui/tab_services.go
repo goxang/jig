@@ -13,10 +13,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/goxang/rig/core"
-	"github.com/goxang/rig/engine"
-	"github.com/goxang/rig/internal/ide"
-	"github.com/goxang/rig/spec"
+	"github.com/goxang/jig/core"
+	"github.com/goxang/jig/engine"
+	"github.com/goxang/jig/internal/ide"
+	"github.com/goxang/jig/spec"
 )
 
 // servicesTab lists services; enter opens one: its instances and its live log, which is only
@@ -27,7 +27,7 @@ type servicesTab struct {
 	list    *grid
 	marked  map[string]bool
 	filter  string
-	// section narrows the list: "" every app and load generator, a rig.yaml section, "other" (apps in
+	// section narrows the list: "" every app and load generator, a jig.yaml section, "other" (apps in
 	// no section) or "infra"
 	section  string
 	sections map[string]string
@@ -551,7 +551,7 @@ func (t *servicesTab) click(m *model, h hit) tea.Cmd {
 	return t.lt.click(m, h)
 }
 
-// shell hands the terminal to `rig exec` for the service; the TUI comes back when it exits.
+// shell hands the terminal to `jig exec` for the service; the TUI comes back when it exits.
 func (t *servicesTab) shell(m *model, svc, instance string) tea.Cmd {
 	self, err := os.Executable()
 	if err != nil {
@@ -830,7 +830,7 @@ func (t *servicesTab) markShown() {
 	}
 }
 
-// sectionOf is the section a service shows under: infrastructure first, then rig.yaml's sections.
+// sectionOf is the section a service shows under: infrastructure first, then jig.yaml's sections.
 func (t *servicesTab) sectionOf(s *spec.Service) string {
 	if s.Role == spec.RoleInfra {
 		return "infra"

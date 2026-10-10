@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/goxang/rig/manifest"
+	"github.com/goxang/jig/manifest"
 )
 
 func TestManifestFieldEdit(t *testing.T) {

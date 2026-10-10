@@ -15,9 +15,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/goxang/rig/core"
-	"github.com/goxang/rig/engine"
-	"github.com/goxang/rig/internal/sh"
+	"github.com/goxang/jig/core"
+	"github.com/goxang/jig/engine"
 )
 
 // kvTab browses a key-value store folder by folder, shows a value, edits it (in $EDITOR or inline),
@@ -300,7 +299,7 @@ func (t *kvTab) edit(m *model, key string, value []byte) tea.Cmd {
 
 // editKV opens a key's value in $VISUAL/$EDITOR; the KV screen saves it when the editor exits.
 func editKV(m *model, comp, key string, value []byte) tea.Cmd {
-	f, err := os.CreateTemp("", "rig-kv-*"+extFor(value))
+	f, err := os.CreateTemp("", "jig-kv-*"+extFor(value))
 	if err != nil {
 		m.setStatus(err.Error(), true)
 		return nil
@@ -308,7 +307,7 @@ func editKV(m *model, comp, key string, value []byte) tea.Cmd {
 	_, _ = f.Write(pretty2(value))
 	f.Close()
 	file := f.Name()
-	c := exec.Command(sh.Shell(), "-c", editorCmd()+` "$1"`, "rig-edit", file)
+	c := exec.Command("sh", "-c", editorCmd()+` "$1"`, "jig-edit", file)
 	return execProcess(c, func(err error) tea.Msg {
 		return kvEditedMsg{comp: comp, key: key, file: file, original: value, err: err}
 	})
@@ -328,12 +327,12 @@ var editors = [][2]string{
 
 func editorFile() string {
 	dir, _ := os.UserConfigDir()
-	return filepath.Join(dir, "rig", "editor")
+	return filepath.Join(dir, "jig", "editor")
 }
 
-// editorCmd is $RIG_EDITOR, the one picked with o, $VISUAL, $EDITOR, or vi.
+// editorCmd is $JIG_EDITOR, the one picked with o, $VISUAL, $EDITOR, or vi.
 func editorCmd() string {
-	if e := os.Getenv("RIG_EDITOR"); e != "" {
+	if e := os.Getenv("JIG_EDITOR"); e != "" {
 		return e
 	}
 	if raw, err := os.ReadFile(editorFile()); err == nil && len(bytes.TrimSpace(raw)) > 0 {
@@ -364,7 +363,7 @@ func pickEditor(m *model) {
 		cmds[e[0]] = e[1]
 	}
 	if len(names) == 0 {
-		m.setStatus("none of nano, vim, code, gnome-text-editor is installed: set $RIG_EDITOR", true)
+		m.setStatus("none of nano, vim, code, gnome-text-editor is installed: set $JIG_EDITOR", true)
 		return
 	}
 	m.pick("edit values with", names, desc, sel, false, func(c []string) tea.Cmd {

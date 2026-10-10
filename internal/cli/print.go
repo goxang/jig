@@ -10,7 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 
-	"github.com/goxang/rig/core"
+	"github.com/goxang/jig/core"
 )
 
 var out = lipgloss.NewRenderer(os.Stdout)
@@ -45,9 +45,9 @@ func stateText(s core.State) string {
 	return dim("? " + string(s))
 }
 
-// brief is output for agents (--brief, RIG_BRIEF=1): no colour or padding, tab-separated, long
+// brief is output for agents (--brief, JIG_BRIEF=1): no colour or padding, tab-separated, long
 // cells cut, at most briefRows rows; every token is paid for.
-var brief = os.Getenv("RIG_BRIEF") != ""
+var brief = os.Getenv("JIG_BRIEF") != ""
 
 const briefRows = 100
 

@@ -6,8 +6,8 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/goxang/rig/core"
-	"github.com/goxang/rig/internal/viz"
+	"github.com/goxang/jig/core"
+	"github.com/goxang/jig/internal/viz"
 )
 
 var (

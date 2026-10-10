@@ -16,12 +16,12 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/goxang/rig/core"
-	"github.com/goxang/rig/engine"
-	"github.com/goxang/rig/spec"
+	"github.com/goxang/jig/core"
+	"github.com/goxang/jig/engine"
+	"github.com/goxang/jig/spec"
 )
 
-// Session is what S saves and `rig resume` brings back: the screen, what each screen was showing,
+// Session is what S saves and `jig resume` brings back: the screen, what each screen was showing,
 // and the query results and history of the run.
 type Session struct {
 	ID      string    `json:"id"`
@@ -80,11 +80,11 @@ type savedLoadHist struct {
 func sessionDir(projectDir string) string {
 	dir, err := spec.DataDir(projectDir)
 	if err != nil {
-		return filepath.Join(projectDir, ".rig", "sessions")
+		return filepath.Join(projectDir, ".jig", "sessions")
 	}
 	dir = filepath.Join(dir, "sessions")
-	// sessions used to live in the project's .rig; bring them along once
-	if old := filepath.Join(projectDir, ".rig", "sessions"); exists(old) && !exists(dir) {
+	// sessions used to live in the project's .jig; bring them along once
+	if old := filepath.Join(projectDir, ".jig", "sessions"); exists(old) && !exists(dir) {
 		if os.MkdirAll(filepath.Dir(dir), 0o755) == nil {
 			_ = os.Rename(old, dir)
 		}
@@ -263,7 +263,7 @@ func LoadSession(projectDir, id string) (*Session, error) {
 			return nil, err
 		}
 		if len(ss) == 0 {
-			return nil, fmt.Errorf("no saved sessions in %s (press S in rig to save one)", sessionDir(projectDir))
+			return nil, fmt.Errorf("no saved sessions in %s (press S in jig to save one)", sessionDir(projectDir))
 		}
 		id = ss[0].ID
 	}
@@ -333,7 +333,7 @@ func CloseSession(projectDir, id string) error {
 
 func pinFile(projectDir string) string { return filepath.Join(sessionDir(projectDir), "pinned") }
 
-// Pinned is the session rig opens on (the last one S saved) and its environment; "" for none.
+// Pinned is the session jig opens on (the last one S saved) and its environment; "" for none.
 func Pinned(projectDir string) (id, env string) {
 	raw, err := os.ReadFile(pinFile(projectDir))
 	if err != nil {
@@ -346,10 +346,10 @@ func Pinned(projectDir string) (id, env string) {
 	return s.ID, s.Env
 }
 
-// Unpin has rig open fresh again.
+// Unpin has jig open fresh again.
 func Unpin(projectDir string) { _ = os.Remove(pinFile(projectDir)) }
 
-// PickSession is `rig resume`'s chooser: rows are id, kind, saved, what; enter picks one, d closes
+// PickSession is `jig resume`'s chooser: rows are id, kind, saved, what; enter picks one, d closes
 // the selected one (through close), q leaves. It returns the picked row, -1 for none.
 func PickSession(rows [][]string, close func(i int) error) (int, error) {
 	p := &sessionPicker{rows: rows, close: close, pick: -1}

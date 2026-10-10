@@ -4,18 +4,19 @@ package redis
 import (
 	"context"
 	"fmt"
-	"github.com/goxang/rig/ai"
 	"io"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 
+	"github.com/goxang/jig/ai"
+
 	goredis "github.com/redis/go-redis/v9"
 
-	"github.com/goxang/rig/core"
-	"github.com/goxang/rig/plugin"
-	"github.com/goxang/rig/spec"
+	"github.com/goxang/jig/core"
+	"github.com/goxang/jig/plugin"
+	"github.com/goxang/jig/spec"
 )
 
 func init() {

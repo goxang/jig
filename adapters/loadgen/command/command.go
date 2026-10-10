@@ -11,11 +11,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/goxang/rig/adapters/loadgen"
-	"github.com/goxang/rig/core"
-	"github.com/goxang/rig/internal/sh"
-	"github.com/goxang/rig/plugin"
-	"github.com/goxang/rig/spec"
+	"github.com/goxang/jig/adapters/loadgen"
+	"github.com/goxang/jig/core"
+	"github.com/goxang/jig/internal/sh"
+	"github.com/goxang/jig/plugin"
+	"github.com/goxang/jig/spec"
 )
 
 func init() {
@@ -50,7 +50,7 @@ func (g *Gen) run(ctx context.Context, script string) ([]byte, error) {
 	if script == "" {
 		return nil, core.ErrUnsupported
 	}
-	c := sh.New(sh.Shell(), "-c", script)
+	c := sh.New("sh", "-c", script)
 	c.Dir = g.env.Project().Dir
 	return c.Output(ctx)
 }

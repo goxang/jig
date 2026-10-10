@@ -9,7 +9,7 @@ import (
 
 	goredis "github.com/redis/go-redis/v9"
 
-	"github.com/goxang/rig/core"
+	"github.com/goxang/jig/core"
 )
 
 const browseKeys = 2000

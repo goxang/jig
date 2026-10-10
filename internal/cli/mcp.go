@@ -15,20 +15,20 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/goxang/rig/ai"
-	"github.com/goxang/rig/engine"
-	"github.com/goxang/rig/internal/scaffold"
+	"github.com/goxang/jig/ai"
+	"github.com/goxang/jig/engine"
+	"github.com/goxang/jig/internal/scaffold"
 )
 
-// mcpCommand serves rig to AI agents over the Model Context Protocol (JSON-RPC on stdio). Every tool
+// mcpCommand serves jig to AI agents over the Model Context Protocol (JSON-RPC on stdio). Every tool
 // runs this binary's own CLI, so agents get exactly what a person at the terminal gets, protections included.
 func mcpCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "mcp",
-		Short: "serve rig to AI agents over MCP (stdio): status, up, deploy, build, logs, queries, load, kv, tasks",
+		Short: "serve jig to AI agents over MCP (stdio): status, up, deploy, build, logs, queries, load, kv, tasks",
 		Long: `Add to an agent's MCP config:
 
-  { "mcpServers": { "rig": { "command": "rig", "args": ["mcp"], "cwd": "/path/to/project" } } }
+  { "mcpServers": { "jig": { "command": "jig", "args": ["mcp"], "cwd": "/path/to/project" } } }
 
 Changes to a protected environment, and pushes over an existing image tag, need "confirm": true.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -71,11 +71,11 @@ func serveMCP(ctx context.Context, in io.Reader, out io.Writer) error {
 		byName[t.Name] = t
 	}
 	listed := tools
-	// opencode names a server's tools <server>_<tool>: served bare, rig_status stays rig_status there
+	// opencode names a server's tools <server>_<tool>: served bare, jig_status stays jig_status there
 	if os.Getenv(ai.EnvBareTools) != "" {
 		listed = make([]mcpTool, len(tools))
 		for i, t := range tools {
-			t.Name = strings.TrimPrefix(t.Name, "rig_")
+			t.Name = strings.TrimPrefix(t.Name, "jig_")
 			listed[i] = t
 		}
 	}
@@ -104,7 +104,7 @@ func serveMCP(ctx context.Context, in io.Reader, out io.Writer) error {
 			resp.Result = map[string]any{
 				"protocolVersion": p.ProtocolVersion,
 				"capabilities":    map[string]any{"tools": map[string]any{}},
-				"serverInfo":      map[string]any{"name": "rig", "version": Version},
+				"serverInfo":      map[string]any{"name": "jig", "version": Version},
 				"instructions":    instructions(),
 			}
 		case "ping":
@@ -122,7 +122,7 @@ func serveMCP(ctx context.Context, in io.Reader, out io.Writer) error {
 			}
 			t, ok := byName[p.Name]
 			if !ok {
-				t, ok = byName["rig_"+p.Name]
+				t, ok = byName["jig_"+p.Name]
 			}
 			if !ok {
 				resp.Error = &rpcErr{Code: -32602, Message: "unknown tool " + p.Name}
@@ -156,23 +156,23 @@ func mcpRedactor() *ai.Redactor {
 
 func instructions() string {
 	if lock := os.Getenv(ai.EnvLock); lock != "" {
-		return "rig controls this project's services and infrastructure. This session is bound to environment " + lock +
-			": every tool acts on it. Start with rig_status. Mutating tools take user_request: the user's own words asking for the change, verbatim."
+		return "jig controls this project's services and infrastructure. This session is bound to environment " + lock +
+			": every tool acts on it. Start with jig_status. Mutating tools take user_request: the user's own words asking for the change, verbatim."
 	}
-	return "rig controls this project's services and infrastructure in any environment (local, docker, kind, kubernetes). " +
-		"Start with rig_envs and rig_status. Every tool takes an optional env. Changes to protected environments need confirm: true."
+	return "jig controls this project's services and infrastructure in any environment (local, docker, kind, kubernetes). " +
+		"Start with jig_envs and jig_status. Every tool takes an optional env. Changes to protected environments need confirm: true."
 }
 
-// callTool runs a tool; serving an assistant started by rig (RIG_AI_ENV set), it first holds the
+// callTool runs a tool; serving an assistant started by jig (JIG_AI_ENV set), it first holds the
 // call to the session's environment, has the user confirm any change, and logs what ran.
 func callTool(ctx context.Context, t mcpTool, args map[string]any) (string, bool) {
 	if args == nil {
 		args = map[string]any{}
 	}
 	switch t.Name {
-	case "rig_ui":
+	case "jig_ui":
 		return uiTool(args)
-	case "rig_file":
+	case "jig_file":
 		return fileTool(args)
 	}
 	argv, err := t.argv(args)
@@ -184,7 +184,7 @@ func callTool(ctx context.Context, t mcpTool, args map[string]any) (string, bool
 		yes, _ := args["confirm"].(bool)
 		return runTool(ctx, argv, str(args, "env"), yes)
 	}
-	e := ai.AuditEntry{At: time.Now(), Env: lock, Command: "rig " + strings.Join(argv, " "), Risk: ai.Classify(argv).String()}
+	e := ai.AuditEntry{At: time.Now(), Env: lock, Command: "jig " + strings.Join(argv, " "), Risk: ai.Classify(argv).String()}
 	by, result, err := guard(lock, args, argv)
 	if err != nil {
 		e.Result, e.Output = result, err.Error()
@@ -201,7 +201,7 @@ func callTool(ctx context.Context, t mcpTool, args map[string]any) (string, bool
 }
 
 // audit appends e to the session's audit log and, for anything but a plain read, shows it in the
-// rig that runs the assistant.
+// jig that runs the assistant.
 func audit(e ai.AuditEntry) {
 	_ = ai.AppendAudit(os.Getenv(ai.EnvAudit), e)
 	if sock := os.Getenv(ai.EnvSock); sock != "" && (e.Risk != ai.Read.String() || e.Result != "ok") {
@@ -214,23 +214,23 @@ func audit(e ai.AuditEntry) {
 // "refused" or "declined" with err.
 func guard(lock string, args map[string]any, argv []string) (by, result string, err error) {
 	if env := str(args, "env"); env != "" && env != lock {
-		return "", "refused", fmt.Errorf("refused: this session is bound to environment %s; to work on %s the user switches rig to it (E) and asks there", lock, env)
+		return "", "refused", fmt.Errorf("refused: this session is bound to environment %s; to work on %s the user switches jig to it (E) and asks there", lock, env)
 	}
 	for _, a := range argv {
 		f, _, _ := strings.Cut(a, "=")
 		switch f {
 		case "-e", "--env", "-f", "--file", "--namespace", "-y", "--yes":
-			return "", "refused", fmt.Errorf("refused: %s is not allowed here; the session's environment and confirmations are set by rig", f)
+			return "", "refused", fmt.Errorf("refused: %s is not allowed here; the session's environment and confirmations are set by jig", f)
 		}
 	}
 	risk := ai.Classify(argv)
 	if risk == ai.Refused {
-		return "", "refused", fmt.Errorf("refused: rig %s is not available to the assistant", argv[0])
+		return "", "refused", fmt.Errorf("refused: jig %s is not available to the assistant", argv[0])
 	}
 	if risk == ai.Read {
 		return "", "", nil
 	}
-	what := "rig " + strings.Join(argv, " ")
+	what := "jig " + strings.Join(argv, " ")
 	by, err = approval(args, what, fmt.Sprintf("AI: %s  (%s on %s)", what, risk, aiEnvLabel(lock, os.Getenv(ai.EnvProtected) != "")))
 	if err != nil {
 		return "", "declined", err
@@ -238,7 +238,7 @@ func guard(lock string, args map[string]any, argv []string) (by, result string, 
 	return by, "", nil
 }
 
-// approval puts an assistant's change to the user: in the rig UI or terminal that runs the assistant,
+// approval puts an assistant's change to the user: in the jig UI or terminal that runs the assistant,
 // or, with no one there to ask, their own words quoted in user_request. It returns who said yes.
 func approval(args map[string]any, command, question string) (string, error) {
 	quoted := func(why string) (string, error) {
@@ -253,7 +253,7 @@ func approval(args map[string]any, command, question string) (string, error) {
 	}
 	r, err := ai.Call(sock, ai.Request{Op: "approve", Command: command, Text: question}, 10*time.Minute)
 	if err != nil {
-		return quoted(fmt.Sprintf(" (could not ask in rig: %v)", err))
+		return quoted(fmt.Sprintf(" (could not ask in jig: %v)", err))
 	}
 	if r.NoOne {
 		return quoted(" (" + r.Text + ")")
@@ -281,11 +281,11 @@ func note(s string) string {
 	return " (" + s + ")"
 }
 
-// uiTool asks the rig UI that started the assistant to show or schedule something.
+// uiTool asks the jig UI that started the assistant to show or schedule something.
 func uiTool(args map[string]any) (string, bool) {
 	sock := os.Getenv(ai.EnvSock)
 	if sock == "" {
-		return "no rig UI is attached to this session: use rig_query instead", true
+		return "no jig UI is attached to this session: use jig_query instead", true
 	}
 	steps := []map[string]any{args}
 	if v, ok := args["steps"].([]any); ok && len(v) > 0 {
@@ -304,7 +304,7 @@ func uiTool(args map[string]any) (string, bool) {
 			continue
 		}
 		if q := req.Args["query"]; q != "" && ai.ClassifyQuery(q) != ai.Read {
-			return strings.Join(append(out, "refused: only reading queries go on the Queries screen; run a change once with rig_query"), "\n"), true
+			return strings.Join(append(out, "refused: only reading queries go on the Queries screen; run a change once with jig_query"), "\n"), true
 		}
 		r, err := ai.Call(sock, req, 30*time.Second)
 		if err != nil {
@@ -384,7 +384,7 @@ func runTool(ctx context.Context, argv []string, env string, yes bool) (string, 
 		return err.Error(), true
 	}
 	cmd := exec.CommandContext(ctx, self, append(global, argv...)...)
-	cmd.Env = append(os.Environ(), "NO_COLOR=1", "RIG_BRIEF=1", "RIG_YES=")
+	cmd.Env = append(os.Environ(), "NO_COLOR=1", "JIG_BRIEF=1", "JIG_YES=")
 	var buf bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &buf, &buf
 	err = cmd.Run()
@@ -471,11 +471,11 @@ func flag(a map[string]any, k, f string) []string {
 
 func mcpTools() []mcpTool {
 	return []mcpTool{
-		{Name: "rig_init", Description: "draft rig.yaml from what the project has (compose files, Kubernetes manifests, Go/Python/Node/Java/Rust services) plus infrastructure presets; returns the YAML. write: true writes it (force: true replaces an existing rig.yaml). After writing or editing rig.yaml, rig_envs checks it loads.",
+		{Name: "jig_init", Description: "draft jig.yaml from what the project has (compose files, Kubernetes manifests, Go/Python/Node/Java/Rust services) plus infrastructure presets; returns the YAML. write: true writes it (force: true replaces an existing jig.yaml). After writing or editing jig.yaml, jig_envs checks it loads.",
 			InputSchema: schema(map[string]any{
 				"with":  map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "infrastructure to add: " + strings.Join(scaffold.Presets(), ", ")},
-				"write": pBool("write rig.yaml instead of returning the draft"),
-				"force": pBool("replace an existing rig.yaml"),
+				"write": pBool("write jig.yaml instead of returning the draft"),
+				"force": pBool("replace an existing jig.yaml"),
 			}),
 			argv: func(a map[string]any) ([]string, error) {
 				argv := []string{"init"}
@@ -487,7 +487,7 @@ func mcpTools() []mcpTool {
 				}
 				return append(argv, flag(a, "force", "--force")...), nil
 			}},
-		{Name: "rig_docs", Description: "rig's reference: config (every rig.yaml key: services, environments, components, otel, ui tabs, dashboards and panels, queries, tests, tasks, alerts), guide (CLI commands, every TUI screen and its keys, AI, GoLand, MCP tools), design (adapters and what each kind does), manifests",
+		{Name: "jig_docs", Description: "jig's reference: config (every jig.yaml key: services, environments, components, otel, ui tabs, dashboards and panels, queries, tests, tasks, alerts), guide (CLI commands, every TUI screen and its keys, AI, GoLand, MCP tools), design (adapters and what each kind does), manifests",
 			InputSchema: schema(map[string]any{"name": pString("config (default), guide, design or manifests"), "search": pString("words: only the sections holding all of them (across every doc when name is empty), e.g. \"tasks steps\"; prefer it over reading a whole doc")}),
 			argv: func(a map[string]any) ([]string, error) {
 				argv := []string{"docs"}
@@ -498,15 +498,15 @@ func mcpTools() []mcpTool {
 				}
 				return append(argv, strings.Fields(str(a, "search"))...), nil
 			}},
-		{Name: "rig_envs", Description: "environments of the project, their runtimes, and the components of the current one",
+		{Name: "jig_envs", Description: "environments of the project, their runtimes, and the components of the current one",
 			InputSchema: schema(map[string]any{}),
 			argv:        func(map[string]any) ([]string, error) { return []string{"env"}, nil }},
-		{Name: "rig_status", Description: "state, readiness, restarts and image of services",
+		{Name: "jig_status", Description: "state, readiness, restarts and image of services",
 			InputSchema: schema(map[string]any{"targets": pTargets}),
 			argv: func(a map[string]any) ([]string, error) {
 				return append([]string{"status"}, list(a, "targets")...), nil
 			}},
-		{Name: "rig_up", Description: "deploy targets and their dependencies in dependency order, waiting for readiness. Infrastructure that runs is left alone. build: build images first (from ref when given); tag: deploy that registry tag without building.",
+		{Name: "jig_up", Description: "deploy targets and their dependencies in dependency order, waiting for readiness. Infrastructure that runs is left alone. build: build images first (from ref when given); tag: deploy that registry tag without building.",
 			InputSchema: schema(map[string]any{"targets": pTargets, "build": pBool("build images first"), "tag": pString("image tag"), "ref": pString("git ref to build from")}),
 			argv: func(a map[string]any) ([]string, error) {
 				argv := append([]string{"up"}, list(a, "targets")...)
@@ -514,10 +514,10 @@ func mcpTools() []mcpTool {
 				argv = append(argv, flag(a, "tag", "--tag")...)
 				return append(argv, flag(a, "ref", "--ref")...), nil
 			}},
-		{Name: "rig_down", Description: "stop services in reverse dependency order (every app when no targets; infrastructure only when named)",
+		{Name: "jig_down", Description: "stop services in reverse dependency order (every app when no targets; infrastructure only when named)",
 			InputSchema: schema(map[string]any{"targets": pTargets}),
 			argv:        func(a map[string]any) ([]string, error) { return append([]string{"down"}, list(a, "targets")...), nil }},
-		{Name: "rig_service", Description: "start, stop or restart services (restart reloads their configuration)",
+		{Name: "jig_service", Description: "start, stop or restart services (restart reloads their configuration)",
 			InputSchema: schema(map[string]any{"action": map[string]any{"type": "string", "enum": []string{"start", "stop", "restart"}}, "targets": pTargets}, "action", "targets"),
 			argv: func(a map[string]any) ([]string, error) {
 				if err := need(a, "action", "targets"); err != nil {
@@ -525,7 +525,7 @@ func mcpTools() []mcpTool {
 				}
 				return append([]string{str(a, "action")}, list(a, "targets")...), nil
 			}},
-		{Name: "rig_scale", Description: "set replica counts, or move them: replicas \"3\", \"+1\", \"-2\"",
+		{Name: "jig_scale", Description: "set replica counts, or move them: replicas \"3\", \"+1\", \"-2\"",
 			InputSchema: schema(map[string]any{"targets": pTargets, "replicas": pString("count, or +n / -n")}, "targets", "replicas"),
 			argv: func(a map[string]any) ([]string, error) {
 				if err := need(a, "targets", "replicas"); err != nil {
@@ -533,7 +533,7 @@ func mcpTools() []mcpTool {
 				}
 				return append(append([]string{"scale"}, list(a, "targets")...), str(a, "replicas")), nil
 			}},
-		{Name: "rig_build", Description: "build images and push them to the environment's registry; returns the tag. An existing tag is not overwritten without confirm.",
+		{Name: "jig_build", Description: "build images and push them to the environment's registry; returns the tag. An existing tag is not overwritten without confirm.",
 			InputSchema: schema(map[string]any{"targets": pTargets, "tag": pString("image tag (default: <branch>-<date>-<time>)"), "ref": pString("git branch, tag or commit to build (default: the working tree)")}, "targets"),
 			argv: func(a map[string]any) ([]string, error) {
 				if err := need(a, "targets"); err != nil {
@@ -543,7 +543,7 @@ func mcpTools() []mcpTool {
 				argv = append(argv, flag(a, "tag", "--tag")...)
 				return append(argv, flag(a, "ref", "--ref")...), nil
 			}},
-		{Name: "rig_deploy", Description: "roll out services: with tag, that image tag from the registry (apps separately from infra: targets [\"app\"]); with build, a fresh build first",
+		{Name: "jig_deploy", Description: "roll out services: with tag, that image tag from the registry (apps separately from infra: targets [\"app\"]); with build, a fresh build first",
 			InputSchema: schema(map[string]any{"targets": pTargets, "tag": pString("image tag to deploy"), "build": pBool("build first"), "ref": pString("git ref to build from")}, "targets"),
 			argv: func(a map[string]any) ([]string, error) {
 				if err := need(a, "targets"); err != nil {
@@ -554,7 +554,7 @@ func mcpTools() []mcpTool {
 				argv = append(argv, flag(a, "build", "--build")...)
 				return append(argv, flag(a, "ref", "--ref")...), nil
 			}},
-		{Name: "rig_logs", Description: "recent log lines of services (merged), optionally one instance, filtered by text",
+		{Name: "jig_logs", Description: "recent log lines of services (merged), optionally one instance, filtered by text",
 			InputSchema: schema(map[string]any{"targets": pTargets, "tail": pString("lines per service (default 100)"), "since": pString("e.g. 10m"), "grep": pString("only lines containing this"), "regex": pString("only lines matching this RE2 regex, (?i) for any case"), "instance": pString("one pod or container")}, "targets"),
 			argv: func(a map[string]any) ([]string, error) {
 				argv := append([]string{"logs"}, list(a, "targets")...)
@@ -564,7 +564,7 @@ func mcpTools() []mcpTool {
 				argv = append(argv, flag(a, "regex", "--regex")...)
 				return append(argv, flag(a, "instance", "--instance")...), nil
 			}},
-		{Name: "rig_query", Description: "run a saved query (name, with params) or an ad hoc one (component + query: SQL with optional @db prefix, PromQL, redis, kubectl, rabbitmq, kv). With no arguments lists saved queries and queryable components.",
+		{Name: "jig_query", Description: "run a saved query (name, with params) or an ad hoc one (component + query: SQL with optional @db prefix, PromQL, redis, kubectl, rabbitmq, kv). With no arguments lists saved queries and queryable components.",
 			InputSchema: schema(map[string]any{"saved": pString("saved query name"), "params": map[string]any{"type": "object", "description": "values for the saved query's {{placeholders}}"},
 				"component": pString("component for an ad hoc query"), "query": pString("ad hoc query text")}),
 			argv: func(a map[string]any) ([]string, error) {
@@ -582,7 +582,7 @@ func mcpTools() []mcpTool {
 				}
 				return []string{"query", str(a, "component"), str(a, "query")}, nil
 			}},
-		{Name: "rig_load", Description: "load generators: status (all), start, stop, rate (requests/s per instance), scale (instances: n, +n, -n), up/down (one step)",
+		{Name: "jig_load", Description: "load generators: status (all), start, stop, rate (requests/s per instance), scale (instances: n, +n, -n), up/down (one step)",
 			InputSchema: schema(map[string]any{"action": map[string]any{"type": "string", "enum": []string{"status", "start", "stop", "rate", "scale", "up", "down"}},
 				"generator": pString("generator component"), "value": pString("rate or replicas"), "force": pBool("allow a rate above the generator's max")}, "action"),
 			argv: func(a map[string]any) ([]string, error) {
@@ -599,7 +599,7 @@ func mcpTools() []mcpTool {
 				}
 				return append(argv, flag(a, "force", "--force")...), nil
 			}},
-		{Name: "rig_kv", Description: "key-value store (Consul): list keys under a prefix, get, put or delete a key. After changing a service's configuration, restart it with rig_service.",
+		{Name: "jig_kv", Description: "key-value store (Consul): list keys under a prefix, get, put or delete a key. After changing a service's configuration, restart it with jig_service.",
 			InputSchema: schema(map[string]any{"action": map[string]any{"type": "string", "enum": []string{"list", "get", "put", "delete"}}, "key": pString("key or prefix"), "value": pString("value for put")}, "action"),
 			argv: func(a map[string]any) ([]string, error) {
 				switch str(a, "action") {
@@ -614,15 +614,15 @@ func mcpTools() []mcpTool {
 				}
 				return nil, fmt.Errorf("action is list, get, put or delete")
 			}},
-		{Name: "rig_infra", Description: "infrastructure where it runs (shared by local, docker and kind): status, up, down, restart",
+		{Name: "jig_infra", Description: "infrastructure where it runs (shared by local, docker and kind): status, up, down, restart",
 			InputSchema: schema(map[string]any{"action": map[string]any{"type": "string", "enum": []string{"status", "up", "down", "restart"}}, "targets": pTargets}, "action"),
 			argv: func(a map[string]any) ([]string, error) {
 				return append([]string{"infra", str(a, "action")}, list(a, "targets")...), need(a, "action")
 			}},
-		{Name: "rig_task", Description: "run a named task from rig.yaml (e.g. bootstrap); without name lists tasks",
+		{Name: "jig_task", Description: "run a named task from jig.yaml (e.g. bootstrap); without name lists tasks",
 			InputSchema: schema(map[string]any{"name": pString("task name")}),
 			argv:        func(a map[string]any) ([]string, error) { return append([]string{"task"}, list(a, "name")...), nil }},
-		{Name: "rig_test", Description: "run a test suite from rig.yaml (go test -json) and get its failures with output; failed=true reruns the last run's failures; report=true reads the last run instead of running; without suite lists suites",
+		{Name: "jig_test", Description: "run a test suite from jig.yaml (go test -json) and get its failures with output; failed=true reruns the last run's failures; report=true reads the last run instead of running; without suite lists suites",
 			InputSchema: schema(map[string]any{"suite": pString("suite name"), "run": pString("only tests matching (go test -run)"), "failed": pBool("rerun the last run's failures"),
 				"race": pBool("race detector"), "cover": pBool("coverage"), "bench": pString("benchmarks matching"), "count": pString("run each test n times"), "report": pBool("report of the last run, no run")}),
 			argv: func(a map[string]any) ([]string, error) {
@@ -639,8 +639,8 @@ func mcpTools() []mcpTool {
 				}
 				return argv, nil
 			}},
-		{Name: "rig_ui", Description: "act in the rig UI the user has open; every action answers with the screen once it has loaded, so one call does it (no state call after). " +
-			"open (screen: services, logs, metrics, traces, queries, kv, data, load, manifests, hosts, tests, flow; select: the row to land on — Data a component, Services a service, Load a generator, Metrics a dashboard, Manifests an object name; path: Data's walk into the component, e.g. [\"db1\"] for a Redis database or [\"Switch\", \"tables\"]; filter: narrows the list), " +
+		{Name: "jig_ui", Description: "act in the jig UI the user has open; every action answers with the screen once it has loaded, so one call does it (no state call after). " +
+			"open (screen: services, logs, metrics, traces, queries, kv, data, load, manifests, hosts, tests; select: the row to land on — Data a component, Services a service, Load a generator, Metrics a dashboard, Manifests an object name; path: Data's walk into the component, e.g. [\"db1\"] for a Redis database or [\"Switch\", \"tables\"]; filter: narrows the list), " +
 			"keys (keys pressed in order on the open screen, e.g. [\"/\", \"api\", \"enter\"]; enter, esc, tab, up, down, left, right, ctrl+r, space; anything else is typed; changes wait for the user's confirmation), " +
 			"logs (services, optional grep), panels (dashboard, panels: show only these panel titles on Metrics, none shows all), add_query (component, query, optional name and every like \"30s\"), schedule (name, every), unschedule (name), state (the screen, without acting). " +
 			"steps: several of these objects run in order in ONE call, e.g. [{action: open, screen: data, select: redis-atomic, path: [db1]}, {action: keys, keys: [\"/\", \"key\"]}]",
@@ -652,20 +652,20 @@ func mcpTools() []mcpTool {
 				"filter": pString("open: narrows the screen's list"),
 				"name":   pString("query name"), "component": pString("component to query"), "query": pString("query text"), "every": pString("schedule interval, e.g. 30s"),
 				"screen": pString("screen to open"), "services": pTargets, "grep": pString("log filter")})},
-		{Name: "rig_file", Description: "the project's files, inside its directory only: list (path, recursive), read (path), write (path, content: creates or replaces), edit (path, old, new: old must be exact and unique unless all: true), move (path, to), delete (path: a file, or a directory with what is in it; needs the user's go-ahead). Paths are relative to the project. Credentials and .git are out of reach.",
+		{Name: "jig_file", Description: "the project's files, inside its directory only: list (path, recursive), read (path), write (path, content: creates or replaces), edit (path, old, new: old must be exact and unique unless all: true), move (path, to), delete (path: a file, or a directory with what is in it; needs the user's go-ahead). Paths are relative to the project. Credentials and .git are out of reach.",
 			InputSchema: schema(map[string]any{"action": map[string]any{"type": "string", "enum": []string{"list", "read", "write", "edit", "move", "delete"}},
 				"path": pString("file or directory, relative to the project"), "to": pString("move: the new path"), "content": pString("write: the whole new content"),
 				"old": pString("edit: the exact text to replace"), "new": pString("edit: what replaces it"), "all": pBool("edit: replace every occurrence"),
 				"recursive": pBool("list: walk subdirectories")}, "action")},
-		{Name: "rig", Description: "any rig command line, for what the other tools do not cover (e.g. [\"do\", \"runtime\", \"events\"], [\"traces\", \"--min\", \"500ms\"])",
+		{Name: "jig", Description: "any jig command line, for what the other tools do not cover (e.g. [\"do\", \"runtime\", \"events\"], [\"traces\", \"--min\", \"500ms\"])",
 			InputSchema: schema(map[string]any{"args": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}}, "args"),
 			argv: func(a map[string]any) ([]string, error) {
 				args := list(a, "args")
 				if len(args) == 0 {
-					return nil, fmt.Errorf("args is required: give the rig command line as a list, e.g. [\"do\", \"runtime\", \"events\"]")
+					return nil, fmt.Errorf("args is required: give the jig command line as a list, e.g. [\"do\", \"runtime\", \"events\"]")
 				}
 				if args[0] == "mcp" || len(args) == 0 {
-					return nil, fmt.Errorf("rig mcp cannot start another mcp server from inside itself")
+					return nil, fmt.Errorf("jig mcp cannot start another mcp server from inside itself")
 				}
 				return args, nil
 			}},

@@ -7,13 +7,13 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/goxang/rig/manifest"
-	"github.com/goxang/rig/spec"
+	"github.com/goxang/jig/manifest"
+	"github.com/goxang/jig/spec"
 )
 
 func init() { spec.RegisterImporter("compose", importCompose) }
 
-// importCompose reads a compose file's services as rig services under their compose names, so a
+// importCompose reads a compose file's services as jig services under their compose names, so a
 // docker runtime with compose: finds their containers. ${VARS} fill from the environment, then the
 // compose file's .env.
 func importCompose(path, dir string) (map[string]*spec.Service, error) {

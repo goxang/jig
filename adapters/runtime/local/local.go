@@ -1,6 +1,6 @@
 // Package local runs services as processes on this machine. Processes are detached into their own
-// process group, so they outlive the rig command that started them; pid and log files live under
-// .rig/<env>/.
+// process group, so they outlive the jig command that started them; pid and log files live under
+// .jig/<env>/.
 package local
 
 import (
@@ -18,15 +18,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/goxang/rig/core"
-	"github.com/goxang/rig/internal/localhost"
-	"github.com/goxang/rig/internal/sh"
-	"github.com/goxang/rig/plugin"
-	"github.com/goxang/rig/spec"
+	"github.com/goxang/jig/core"
+	"github.com/goxang/jig/internal/localhost"
+	"github.com/goxang/jig/internal/sh"
+	"github.com/goxang/jig/plugin"
+	"github.com/goxang/jig/spec"
 )
 
 func init() {
-	plugin.Register(core.KindRuntime, "local", "processes on this machine: go build + run, detached, pid and log files under .rig/", New)
+	plugin.Register(core.KindRuntime, "local", "processes on this machine: go build + run, detached, pid and log files under .jig/", New)
 }
 
 type Options struct {
@@ -351,7 +351,7 @@ func (r *Runtime) Exec(ctx context.Context, s *spec.Service, o core.ExecOptions)
 }
 
 // Forward is the port itself, except a service's metrics port when its process does not listen
-// there: local configs often give every service its own metrics port while rig.yaml names one for
+// there: local configs often give every service its own metrics port while jig.yaml names one for
 // all, so the process's own port serving /metrics stands in.
 func (r *Runtime) Forward(ctx context.Context, t core.Target) (string, error) {
 	addr := fmt.Sprintf("127.0.0.1:%d", t.Port)

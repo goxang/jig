@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/goxang/rig/core"
+	"github.com/goxang/jig/core"
 )
 
 func TestJSONTreeEditKeepsOrder(t *testing.T) {

@@ -18,7 +18,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/goxang/rig/internal/sh"
+	"github.com/goxang/jig/internal/sh"
 )
 
 // job is one operation started from the UI (a build, a deploy, a task): its output, kept while it
@@ -29,7 +29,7 @@ type job struct {
 	stop  context.CancelFunc
 	// stdin, when set, takes what the user types for the job (a task step that reads input)
 	stdin io.WriteCloser
-	// log and pid, for a task: it writes to log.log and keeps running when rig closes, so a
+	// log and pid, for a task: it writes to log.log and keeps running when jig closes, so a
 	// session reopened later follows it again
 	log string
 	pid int
@@ -157,7 +157,7 @@ func (j *job) took() time.Duration {
 // taskFiles makes the files a task writes: base.log its output, base.err and base.done how it ended.
 // Those of tasks started over a week ago go.
 func taskFiles() (base string, out *os.File, err error) {
-	dir := filepath.Join(os.TempDir(), "rig-tasks")
+	dir := filepath.Join(os.TempDir(), "jig-tasks")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", nil, err
 	}

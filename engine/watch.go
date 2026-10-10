@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/goxang/rig/core"
-	"github.com/goxang/rig/internal/sh"
-	"github.com/goxang/rig/spec"
+	"github.com/goxang/jig/core"
+	"github.com/goxang/jig/internal/sh"
+	"github.com/goxang/jig/spec"
 )
 
 // WatchEvent is a step of a live rebuild: State is changed, building, restarting, ok or failed.
@@ -27,7 +27,7 @@ type WatchEvent struct {
 	Took   time.Duration
 }
 
-var defaultIgnore = []string{"*_test.go", "*.md", ".git", ".rig", "node_modules", "*.swp", "*~", ".#*"}
+var defaultIgnore = []string{"*_test.go", "*.md", ".git", ".jig", "node_modules", "*.swp", "*~", ".#*"}
 
 // watchPoll and watchQuiet: how often sources are looked at, and how long they must stay unchanged
 // after a change before the rebuild starts (an editor's save, a git checkout, come in bursts).

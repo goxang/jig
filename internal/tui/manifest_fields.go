@@ -8,7 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"gopkg.in/yaml.v3"
 
-	"github.com/goxang/rig/manifest"
+	"github.com/goxang/jig/manifest"
 )
 
 const secretMask = "••••••"

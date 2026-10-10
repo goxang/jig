@@ -12,10 +12,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/goxang/rig/core"
-	"github.com/goxang/rig/internal/sh"
-	"github.com/goxang/rig/manifest"
-	"github.com/goxang/rig/spec"
+	"github.com/goxang/jig/core"
+	"github.com/goxang/jig/manifest"
+	"github.com/goxang/jig/spec"
 )
 
 // k8sObjects is a runtime that knows a service's manifests and the cluster's live objects (Kubernetes, kind).
@@ -89,7 +88,7 @@ func objectActions(m *model, o *manifest.Object, svc string) {
 		relTo(m.app.Spec.Dir, o.File) + " in your editor; saved back into the file",
 		"kubectl edit: saving applies at once",
 		"what runs now, written into the file (in your editor first; $VARS kept)",
-		"what rig would deploy, for this object only",
+		"what jig would deploy, for this object only",
 	}
 	m.pick(o.ID(), opts, desc, 0, false, func(c []string) tea.Cmd {
 		if len(c) == 0 {
@@ -120,7 +119,7 @@ func editManifest(m *model, o *manifest.Object, start []byte) tea.Cmd {
 	if start == nil {
 		start = original
 	}
-	f, err := os.CreateTemp("", "rig-manifest-*.yaml")
+	f, err := os.CreateTemp("", "jig-manifest-*.yaml")
 	if err != nil {
 		m.setStatus(err.Error(), true)
 		return nil
@@ -131,7 +130,7 @@ func editManifest(m *model, o *manifest.Object, start []byte) tea.Cmd {
 	// an old mtime, so a save within the same second still shows
 	old := time.Now().Add(-time.Minute)
 	_ = os.Chtimes(file, old, old)
-	c := exec.Command(sh.Shell(), "-c", editorCmd()+` "$1"`, "rig-edit", file)
+	c := exec.Command("sh", "-c", editorCmd()+` "$1"`, "jig-edit", file)
 	return execProcess(c, func(err error) tea.Msg {
 		return manifestEditedMsg{obj: o, file: file, original: original, written: old, err: err}
 	})
@@ -193,7 +192,7 @@ func (m *model) rescanManifests() {
 	}
 }
 
-// editLive hands the terminal to `kubectl edit`, with the editor rig uses.
+// editLive hands the terminal to `kubectl edit`, with the editor jig uses.
 func editLive(m *model, o *manifest.Object) tea.Cmd {
 	k, ok := m.k8s()
 	if !ok {

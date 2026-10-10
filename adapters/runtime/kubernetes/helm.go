@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/goxang/rig/core"
-	"github.com/goxang/rig/internal/sh"
-	"github.com/goxang/rig/spec"
+	"github.com/goxang/jig/core"
+	"github.com/goxang/jig/internal/sh"
+	"github.com/goxang/jig/spec"
 )
 
 // HelmSection deploys a service with a Helm chart instead of manifests (`helm:` on the service).
@@ -23,7 +23,7 @@ type HelmSection struct {
 	Values  []string `yaml:"values"`  // values files, relative to the project
 	// Set are --set values; $TAG, $NAMESPACE and the environment's manifest vars are filled in.
 	Set map[string]string `yaml:"set"`
-	// Where rig puts what it builds and scales, e.g. image.repository, image.tag, replicaCount.
+	// Where jig puts what it builds and scales, e.g. image.repository, image.tag, replicaCount.
 	ImageKey    string `yaml:"image_key"`
 	TagKey      string `yaml:"tag_key"`
 	ReplicasKey string `yaml:"replicas_key"`

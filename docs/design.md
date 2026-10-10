@@ -1,8 +1,8 @@
 # Design
 
 ```
-cmd/rig             the binary: CLI + TUI + every bundled adapter
-spec/               rig.yaml: schema, loading, environments, variables, imports, dependency order
+cmd/jig             the binary: CLI + TUI + every bundled adapter
+spec/               jig.yaml: schema, loading, environments, variables, imports, dependency order
 core/               the interfaces: one per component kind, plus optional capabilities
 plugin/             the adapter registry
 engine/             a project opened for one environment: lazy components, svc:// resolution,
@@ -16,7 +16,7 @@ internal/viz        charts, gauges, sparklines, waterfalls, relation graphs
 
 ## Components and adapters
 
-Everything rig talks to is a **component**: a named instance of an **adapter**, which implements the
+Everything jig talks to is a **component**: a named instance of an **adapter**, which implements the
 interface of one **kind**.
 
 | kind | interface | bundled adapters |
@@ -69,14 +69,14 @@ func New(env core.Env, c *spec.Component) (any, error) {
 `c.Decode` fills your options from the component's YAML. `env` gives the project, the active runtime,
 `Resolve` for `svc://` addresses and `Component` for other components (the `kv` load generator uses the
 `kv` component it names). Build your own binary by importing `adapters/all` and your package next to
-`cmd/rig`'s three lines.
+`cmd/jig`'s three lines.
 
 Runtimes read their per-service settings from a section named after them (`k8s:`, `docker:`,
 `local:`), so the shared service schema never grows runtime fields.
 
 ## Choices worth knowing
 
-- **External tools over client libraries** for kubectl, docker, kind, ssh and dlv: rig uses the user's
+- **External tools over client libraries** for kubectl, docker, kind, ssh and dlv: jig uses the user's
   kubeconfig, contexts, ssh config and agents exactly as the terminal does, and the binary stays small.
 - **The Kubernetes runtime never uses the current context.** An environment names its context; a
   protected environment refuses changes until confirmed (`--yes`, or the TUI's confirm prompt).
@@ -85,7 +85,7 @@ Runtimes read their per-service settings from a section named after them (`k8s:`
 - **Front ends load lazily**: the TUI asks the runtime for all services in one call every 3s, and a
   screen fetches only while it is showing.
 - **Run state lives with the environment**: a ConfigMap on Kubernetes (the whole team sees the tag,
-  images and rates), `.rig/<env>/state.json` elsewhere.
+  images and rates), `.jig/<env>/state.json` elsewhere.
 - **Builds**: the `go` builder compiles on the host and adds one layer to a base image with
   go-containerregistry: no daemon, no in-container module download, local build cache.
 - **No metrics server needed**: the `scrape` adapter reads `/metrics` itself and answers a PromQL

@@ -6,10 +6,10 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/goxang/rig/core"
-	"github.com/goxang/rig/internal/sh"
-	"github.com/goxang/rig/plugin"
-	"github.com/goxang/rig/spec"
+	"github.com/goxang/jig/core"
+	"github.com/goxang/jig/internal/sh"
+	"github.com/goxang/jig/plugin"
+	"github.com/goxang/jig/spec"
 )
 
 func init() {

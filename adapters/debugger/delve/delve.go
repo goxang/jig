@@ -11,10 +11,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/goxang/rig/core"
-	"github.com/goxang/rig/internal/sh"
-	"github.com/goxang/rig/plugin"
-	"github.com/goxang/rig/spec"
+	"github.com/goxang/jig/core"
+	"github.com/goxang/jig/internal/sh"
+	"github.com/goxang/jig/plugin"
+	"github.com/goxang/jig/spec"
 )
 
 func init() {
@@ -171,7 +171,7 @@ func (d *Debugger) relaunch(ctx context.Context, rl core.Relauncher, s *spec.Ser
 }
 
 func hint(addr string) string {
-	return fmt.Sprintf("GoLand / VS Code: run the \"rig: <service>\" config `rig ide` wrote (Go Remote on %s), or dlv connect %s", addr, addr)
+	return fmt.Sprintf("GoLand / VS Code: run the \"jig: <service>\" config `jig ide` wrote (Go Remote on %s), or dlv connect %s", addr, addr)
 }
 
 // listenAddr is the service's stable debug port, or any free one when something holds it.

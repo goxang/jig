@@ -1,5 +1,5 @@
 {
-  "$id": "https://raw.githubusercontent.com/goxang/rig/main/spec/rig.schema.json",
+  "$id": "https://raw.githubusercontent.com/goxang/jig/main/spec/jig.schema.json",
   "$schema": "http://json-schema.org/draft-07/schema#",
   "additionalProperties": false,
   "definitions": {
@@ -28,7 +28,7 @@
             },
             "type": "array"
           },
-          "description": "The questions tab offers in an empty chat, by screen (services, logs, ...) or \"all\"; they come before rig's own.",
+          "description": "The questions tab offers in an empty chat, by screen (services, logs, ...) or \"all\"; they come before jig's own.",
           "type": "object"
         },
         "instructions": {
@@ -280,7 +280,7 @@
           "type": "object"
         },
         "description": {
-          "description": "shown by rig env and the TUI",
+          "description": "shown by jig env and the TUI",
           "type": [
             "string",
             "number",
@@ -367,211 +367,6 @@
           },
           "description": "variables for this environment",
           "type": "object"
-        }
-      },
-      "type": "object"
-    },
-    "Flow": {
-      "additionalProperties": false,
-      "properties": {
-        "help": {
-          "type": [
-            "string",
-            "number",
-            "boolean"
-          ]
-        },
-        "links": {
-          "items": {
-            "$ref": "#/definitions/FlowLink"
-          },
-          "type": "array"
-        },
-        "live": {
-          "description": "False opens the screen without live data (no queries) until it is turned on.",
-          "type": [
-            "boolean",
-            "string"
-          ]
-        },
-        "nodes": {
-          "additionalProperties": {
-            "$ref": "#/definitions/FlowNode"
-          },
-          "type": "object"
-        },
-        "source": {
-          "description": "The metrics component the queries ask (default: the first).",
-          "type": [
-            "string",
-            "number",
-            "boolean"
-          ]
-        }
-      },
-      "type": "object"
-    },
-    "FlowLink": {
-      "additionalProperties": false,
-      "properties": {
-        "errors": {
-          "type": [
-            "string",
-            "number",
-            "boolean"
-          ]
-        },
-        "from": {
-          "type": [
-            "string",
-            "number",
-            "boolean"
-          ]
-        },
-        "label": {
-          "type": [
-            "string",
-            "number",
-            "boolean"
-          ]
-        },
-        "rate": {
-          "description": "And Errors are instant queries; Rate left out, the link carries its target's rate shared over the target's inputs.",
-          "type": [
-            "string",
-            "number",
-            "boolean"
-          ]
-        },
-        "to": {
-          "type": [
-            "string",
-            "number",
-            "boolean"
-          ]
-        }
-      },
-      "type": "object"
-    },
-    "FlowNode": {
-      "additionalProperties": false,
-      "properties": {
-        "backlog": {
-          "type": [
-            "string",
-            "number",
-            "boolean"
-          ]
-        },
-        "column": {
-          "description": "Places the node (0 is the left); left out, it follows the links (one right of its inputs).",
-          "type": [
-            "integer",
-            "string"
-          ]
-        },
-        "errors": {
-          "type": [
-            "string",
-            "number",
-            "boolean"
-          ]
-        },
-        "help": {
-          "type": [
-            "string",
-            "number",
-            "boolean"
-          ]
-        },
-        "hot": {
-          "type": [
-            "number",
-            "string"
-          ]
-        },
-        "kind": {
-          "description": "Picks the icon and colour: load, gateway, service, queue, database, cache, external.",
-          "type": [
-            "string",
-            "number",
-            "boolean"
-          ]
-        },
-        "label": {
-          "type": [
-            "string",
-            "number",
-            "boolean"
-          ]
-        },
-        "latency": {
-          "type": [
-            "string",
-            "number",
-            "boolean"
-          ]
-        },
-        "load": {
-          "description": "Names load generators: their target rates make the node's offered load.",
-          "items": {
-            "type": [
-              "string",
-              "number",
-              "boolean"
-            ]
-          },
-          "type": "array"
-        },
-        "low": {
-          "description": "Low, Hot and Over are rates (per second): below Low it is barely used, from Hot it runs hot, from Over it is overloaded. Hot and Over default to 70% and 90% of Max.",
-          "type": [
-            "number",
-            "string"
-          ]
-        },
-        "max": {
-          "description": "What the node handles per second: past 70% it runs hot, past 90% it is overloaded.",
-          "type": [
-            "number",
-            "string"
-          ]
-        },
-        "open": {
-          "description": "What a click opens: a service, a component (Data, Load, KV...), dashboard:\u003cname\u003e, or a screen.",
-          "type": [
-            "string",
-            "number",
-            "boolean"
-          ]
-        },
-        "over": {
-          "type": [
-            "number",
-            "string"
-          ]
-        },
-        "rate": {
-          "description": "Rate, Errors, Latency (ms) and Backlog are instant metrics queries.",
-          "type": [
-            "string",
-            "number",
-            "boolean"
-          ]
-        },
-        "shared": {
-          "description": "Draws the node on the row under the others, reached by every node that links to it (a cache or database many use). Left out, a cache or database linked from several columns is shared.",
-          "type": [
-            "boolean",
-            "string"
-          ]
-        },
-        "slow": {
-          "description": "A latency (ms) past which the node counts as overloaded.",
-          "type": [
-            "number",
-            "string"
-          ]
         }
       },
       "type": "object"
@@ -1212,7 +1007,7 @@
           "type": "array"
         },
         "groups": {
-          "description": "names to address several services at once: rig up core",
+          "description": "names to address several services at once: jig up core",
           "items": {
             "type": [
               "string",
@@ -1239,7 +1034,7 @@
           ]
         },
         "manual": {
-          "description": "started only when named or through a group or section, never by all or its role, so rig infra up skips it too (e.g. frontends, an optional Prometheus)",
+          "description": "started only when named or through a group or section, never by all or its role, so jig infra up skips it too (e.g. frontends, an optional Prometheus)",
           "type": [
             "boolean",
             "string"
@@ -1279,7 +1074,7 @@
           ]
         },
         "role": {
-          "description": "app (default), infra, or load (left out of rig up)",
+          "description": "app (default), infra, or load (left out of jig up)",
           "type": [
             "string",
             "number",
@@ -1307,7 +1102,7 @@
               "$ref": "#/definitions/Watch"
             }
           ],
-          "description": "{paths, ignore}: what rig watch (ctrl+w in the UI) rebuilds and restarts the service on. Left out: the project packages a build.go main imports, else build.context, else run.dir; .gitignored files, tests and docs never count. Changes settle 0.5s before the rebuild; a failed build keeps the old one running"
+          "description": "{paths, ignore}: what jig watch (ctrl+w in the UI) rebuilds and restarts the service on. Left out: the project packages a build.go main imports, else build.context, else run.dir; .gitignored files, tests and docs never count. Changes settle 0.5s before the rebuild; a failed build keeps the old one running"
         }
       },
       "type": "object"
@@ -1458,7 +1253,7 @@
           ]
         },
         "command": {
-          "description": "Runs the suite through sh instead of go test: pytest, jest, mvn test, cargo test, ... Writing JUnit XML to $RIG_JUNIT gives the screen one row per test; without it the suite passes or fails as a whole by its exit status.",
+          "description": "Runs the suite through sh instead of go test: pytest, jest, mvn test, cargo test, ... Writing JUnit XML to $JIG_JUNIT gives the screen one row per test; without it the suite passes or fails as a whole by its exit status.",
           "type": [
             "string",
             "number",
@@ -1677,7 +1472,7 @@
       "description": "{deny: [globs], instructions: text, ideas: {screen: [questions]}}: project paths the assistant never reads (on top of .env, keys and secrets/), notes it gets with every turn, and the questions tab offers in an empty chat per screen (all for every screen)"
     },
     "alerts": {
-      "description": "thresholds shown in the TUI header and by rig alerts",
+      "description": "thresholds shown in the TUI header and by jig alerts",
       "items": {
         "$ref": "#/definitions/Alert"
       },
@@ -1698,7 +1493,7 @@
       "type": "object"
     },
     "default": {
-      "description": "environment used when neither -e nor $RIG_ENV is given",
+      "description": "environment used when neither -e nor $JIG_ENV is given",
       "type": [
         "string",
         "number",
@@ -1711,16 +1506,8 @@
       },
       "type": "object"
     },
-    "flow": {
-      "allOf": [
-        {
-          "$ref": "#/definitions/Flow"
-        }
-      ],
-      "description": "{help, source, live, nodes, links}: the Flow screen, requests moving through the system"
-    },
     "help": {
-      "description": "Shown by `rig -h` under the project name: this project's own quick-start for its main CLI workflows (e.g. build/deploy/ship with a target database and image tag). Plain text, a few example command lines; left out, `rig -h` shows only its own generic help.",
+      "description": "Shown by `jig -h` under the project name: this project's own quick-start for its main CLI workflows (e.g. build/deploy/ship with a target database and image tag). Plain text, a few example command lines; left out, `jig -h` shows only its own generic help.",
       "type": [
         "string",
         "number",
@@ -1728,7 +1515,7 @@
       ]
     },
     "imports": {
-      "description": "services from the files that already define them, read on every load so they stay the only definition: - compose: deploy/compose.yml (image, build, command, ports, env, env_file, depends_on and project volumes, under the compose names; ${VARS} from the environment, then the compose file's .env), - kubernetes: deploy/k8s (a service per Deployment, StatefulSet and DaemonSet, named after it, with its image and container ports; a Kubernetes runtime without manifests: deploys from these folders), - godev: .godev.yaml. A service rig.yaml also defines is the imported one with rig.yaml's keys merged over it (build: null drops an imported key), so rig.yaml holds only what those files have no word for: a Go main to build, health, groups. A workload a rig.yaml service already claims through k8s.workload is not imported again under its own name",
+      "description": "services from the files that already define them, read on every load so they stay the only definition: - compose: deploy/compose.yml (image, build, command, ports, env, env_file, depends_on and project volumes, under the compose names; ${VARS} from the environment, then the compose file's .env), - kubernetes: deploy/k8s (a service per Deployment, StatefulSet and DaemonSet, named after it, with its image and container ports; a Kubernetes runtime without manifests: deploys from these folders), - godev: .godev.yaml. A service jig.yaml also defines is the imported one with jig.yaml's keys merged over it (build: null drops an imported key), so jig.yaml holds only what those files have no word for: a Go main to build, health, groups. A workload a jig.yaml service already claims through k8s.workload is not imported again under its own name",
       "items": {
         "additionalProperties": {
           "type": [
@@ -1742,7 +1529,7 @@
       "type": "array"
     },
     "manifests": {
-      "description": "folders rig manifests and the Manifests screen read (default: the runtime's manifests, else the kubernetes imports). The screen lists only the objects a service deploys; u shows the rest",
+      "description": "folders jig manifests and the Manifests screen read (default: the runtime's manifests, else the kubernetes imports). The screen lists only the objects a service deploys; u shows the rest",
       "items": {
         "type": [
           "string",
@@ -1779,7 +1566,7 @@
       "additionalProperties": {
         "$ref": "#/definitions/Report"
       },
-      "description": "metrics, traces and queries a run is measured by, saved as md, json or xml: rig report start and stop, rig report, a suite's report:, the Load screen's W",
+      "description": "metrics, traces and queries a run is measured by, saved as md, json or xml: jig report start and stop, jig report, a suite's report:, the Load screen's W",
       "type": "object"
     },
     "secrets": {
@@ -1806,14 +1593,14 @@
       "additionalProperties": {
         "$ref": "#/definitions/Task"
       },
-      "description": "name: [shell step, ...] or name: {help, steps}, run in order by rig task \u003cname\u003e",
+      "description": "name: [shell step, ...] or name: {help, steps}, run in order by jig task \u003cname\u003e",
       "type": "object"
     },
     "tests": {
       "additionalProperties": {
         "$ref": "#/definitions/TestSuite"
       },
-      "description": "test suites for rig test and the Tests screen",
+      "description": "test suites for jig test and the Tests screen",
       "type": "object"
     },
     "ui": {
@@ -1842,6 +1629,6 @@
       ]
     }
   },
-  "title": "rig.yaml",
+  "title": "jig.yaml",
   "type": "object"
 }

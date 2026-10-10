@@ -12,7 +12,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/goxang/rig/core"
+	"github.com/goxang/jig/core"
 )
 
 // Palette follows Grafana's classic series colours.

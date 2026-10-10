@@ -7,11 +7,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/goxang/rig/engine"
-	"github.com/goxang/rig/spec"
+	"github.com/goxang/jig/engine"
+	"github.com/goxang/jig/spec"
 )
 
-// completeProject loads rig.yaml for shell completion; nil when there is none. It never opens the
+// completeProject loads jig.yaml for shell completion; nil when there is none. It never opens the
 // runtime, so a tab press stays instant.
 func completeProject() *spec.Project {
 	file := g.file
