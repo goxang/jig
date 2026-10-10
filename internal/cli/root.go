@@ -60,8 +60,11 @@ func Execute() int {
 			_ = os.WriteFile(f, []byte(text), 0o600) // the UI that ran this shows it after the terminal closes
 		}
 		code = 1
-		if errors.Is(err, engine.ErrProtected) {
+		switch {
+		case errors.Is(err, engine.ErrFailed):
 			code = 3
+		case errors.Is(err, engine.ErrProtected):
+			code = 4
 		}
 	}
 	if f := os.Getenv("JIG_DONE_FILE"); f != "" {

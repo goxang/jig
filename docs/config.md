@@ -40,7 +40,8 @@ is out of date.
 | `queries` | saved queries (see below) |
 | `secrets` | `NAME: {help, default}`: values kept out of the repo (see below) |
 | `alerts` | thresholds shown in the TUI header and by `jig alerts` (see below) |
-| `reports` | metrics, traces and queries a run is measured by, saved as md, json or xml: `jig report start` and `stop`, `jig report`, a suite's `report:`, the Load screen's `W` (see below) |
+| `reports` | metrics, traces and queries a run is measured by, with tests, load results, compares, templates and publishing: `jig report start` and `stop`, `jig report`, a suite's `report:`, the Load screen's `W` (see below) |
+| `load` | named load runs: a generator, a profile, a rate, a duration and assertions for `jig load run` (see below) |
 | `otel` | OpenTelemetry for every app and load service (see below) |
 | `ui` | `{tabs, mode, logs}`: the screens and their order (left out, every screen the project configures something for); `mode: simple` starts newcomers on fewer screens, columns and keys (`V` switches); `logs` (see below) |
 | `keys` | the key preset: `jig` (the default) or `rig` (rig's keys). A personal choice, so usually in `.jig/local.yaml` or `~/.config/jig/config.yaml` |
@@ -236,6 +237,37 @@ tests:
   jvm:  { dir: billing, command: 'mvn -q test && cat target/surefire-reports/*.xml > $JIG_JUNIT' }
 ```
 
+Or name a `runner:`, a plugin implementing `tests/1` (`jig-std install` brings `pytest`, `jest`, `vitest`,
+`hurl`, `k6` and `junit`), with its options under `with:`:
+
+```yaml
+tests:
+  py:    { dir: api, runner: pytest, with: { args: [-x, tests/] } }
+  api:   { runner: hurl, with: { files: [e2e/*.hurl] }, env: { HOST: "svc://api:8080" } }
+  smoke: { runner: k6, with: { script: load/smoke.js } }     # each k6 check is a test
+  jvm:   { dir: billing, runner: junit, with: { command: mvn -q test, reports: "target/surefire-reports/*.xml" } }
+```
+
+`jig test <suite> --ci` prints plainly with every failure's output; `-o file.xml` writes JUnit. A failed
+test exits 3.
+
+## load
+
+```yaml
+load:
+  smoke:
+    generator: api-load      # a loadgen component
+    profile: ramp            # steady (default), ramp (to rate over the first 80%), spike (a fifth, then rate in the middle fifth), soak
+    rate: 500
+    for: 2m
+    assert: ["p95 < 200ms", "errors < 0.5%", "throughput >= 400/s"]
+```
+
+`jig load run smoke` drives the generator, prints live numbers, then checks `assert` (`p50`, `p95`,
+`p99` against durations, `errors` in percent, `throughput` per second, `sent`, `failed`) and keeps the
+result. `--vs last` (or a run id) compares with an earlier run; `--rate`, `--for`, `--profile` and
+`--assert` override; a generator name runs ad hoc. A broken assertion exits 3.
+
 ## reports
 
 ```yaml
@@ -255,6 +287,25 @@ reports:
       - { title: failed orders, source: db, query: "SELECT status, count(*) FROM orders WHERE created_at >= '${from}' GROUP BY status" }
       - { query: open-orders }   # a saved query, by name
 ```
+
+A report can also carry `tests: <suite>` (its last run), `load: <load run>` (its last result),
+`compare: last` (each metric's change against the last kept report), `ai: true` (a summary the
+assistant writes), `template:` (markdown with `{{.Rows}}`, `{{.Tests}}`, `{{.Load}}`, `{{.Compare}}` and
+`{{table "plugin.source" "key=value"}}`), `publish:` (actions run with it, `${report}` its markdown and
+`${file}` its file) and `schedule:` (cron, measured and published while `jig report watch` runs):
+
+```yaml
+reports:
+  nightly:
+    tests: e2e
+    load: smoke
+    compare: last
+    publish: [{ action: slack.send, args: { channel: "#perf", text: "${report}" } }]
+    schedule: "0 6 * * 1-5"
+```
+
+Formats: `md`, `html`, `json`, `xml`, `csv` and `junit` (each load assertion and failed test a case). A
+failed test or broken assertion exits 3, so `jig report nightly --vs last` gates an MR pipeline.
 
 Each metric is a range query over the window, summarised per series by `stats`: `avg`, `min`, `max`,
 `last`, `p50`, `p90`, `p95`, `p99` (default `avg, max, last`). A `traces:` entry counts the traces in the

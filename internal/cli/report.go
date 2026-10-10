@@ -9,12 +9,15 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/goxang/jig/engine"
+	"github.com/goxang/jig/kernel/cron"
+	"github.com/goxang/jig/kernel/jobs"
 )
 
 func reportCommand() *cobra.Command {
 	var since time.Duration
-	var from, to, out, source, format, verbosity string
-	save := func(a *engine.App, rep *engine.ReportResult) error {
+	var from, to, out, source, format, verbosity, vs string
+	var noPublish bool
+	save := func(ctx context.Context, a *engine.App, rep *engine.ReportResult) error {
 		if format != "" {
 			rep.Format = format
 		}
@@ -26,11 +29,24 @@ func reportCommand() *cobra.Command {
 			return err
 		}
 		fmt.Println(dim("\nsaved to " + file))
+		if !noPublish {
+			e := engine.NewLocal(a, &jobs.Manager{})
+			defer e.Close()
+			if err := e.Publish(ctx, rep, file); err != nil {
+				return err
+			}
+		}
+		if rep.Failed() {
+			return fmt.Errorf("report %s: %w", rep.Name, engine.ErrFailed)
+		}
 		return nil
 	}
 	verbose := func(a *engine.App, name string) {
 		if r := a.Spec.Reports[name]; r != nil && verbosity != "" {
 			r.Verbosity = verbosity
+		}
+		if r := a.Spec.Reports[name]; r != nil && vs != "" {
+			r.Compare = vs
 		}
 	}
 	c := &cobra.Command{
@@ -75,16 +91,18 @@ func reportCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return save(a, rep)
+			return save(ctx, a, rep)
 		}),
 	}
 	c.Flags().DurationVar(&since, "since", 15*time.Minute, "the window: this long until now")
 	c.Flags().StringVar(&from, "from", "", "window start: 15:04, 15:04:05 (today) or RFC 3339")
 	c.Flags().StringVar(&to, "to", "", "window end (default now)")
 	c.PersistentFlags().StringVar(&source, "source", "", "metrics component instead of the report's (local-prom, say)")
-	c.PersistentFlags().StringVarP(&out, "output", "o", "", "file to write; .json or .xml picks the format (default under the project's jig data directory)")
-	c.PersistentFlags().StringVar(&format, "format", "", "md, json or xml (default the report's format:, else md)")
+	c.PersistentFlags().StringVarP(&out, "output", "o", "", "file to write; .json, .xml, .html or .csv picks the format (default under the project's jig data directory)")
+	c.PersistentFlags().StringVar(&format, "format", "", "md, html, json, xml, csv or junit (default the report's format:, else md)")
 	c.PersistentFlags().StringVar(&verbosity, "verbosity", "", "brief, normal or full (default the report's)")
+	c.PersistentFlags().StringVar(&vs, "vs", "", "compare with a kept report: last, or its time (20261011-1504)")
+	c.PersistentFlags().BoolVar(&noPublish, "no-publish", false, "skip the report's publish: actions")
 	c.AddCommand(&cobra.Command{
 		Use:   "start <name>",
 		Short: "start a reporter: its window opens now and closes at jig report stop",
@@ -107,7 +125,41 @@ func reportCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return save(a, rep)
+			return save(ctx, a, rep)
+		}),
+	}, &cobra.Command{
+		Use:   "watch",
+		Short: "measure and publish each report with a schedule: when it comes due, over the time since its last run",
+		Args:  cobra.NoArgs,
+		RunE: withApp(func(ctx context.Context, a *engine.App, _ []string) error {
+			last := map[string]time.Time{}
+			fmt.Println(dim("watching report schedules; Ctrl-C stops"))
+			for {
+				now := time.Now()
+				select {
+				case <-ctx.Done():
+					return nil
+				case <-time.After(now.Truncate(time.Minute).Add(time.Minute).Sub(now)):
+				}
+				for _, n := range a.ReportNames() {
+					r := a.Spec.Reports[n]
+					if ok, err := cron.Due(r.Schedule, time.Now()); err != nil || !ok {
+						continue
+					}
+					from := last[n]
+					if from.IsZero() {
+						from = time.Now().Add(-since)
+					}
+					last[n] = time.Now()
+					rep, err := a.MeasureReport(ctx, n, source, from, last[n])
+					if err == nil {
+						err = save(ctx, a, rep)
+					}
+					if err != nil {
+						fmt.Fprintln(os.Stderr, red("✗")+" "+err.Error())
+					}
+				}
+			}
 		}),
 	})
 	return c

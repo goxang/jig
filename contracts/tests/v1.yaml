@@ -1,10 +1,12 @@
 contract: tests/1
-description: test suites and their results
+description: "a test runner: each line of tests.events is a go test -json event (test2json)"
 sources:
+  tests.events:
+    stream: true
+    args: {run: string, dir: string, env: json, with: json}
+    fields: {}
   tests.list:
+    args: {dir: string, with: json}
     fields: {suite: string, name: string, file: string}
-  tests.results:
-    args: {run: string}
-    fields: {name: string, status: string, duration: duration, output: string}
-actions:
-  tests.run: {effect: write, args: {suite: string, filter: string}, outputs: {run: string}}
+capabilities:
+  list: {sources: [tests.list]}

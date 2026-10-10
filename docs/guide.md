@@ -32,6 +32,10 @@ jig test unit --race          # a test suite; --failed reruns the failures, -o f
 jig test ./pkg/x/...          # any packages, no suite needed
 jig report load --since 20m   # metrics, traces and queries of a load test (reports: in jig.yaml): md, json or xml
 jig report start load; jig test e2e; jig report stop load   # a report of exactly that run
+jig load run smoke --vs last  # a load: run with its profile and assertions, compared with the last one
+jig test e2e --ci -o e2e.xml  # for pipelines: plain output, JUnit; failures exit 3
+jig inbox                     # writes waiting for approval: the assistant's and agents'
+jig agent watch               # run agents: on their events and schedules
 jig ns --create me            # Kubernetes: switch the environment to a new namespace (jig ns lists them)
 jig metrics targets -o f.json # services as Prometheus file_sd targets, for a local Prometheus
 jig resume last               # the TUI as a saved session (S) left it
@@ -42,7 +46,8 @@ jig mcp                       # MCP server for AI agents
 
 `-e <env>` (or `$JIG_ENV`) picks the environment. A `protected: true` environment refuses changes
 without `--yes`; pushing over an existing image tag needs it too. A `readonly: true` one refuses them
-even with it. In the TUI the confirmation is the `--yes`; `jig --yes` opens it already confirmed, so a
+even with it. Exit codes: 1 an error, 3 a check failed (tests, load assertions, a report), 4 a protected
+environment needs `--yes`. In the TUI the confirmation is the `--yes`; `jig --yes` opens it already confirmed, so a
 protected environment asks nothing more.
 
 ## Terminal UI

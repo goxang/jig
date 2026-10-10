@@ -68,6 +68,8 @@ type Project struct {
 	// Reports name the metrics a run is measured by: `jig report <name>`, a test suite's report:,
 	// the Load screen's W.
 	Reports map[string]*Report `yaml:"reports"`
+	// Load names load runs: a generator driven by a profile, judged by assertions (`jig load run <name>`).
+	Load map[string]*LoadRun `yaml:"load"`
 	// Sections split the Services screen by business area; services in none fall under "other".
 	Sections map[string]*Section `yaml:"sections"`
 	// OTel points every app and load service at OpenTelemetry backends.
@@ -509,8 +511,12 @@ type TestSuite struct {
 	// Command runs the suite through sh instead of go test: pytest, jest, mvn test, cargo test, ...
 	// Writing JUnit XML to $JIG_JUNIT gives the screen one row per test; without it the suite passes
 	// or fails as a whole by its exit status.
-	Command  string   `yaml:"command"`
-	Packages []string `yaml:"packages"`
+	Command string `yaml:"command"`
+	// Runner is a plugin's tests/1 runner (pytest, jest, vitest, hurl, k6, junit) instead of go test;
+	// With is its options.
+	Runner   string         `yaml:"runner"`
+	With     map[string]any `yaml:"with"`
+	Packages []string       `yaml:"packages"`
 	// Exclude drops packages from Packages (go list patterns: ./pkg/tests/...), so a suite can be
 	// "everything but the integration tests".
 	Exclude []string `yaml:"exclude"`
@@ -540,6 +546,17 @@ type TestSuite struct {
 	Report string `yaml:"report"`
 }
 
+// LoadRun drives Generator at Rate with Profile (steady, ramp, spike or soak) for For, then checks
+// Assert: "p95 < 200ms", "errors < 0.5%", "throughput >= 1500/s".
+type LoadRun struct {
+	Help      string        `yaml:"help"`
+	Generator string        `yaml:"generator"`
+	Profile   string        `yaml:"profile"`
+	Rate      float64       `yaml:"rate"`
+	For       time.Duration `yaml:"for"`
+	Assert    []string      `yaml:"assert"`
+}
+
 type Report struct {
 	Help string `yaml:"help"`
 	// Source is the metrics component (default the first).
@@ -551,8 +568,28 @@ type Report struct {
 	Verbosity string `yaml:"verbosity"`
 	// Every adds a timeline: each metric's value per interval of the window.
 	Every time.Duration `yaml:"every"`
-	// Format is md (default), json or xml; a file name's extension wins.
+	// Format is md (default), html, json, xml, csv or junit; a file name's extension wins.
 	Format string `yaml:"format"`
+	// Template is markdown (Go text/template) shown instead of the default layout: {{table "source"}}
+	// renders a plugin source, {{.Rows}}, {{.Tests}}, {{.Load}} and {{.Compare}} the measured parts.
+	Template string `yaml:"template"`
+	// Tests adds a suite's last run, Load a load: entry's last result.
+	Tests string `yaml:"tests"`
+	Load  string `yaml:"load"`
+	// Compare is last (or a saved report's time, 20261011-1504): each metric's change against it.
+	Compare string `yaml:"compare"`
+	// AI adds a summary the assistant writes from the report.
+	AI bool `yaml:"ai"`
+	// Publish runs these actions with the report: ${report} is its markdown, ${file} its saved file.
+	Publish []ReportPublish `yaml:"publish"`
+	// Schedule measures and publishes it on a cron schedule (5 fields) while `jig report watch` runs,
+	// over the time since its last run.
+	Schedule string `yaml:"schedule"`
+}
+
+type ReportPublish struct {
+	Action string         `yaml:"action"`
+	Args   map[string]any `yaml:"args"`
 }
 
 // ReportTrace counts the traces of a service (and operation, and slower than Min) in the window

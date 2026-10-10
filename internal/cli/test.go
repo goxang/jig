@@ -19,6 +19,7 @@ func testCommand() *cobra.Command {
 		o              engine.TestOptions
 		pkgs           []string
 		failed, all, v bool
+		ci             bool
 		junit, out     string
 	)
 	test := &cobra.Command{
@@ -40,7 +41,11 @@ func testCommand() *cobra.Command {
 				var rows [][]string
 				for _, n := range a.SuiteNames() {
 					s := a.Spec.Tests[n]
-					rows = append(rows, []string{n, strings.Join(s.Packages, " "), s.Help})
+					what := strings.Join(s.Packages, " ")
+					if s.Runner != "" {
+						what = "runner " + s.Runner
+					}
+					rows = append(rows, []string{n, what, s.Help})
 				}
 				if len(rows) == 0 {
 					return fmt.Errorf("no tests: in %s", a.Spec.File)
@@ -72,6 +77,9 @@ func testCommand() *cobra.Command {
 					return nil
 				}
 			}
+			if ci {
+				v, plain = true, true
+			}
 			run := a.NewTestRun(s.Name, jobs[0].Options)
 			done := make(chan error, 1)
 			go func() { done <- a.RunTests(ctx, s, run, jobs) }()
@@ -97,7 +105,11 @@ func testCommand() *cobra.Command {
 					return err
 				}
 			}
-			if out != "" {
+			if out != "" && strings.HasSuffix(out, ".xml") {
+				if err := writeJUnit(run, out); err != nil {
+					return err
+				}
+			} else if out != "" {
 				if err := engine.WriteReportFile(out, func(w io.Writer) { run.WriteReport(w, false) }); err != nil {
 					return err
 				}
@@ -107,10 +119,10 @@ func testCommand() *cobra.Command {
 				return runErr
 			}
 			if n := run.Counts()[engine.TestFail]; n > 0 {
-				return fmt.Errorf("%d failed (jig test %s --failed reruns them)", n, s.Name)
+				return fmt.Errorf("%d tests %w (jig test %s --failed reruns them)", n, engine.ErrFailed, s.Name)
 			}
 			if n := run.FailedPackages(); n > 0 {
-				return fmt.Errorf("%d packages failed (build output above)", n)
+				return fmt.Errorf("%d packages %w (build output above)", n, engine.ErrFailed)
 			}
 			return nil
 		}),
@@ -135,7 +147,8 @@ func testCommand() *cobra.Command {
 	f.BoolVar(&all, "all", false, "print subtests as they finish too (default: top-level tests)")
 	f.BoolVarP(&v, "verbose", "v", false, "print the output of failed tests as they fail")
 	f.StringVar(&junit, "junit", "", "also write a JUnit XML report to this file")
-	f.StringVarP(&out, "output", "o", "", "also write the full report (tests, then the suite's metrics) to this file")
+	f.StringVarP(&out, "output", "o", "", "also write the full report (tests, then the suite's metrics) to this file; .xml writes JUnit")
+	f.BoolVar(&ci, "ci", false, "for pipelines: plain output, every failure's output; failures exit 3 either way")
 	testFlagChanged = func(name string) bool { return f.Changed(name) }
 
 	var report struct {

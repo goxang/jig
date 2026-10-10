@@ -437,6 +437,9 @@ func (a *App) runJob(ctx context.Context, s *spec.TestSuite, run *TestRun, o Tes
 	if s.Dir != "" {
 		dir = filepath.Join(a.Spec.Dir, s.Dir)
 	}
+	if s.Runner != "" {
+		return a.runPluginTests(ctx, s, run, o, dir, env)
+	}
 	if s.Command != "" {
 		pattern := o.Run
 		if pattern == "" {

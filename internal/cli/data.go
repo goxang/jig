@@ -9,8 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/term"
-
 	"github.com/spf13/cobra"
 
 	"github.com/goxang/jig/core"
@@ -354,62 +352,7 @@ func loadCommand() *cobra.Command {
 	upCmd := one("up <generator>", "raise the rate one step", nudge(1))
 	downCmd := one("down <generator>", "lower the rate one step", nudge(-1))
 
-	var rateFlag float64
-	var dur time.Duration
-	run := one("run <generator>", "start, show live numbers, stop on Ctrl-C (in-process generators run only this long)", func(ctx context.Context, a *engine.App, n string, g core.LoadGenerator, _ []string) error {
-		if err := a.Guard(); err != nil {
-			return err
-		}
-		if rateFlag > 0 {
-			if err := a.SetRate(ctx, n, rateFlag, force); err != nil {
-				return err
-			}
-		}
-		if err := g.Start(ctx); err != nil {
-			return err
-		}
-		defer g.Stop(context.Background())
-		if dur > 0 {
-			var cancel context.CancelFunc
-			ctx, cancel = context.WithTimeout(ctx, dur)
-			defer cancel()
-		}
-		var hist []float64
-		var lastSent int64
-		// a terminal redraws one line; a pipe (an agent, CI, a log file) gets a line every 5s
-		live := term.IsTerminal(int(os.Stdout.Fd()))
-		tick := time.NewTicker(time.Second)
-		defer tick.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				if live {
-					fmt.Println()
-				}
-				return nil
-			case <-tick.C:
-			}
-			st, err := g.Status(ctx)
-			if err != nil {
-				continue
-			}
-			got := float64(st.Sent - lastSent)
-			lastSent = st.Sent
-			hist = append(hist, got)
-			if !live {
-				if len(hist)%5 == 0 {
-					fmt.Printf("%s  target %s  actual %s  failed %d/%d  p50 %s p99 %s\n", n, viz.Human(st.Rate, "/s"), viz.Human(got, "/s"),
-						st.Failed, st.Sent, st.Latency.P50.Round(time.Microsecond), st.Latency.P99.Round(time.Microsecond))
-				}
-				continue
-			}
-			fmt.Printf("\r%s %s  target %s  actual %s  failed %d/%d  p50 %s p99 %s   ", bold(n), viz.Sparkline(hist, 30, viz.Palette[0]),
-				viz.Human(st.Rate, "/s"), viz.Human(got, "/s"), st.Failed, st.Sent, st.Latency.P50.Round(time.Microsecond), st.Latency.P99.Round(time.Microsecond))
-		}
-	})
-	run.Flags().Float64VarP(&rateFlag, "rate", "r", 0, "rate to run at")
-	run.Flags().DurationVarP(&dur, "for", "d", 0, "stop after")
-	run.Flags().BoolVar(&force, "force", false, "exceed max")
+	run := loadRunCommand()
 
 	scale := one("scale <generator> <replicas|+n|-n>", "run more or fewer generator instances (each sends at the rate)", func(ctx context.Context, a *engine.App, n string, g core.LoadGenerator, args []string) error {
 		if err := a.Guard(); err != nil {

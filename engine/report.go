@@ -45,7 +45,13 @@ type ReportResult struct {
 	Timeline []ReportTimeline `json:"timeline,omitempty"`
 	Traces   []ReportTraceRow `json:"traces,omitempty"`
 	Tables   []ReportTableRow `json:"tables,omitempty"`
-	Format   string           `json:"-"`
+	Tests    *ReportTests     `json:"tests,omitempty"`
+	Load     *LoadResult      `json:"load,omitempty"`
+	Compare  []ReportDelta    `json:"compare,omitempty"`
+	// Summary is what the assistant wrote about it (ai: true); Text is the rendered template:.
+	Summary string `json:"summary,omitempty"`
+	Text    string `json:"text,omitempty"`
+	Format  string `json:"-"`
 }
 
 // ReportTimeline is one series' average per interval of the window (the report's every:).
@@ -124,7 +130,7 @@ func (a *App) MeasureReport(ctx context.Context, name, source string, from, to t
 	for _, q := range r.Queries {
 		out.Tables = append(out.Tables, a.reportQuery(ctx, q, from, to, maxRows))
 	}
-	return out, nil
+	return out, a.enrich(ctx, r, out)
 }
 
 func (a *App) reportMetrics(ctx context.Context, r *spec.Report, source string, out *ReportResult, maxSeries int) error {
@@ -309,6 +315,15 @@ func summarise(ps []core.Point, stat string) (float64, bool) {
 
 // Markdown writes the report as tables: metrics, timeline, traces, queries.
 func (r *ReportResult) Markdown(w io.Writer) {
+	if r.Text != "" {
+		fmt.Fprintln(w, r.Text)
+	} else {
+		r.body(w)
+	}
+	r.extras(w)
+}
+
+func (r *ReportResult) body(w io.Writer) {
 	fmt.Fprintf(w, "## %s · %s · %s → %s (%s)\n\n", r.Name, r.Env, r.From.Format("2006-01-02 15:04:05"), r.To.Format("15:04:05"), r.To.Sub(r.From).Round(time.Second))
 	if len(r.Rows) > 0 {
 		fmt.Fprintf(w, "| metric | series | %s |\n|---|---|%s\n", strings.Join(r.Stats, " | "), strings.Repeat("---:|", len(r.Stats)))
@@ -407,8 +422,14 @@ func (r *ReportResult) Write(w io.Writer, format string) error {
 	case "", "md", "markdown":
 		r.Markdown(w)
 		return nil
+	case "html":
+		return r.html(w)
+	case "csv":
+		return r.csv(w)
+	case "junit":
+		return r.junit(w)
 	}
-	return fmt.Errorf("format %q: want md, json or xml", format)
+	return fmt.Errorf("format %q: want md, html, json, xml, csv or junit", format)
 }
 
 // ReportFormat is the format a file name asks for, else the report's own.
@@ -420,6 +441,10 @@ func ReportFormat(file, fallback string) string {
 		return "xml"
 	case ".md", ".markdown":
 		return "md"
+	case ".html":
+		return "html"
+	case ".csv":
+		return "csv"
 	}
 	return cmp.Or(fallback, "md")
 }

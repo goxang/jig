@@ -25,6 +25,9 @@ import (
 // ErrProtected stops a mutating operation on a protected environment unless the caller confirmed.
 var ErrProtected = errors.New("environment is protected: pass --yes to change it")
 
+// ErrFailed is a check that ran and failed: tests, load assertions, a report's compare. The CLI exits 3.
+var ErrFailed = errors.New("failed")
+
 type App struct {
 	Spec *spec.Project
 	Env  *spec.Environment

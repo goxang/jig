@@ -1,4 +1,4 @@
-package agents
+package cron
 
 import (
 	"testing"
@@ -19,12 +19,12 @@ func TestDue(t *testing.T) {
 		"30 9 1 * 2":       false,
 		"0,30 8-10 * 10 *": true,
 	} {
-		if got, err := due(cron, at); err != nil || got != want {
+		if got, err := Due(cron, at); err != nil || got != want {
 			t.Errorf("%q = %v, %v; want %v", cron, got, err, want)
 		}
 	}
 	for _, bad := range []string{"* * * *", "61 * * * *", "*/0 * * * *", "a * * * *"} {
-		if _, err := due(bad, at); err == nil {
+		if _, err := Due(bad, at); err == nil {
 			t.Errorf("%q: want an error", bad)
 		}
 	}

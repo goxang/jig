@@ -457,6 +457,53 @@
       },
       "type": "object"
     },
+    "LoadRun": {
+      "additionalProperties": false,
+      "properties": {
+        "assert": {
+          "items": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          },
+          "type": "array"
+        },
+        "for": {
+          "description": "a duration: 500ms, 30s, 5m, 1h",
+          "type": "string"
+        },
+        "generator": {
+          "type": [
+            "string",
+            "number",
+            "boolean"
+          ]
+        },
+        "help": {
+          "type": [
+            "string",
+            "number",
+            "boolean"
+          ]
+        },
+        "profile": {
+          "type": [
+            "string",
+            "number",
+            "boolean"
+          ]
+        },
+        "rate": {
+          "type": [
+            "number",
+            "string"
+          ]
+        }
+      },
+      "type": "object"
+    },
     "LogsUI": {
       "additionalProperties": false,
       "properties": {
@@ -832,12 +879,27 @@
     "Report": {
       "additionalProperties": false,
       "properties": {
+        "ai": {
+          "description": "Adds a summary the assistant writes from the report.",
+          "type": [
+            "boolean",
+            "string"
+          ]
+        },
+        "compare": {
+          "description": "Last (or a saved report's time, 20261011-1504): each metric's change against it.",
+          "type": [
+            "string",
+            "number",
+            "boolean"
+          ]
+        },
         "every": {
           "description": "Adds a timeline: each metric's value per interval of the window.",
           "type": "string"
         },
         "format": {
-          "description": "Md (default), json or xml; a file name's extension wins.",
+          "description": "Md (default), html, json, xml, csv or junit; a file name's extension wins.",
           "type": [
             "string",
             "number",
@@ -851,9 +913,23 @@
             "boolean"
           ]
         },
+        "load": {
+          "type": [
+            "string",
+            "number",
+            "boolean"
+          ]
+        },
         "metrics": {
           "items": {
             "$ref": "#/definitions/ReportMetric"
+          },
+          "type": "array"
+        },
+        "publish": {
+          "description": "Runs these actions with the report: ${report} is its markdown, ${file} its saved file.",
+          "items": {
+            "$ref": "#/definitions/ReportPublish"
           },
           "type": "array"
         },
@@ -863,8 +939,32 @@
           },
           "type": "array"
         },
+        "schedule": {
+          "description": "Measures and publishes it on a cron schedule (5 fields) while `jig report watch` runs, over the time since its last run.",
+          "type": [
+            "string",
+            "number",
+            "boolean"
+          ]
+        },
         "source": {
           "description": "The metrics component (default the first).",
+          "type": [
+            "string",
+            "number",
+            "boolean"
+          ]
+        },
+        "template": {
+          "description": "Markdown (Go text/template) shown instead of the default layout: {{table \"source\"}} renders a plugin source, {{.Rows}}, {{.Tests}}, {{.Load}} and {{.Compare}} the measured parts.",
+          "type": [
+            "string",
+            "number",
+            "boolean"
+          ]
+        },
+        "tests": {
+          "description": "Adds a suite's last run, Load a load: entry's last result.",
           "type": [
             "string",
             "number",
@@ -928,6 +1028,23 @@
             "number",
             "boolean"
           ]
+        }
+      },
+      "type": "object"
+    },
+    "ReportPublish": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "type": [
+            "string",
+            "number",
+            "boolean"
+          ]
+        },
+        "args": {
+          "additionalProperties": {},
+          "type": "object"
         }
       },
       "type": "object"
@@ -1556,6 +1673,14 @@
             "boolean"
           ]
         },
+        "runner": {
+          "description": "A plugin's tests/1 runner (pytest, jest, vitest, hurl, k6, junit) instead of go test; With is its options.",
+          "type": [
+            "string",
+            "number",
+            "boolean"
+          ]
+        },
         "short": {
           "type": [
             "boolean",
@@ -1579,6 +1704,10 @@
         "timeout": {
           "description": "a duration: 500ms, 30s, 5m, 1h",
           "type": "string"
+        },
+        "with": {
+          "additionalProperties": {},
+          "type": "object"
         }
       },
       "type": "object"
@@ -1762,6 +1891,13 @@
         "boolean"
       ]
     },
+    "load": {
+      "additionalProperties": {
+        "$ref": "#/definitions/LoadRun"
+      },
+      "description": "named load runs: a generator, a profile, a rate, a duration and assertions for jig load run",
+      "type": "object"
+    },
     "manifests": {
       "description": "folders jig manifests and the Manifests screen read (default: the runtime's manifests, else the kubernetes imports). The screen lists only the objects a service deploys; u shows the rest",
       "items": {
@@ -1815,7 +1951,7 @@
       "additionalProperties": {
         "$ref": "#/definitions/Report"
       },
-      "description": "metrics, traces and queries a run is measured by, saved as md, json or xml: jig report start and stop, jig report, a suite's report:, the Load screen's W",
+      "description": "metrics, traces and queries a run is measured by, with tests, load results, compares, templates and publishing: jig report start and stop, jig report, a suite's report:, the Load screen's W",
       "type": "object"
     },
     "secrets": {
