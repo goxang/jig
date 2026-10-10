@@ -2,3 +2,4 @@
 /jig
 /dist/
 .idea/
+__pycache__/
