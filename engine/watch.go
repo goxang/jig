@@ -140,6 +140,29 @@ func (a *App) Rebuild(ctx context.Context, name string, emit func(WatchEvent)) {
 	emit(WatchEvent{Service: name, State: "ok", Took: time.Since(start)})
 }
 
+// Affected are the services whose sources (as jig watch sees them) hold one of files, paths from the
+// project directory: what a change set touches and so what to rebuild, deploy and test.
+func (a *App) Affected(ctx context.Context, files []string) []string {
+	var out []string
+	for _, name := range a.Spec.ServiceNames() {
+		s := a.Spec.Services[name]
+		if s.Role == spec.RoleLoad {
+			continue
+		}
+		paths := a.watchPaths(ctx, s)
+	files:
+		for _, f := range files {
+			for _, p := range paths {
+				if p == "." || f == p || strings.HasPrefix(f, strings.TrimSuffix(p, "/")+"/") {
+					out = append(out, name)
+					break files
+				}
+			}
+		}
+	}
+	return out
+}
+
 // watchPaths are a service's watch.paths, else what its build or run reads from the project.
 func (a *App) watchPaths(ctx context.Context, s *spec.Service) []string {
 	if s.Watch != nil && len(s.Watch.Paths) > 0 {
