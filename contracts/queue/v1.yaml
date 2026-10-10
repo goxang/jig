@@ -4,8 +4,55 @@ description: a message broker's queues
 sources:
   queue.list:
     fields: {name: string, messages: int, ready: int, unacked: int, consumers: int, in_rate: number, out_rate: number}
+  queue.run-query:
+    args: {query: string!}
+    fields: {}
+  queue.query-language:
+    fields: {language: string}
+  queue.ping:
+    fields: {}
+  queue.actions:
+    fields: {name: string, help: string, mutate: bool}
+  queue.browse:
+    args: {path: json}
+    fields: {}
+  queue.query-at:
+    args: {path: json, query: string!}
+    fields: {}
+  queue.suggest:
+    args: {path: json}
+    fields: {query: string}
+  queue.suggest-row:
+    args: {path: json, columns: json, row: json}
+    fields: {query: string}
+  queue.fresh:
+    fields: {fresh: bool}
+  queue.seed-host:
+    fields: {service: string}
+  queue.info:
+    args: {queue: string!}
+    fields: {}
+  queue.peek:
+    args: {queue: string!, n: int}
+    fields: {}
 actions:
   queue.purge: {effect: danger, args: {queue: string!}}
   queue.publish: {effect: write, args: {target: string!, body: string!}}
+  queue.run-action: {effect: write, args: {name: string!, args: json}}
+  queue.delete-rows: {effect: danger, args: {path: json, columns: json, rows: json}}
+  queue.set-cell: {effect: write, args: {path: json, columns: json, row: json, col: int!, value: string}}
+  queue.snapshot: {effect: write, args: {file: string!}}
+  queue.restore: {effect: danger, args: {file: string!}}
+  queue.seed: {effect: write}
+  queue.delete: {effect: danger, args: {queue: string!}}
 capabilities:
   inspect: {sources: [queue.info, queue.peek], actions: [queue.delete]}
+  browse: {sources: [queue.browse]}
+  path-query: {sources: [queue.query-at, queue.suggest]}
+  row-query: {sources: [queue.suggest-row]}
+  edit: {actions: [queue.delete-rows, queue.set-cell]}
+  snapshot: {actions: [queue.snapshot, queue.restore]}
+  seed: {sources: [queue.fresh, queue.seed-host], actions: [queue.seed]}
+  query: {sources: [queue.run-query, queue.query-language]}
+  ping: {sources: [queue.ping]}
+  actions: {sources: [queue.actions], actions: [queue.run-action]}

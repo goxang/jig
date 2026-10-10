@@ -209,7 +209,7 @@ func dataCommands() []*cobra.Command {
 				var rows [][]string
 				for _, n := range engine.SortedKeys(a.Spec.Components) {
 					if v, err := a.Component(n); err == nil {
-						if _, ok := v.(core.Browser); ok {
+						if _, ok := core.As[core.Browser](v); ok {
 							k, t, _ := a.Kind(n)
 							rows = append(rows, []string{n, string(k), t})
 						}
@@ -222,7 +222,7 @@ func dataCommands() []*cobra.Command {
 			if err != nil {
 				return err
 			}
-			b, ok := v.(core.Browser)
+			b, ok := core.As[core.Browser](v)
 			if !ok {
 				return fmt.Errorf("%s does not support browsing (no Browser adapter): use `jig query` for it instead", args[0])
 			}
@@ -415,7 +415,7 @@ func loadCommand() *cobra.Command {
 		if err := a.Guard(); err != nil {
 			return err
 		}
-		ls, ok := g.(core.LoadScaler)
+		ls, ok := core.As[core.LoadScaler](g)
 		if !ok {
 			return fmt.Errorf("%s does not run as replicas", n)
 		}
@@ -554,7 +554,7 @@ func doCommand() *cobra.Command {
 					if err != nil {
 						continue
 					}
-					if ac, ok := v.(core.Actioner); ok {
+					if ac, ok := core.As[core.Actioner](v); ok {
 						for _, act := range ac.Actions() {
 							rows = append(rows, []string{n, act.Name, act.Help})
 						}
@@ -567,7 +567,7 @@ func doCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			ac, ok := v.(core.Actioner)
+			ac, ok := core.As[core.Actioner](v)
 			if !ok {
 				return fmt.Errorf("%s has no actions", args[0])
 			}

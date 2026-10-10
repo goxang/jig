@@ -30,9 +30,9 @@ func (a *App) snapshotter(comp string) (core.Snapshotter, error) {
 	if err != nil {
 		return nil, err
 	}
-	s, ok := v.(core.Snapshotter)
+	s, ok := core.As[core.Snapshotter](v)
 	if !ok {
-		if _, cache := v.(core.Cache); cache {
+		if _, cache := core.As[core.Cache](v); cache {
 			return nil, fmt.Errorf("%s: cache snapshots are not supported (redis-cli --rdb <file> takes one by hand): %w", comp, core.ErrUnsupported)
 		}
 		return nil, fmt.Errorf("%s cannot be snapshotted: %w", comp, core.ErrUnsupported)
@@ -125,7 +125,7 @@ func (a *App) SeedData(ctx context.Context, comp string, log io.Writer) error {
 	if err != nil {
 		return err
 	}
-	s, ok := v.(core.Seeder)
+	s, ok := core.As[core.Seeder](v)
 	if !ok {
 		return fmt.Errorf("%s has no seed: %w", comp, core.ErrUnsupported)
 	}
@@ -140,7 +140,7 @@ func (a *App) seedFresh(ctx context.Context, services map[string]bool, out io.Wr
 		if err != nil {
 			continue
 		}
-		s, ok := v.(core.Seeder)
+		s, ok := core.As[core.Seeder](v)
 		if !ok || !services[s.Host()] {
 			continue
 		}

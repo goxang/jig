@@ -218,7 +218,7 @@ func (t *loadTab) update(m *model, msg tea.Msg) tea.Cmd {
 			saveReport(m, window)
 			return nil
 		case "[", "]":
-			ls, ok := g.(core.LoadScaler)
+			ls, ok := core.As[core.LoadScaler](g)
 			if !ok {
 				m.setStatus(n+" does not run as instances", true)
 				return nil
@@ -235,7 +235,7 @@ func (t *loadTab) update(m *model, msg tea.Msg) tea.Cmd {
 				return ls.SetReplicas(ctx, max(cur+d, 0))
 			})
 		case "R":
-			ls, ok := g.(core.LoadScaler)
+			ls, ok := core.As[core.LoadScaler](g)
 			if !ok {
 				m.setStatus(n+" does not run as instances", true)
 				return nil
@@ -249,7 +249,7 @@ func (t *loadTab) update(m *model, msg tea.Msg) tea.Cmd {
 				return m.act(fmt.Sprintf("%s to %d instances", n, k), false, func(ctx context.Context) error { return ls.SetReplicas(ctx, k) })
 			})
 		case "c", "v", "b":
-			lc, ok := g.(core.LoadConfigured)
+			lc, ok := core.As[core.LoadConfigured](g)
 			if !ok {
 				m.setStatus(n+" has no config key or services", true)
 				return nil
@@ -539,7 +539,7 @@ func (t *loadTab) services(m *model, n string) []core.Status {
 	if err != nil {
 		return nil
 	}
-	lc, ok := g.(core.LoadConfigured)
+	lc, ok := core.As[core.LoadConfigured](g)
 	if !ok {
 		return nil
 	}

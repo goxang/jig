@@ -309,8 +309,8 @@ func (t *dataTab) open(m *model) tea.Cmd {
 			}
 			c := dataComp{name: n, kind: string(k), adapter: typ}
 			if v, err := a.Component(n); err == nil {
-				_, c.browse = v.(core.Browser)
-				_, c.edit = v.(core.Editor)
+				_, c.browse = core.As[core.Browser](v)
+				_, c.edit = core.As[core.Editor](v)
 			}
 			out = append(out, c)
 		}
@@ -371,7 +371,7 @@ func (t *dataTab) loadView(m *model) tea.Cmd {
 		if err != nil {
 			return brokerViewMsg{gen: gen, view: view, err: err}
 		}
-		q, ok := v.(core.Querier)
+		q, ok := core.As[core.Querier](v)
 		if !ok {
 			return brokerViewMsg{gen: gen, view: view, err: fmt.Errorf("%s has no other lists", comp)}
 		}
@@ -386,7 +386,7 @@ func (t *dataTab) inspector(m *model) (core.QueueInspector, bool) {
 	if err != nil {
 		return nil, false
 	}
-	qi, ok := v.(core.QueueInspector)
+	qi, ok := core.As[core.QueueInspector](v)
 	return qi, ok
 }
 
@@ -468,7 +468,7 @@ func (t *dataTab) load(m *model) tea.Cmd {
 			return browseMsg{gen: gen, seq: seq, err: err}
 		}
 		if query != "" {
-			pq, ok := v.(core.PathQuerier)
+			pq, ok := core.As[core.PathQuerier](v)
 			if !ok {
 				return browseMsg{gen: gen, seq: seq, leaf: true, err: fmt.Errorf("%s cannot run queries", c.name)}
 			}
@@ -758,13 +758,13 @@ func (t *dataTab) key(m *model, k tea.KeyPressMsg) tea.Cmd {
 			return nil
 		}
 		v, err := m.app.Component(c.name)
-		pq, ok := v.(core.PathQuerier)
+		pq, ok := core.As[core.PathQuerier](v)
 		if err != nil || !ok {
 			t.askQuery(m, c, at, "", "")
 			return nil
 		}
 		gen, ctx := m.gen, m.work()
-		rq, _ := v.(core.RowQuerier)
+		rq, _ := core.As[core.RowQuerier](v)
 		row, tb := -1, t.table
 		if r, ok := t.right.current(); ok && t.leaf && rq != nil {
 			row = rowIndex(r.id)
@@ -1013,7 +1013,7 @@ func pathQueryCheck(m *model, comp string, at []string) func(context.Context, st
 		if err != nil {
 			return nil
 		}
-		pq, ok := v.(core.PathQuerier)
+		pq, ok := core.As[core.PathQuerier](v)
 		if !ok {
 			return nil
 		}

@@ -48,8 +48,8 @@ func (a *App) Targets(targets []string, deps bool) ([]string, error) {
 
 // ImageBased reports whether the runtime runs images (and so needs builds) rather than local processes.
 func (a *App) ImageBased() bool {
-	_, reg := a.runtime.(core.Registrar)
-	_, load := a.runtime.(core.ImageLoader)
+	_, reg := core.As[core.Registrar](a.runtime)
+	_, load := core.As[core.ImageLoader](a.runtime)
 	return reg || load
 }
 
@@ -331,7 +331,7 @@ func (a *App) Push(ctx context.Context, s *spec.Service, tag string, out io.Writ
 		return nil
 	}
 	reg := ""
-	if r, ok := a.runtime.(core.Registrar); ok {
+	if r, ok := core.As[core.Registrar](a.runtime); ok {
 		reg = r.Registry()
 	}
 	if reg == "" {
@@ -349,7 +349,7 @@ func (a *App) Push(ctx context.Context, s *spec.Service, tag string, out io.Writ
 		typ = "go"
 	}
 	if b, err := a.builder(typ); err == nil {
-		if p, ok := b.(core.Pusher); ok {
+		if p, ok := core.As[core.Pusher](b); ok {
 			return p.Push(ctx, img, out)
 		}
 	}
@@ -375,7 +375,7 @@ func (a *App) build(ctx context.Context, s *spec.Service, tag, ref string, push 
 		return "", err
 	}
 	reg := ""
-	if r, ok := a.runtime.(core.Registrar); ok {
+	if r, ok := core.As[core.Registrar](a.runtime); ok {
 		reg = r.Registry()
 	}
 	if out == nil {
@@ -412,7 +412,7 @@ func (a *App) build(ctx context.Context, s *spec.Service, tag, ref string, push 
 	if err != nil {
 		return "", fmt.Errorf("build %s: %w", s.Name, err)
 	}
-	if l, ok := a.runtime.(core.ImageLoader); ok && reg == "" {
+	if l, ok := core.As[core.ImageLoader](a.runtime); ok && reg == "" {
 		if err := l.LoadImage(ctx, img); err != nil {
 			return "", err
 		}

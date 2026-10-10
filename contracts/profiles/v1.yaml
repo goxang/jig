@@ -4,5 +4,19 @@ description: captures profiles of a running service
 sources:
   profiles.kinds:
     fields: {kind: string}
+  profiles.run-query:
+    args: {query: string!}
+    fields: {}
+  profiles.query-language:
+    fields: {language: string}
+  profiles.ping:
+    fields: {}
+  profiles.actions:
+    fields: {name: string, help: string, mutate: bool}
 actions:
   profiles.capture: {effect: read, args: {service: string!, instance: string, kind: string!, duration: duration, dir: string!}, outputs: {kind: string, format: string, file: string, summary: string}}
+  profiles.run-action: {effect: write, args: {name: string!, args: json}}
+capabilities:
+  query: {sources: [profiles.run-query, profiles.query-language]}
+  ping: {sources: [profiles.ping]}
+  actions: {sources: [profiles.actions], actions: [profiles.run-action]}

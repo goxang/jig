@@ -4,13 +4,34 @@ description: runs the project's services and reports their state
 sources:
   runtime.status:
     args: {services: json}
-    fields: {service: string, state: string, ready: int, desired: int, image: string, message: string, instances: json}
+    fields: {service: string, state: string, ready: int, desired: int, image: string, message: string, instances: json, autoscale: json}
   runtime.discover:
     fields: {name: string, kind: string, service: string, state: string}
   runtime.logs:
     stream: true
     args: {service: string!, instance: string, since: duration, tail: int, follow: bool}
     fields: {time: time, service: string, instance: string, stream: string, text: string}
+  runtime.run-query:
+    args: {query: string!}
+    fields: {}
+  runtime.query-language:
+    fields: {language: string}
+  runtime.ping:
+    fields: {}
+  runtime.actions:
+    fields: {name: string, help: string, mutate: bool}
+  runtime.state:
+    fields: {key: string, value: string}
+  runtime.registry:
+    fields: {registry: string}
+  runtime.resources:
+    args: {service: string!}
+    fields: {container: string, cpu_request: string, cpu_limit: string, mem_request: string, mem_limit: string}
+  runtime.env:
+    args: {service: string!}
+    fields: {name: string, value: string}
+  runtime.hosts:
+    fields: {name: string, addr: string, roles: json, ready: bool, reason: string, os: string, kernel: string, cpus: int, cpu_used: number, mem_total: int, mem_used: int, disk_total: int, disk_used: int, load1: number, labels: json, pods: json}
 actions:
   runtime.start: {effect: write, args: {service: string!}}
   runtime.stop: {effect: danger, args: {service: string!}}
@@ -19,9 +40,25 @@ actions:
   runtime.deploy: {effect: danger, args: {service: string!, image: string, env: json, replicas: int}}
   # exec answers outputs.argv: the command jig runs on the user's terminal (kubectl exec -it ..., ssh -t ...)
   runtime.exec: {effect: write, args: {service: string!, instance: string, command: json, tty: bool}, outputs: {argv: json}}
+  runtime.run-action: {effect: write, args: {name: string!, args: json}}
+  runtime.save-state: {effect: write, args: {state: json!}}
+  runtime.load-image: {effect: write, args: {image: string!}}
+  runtime.bridge: {effect: write, args: {service: string!, ports: json!}}
+  runtime.autoscale: {effect: write, args: {service: string!, min: int, max: int, cpu: int, memory: int}}
+  runtime.set-resources: {effect: write, args: {service: string!, container: string, cpu_request: string, cpu_limit: string, mem_request: string, mem_limit: string}}
+  runtime.forward: {effect: read, args: {service: string!, instance: string, port: int!}, outputs: {addr: string}}
+  runtime.shell: {effect: write, args: {host: string!, command: json}, outputs: {argv: json}}
 capabilities:
   autoscale: {actions: [runtime.autoscale]}
   resources: {sources: [runtime.resources], actions: [runtime.set-resources]}
   env: {sources: [runtime.env]}
   forward: {actions: [runtime.forward]}
   namespaces: {sources: [runtime.namespaces]}
+  state: {sources: [runtime.state], actions: [runtime.save-state]}
+  registry: {sources: [runtime.registry]}
+  load-image: {actions: [runtime.load-image]}
+  bridge: {actions: [runtime.bridge]}
+  hosts: {sources: [runtime.hosts], actions: [runtime.shell]}
+  query: {sources: [runtime.run-query, runtime.query-language]}
+  ping: {sources: [runtime.ping]}
+  actions: {sources: [runtime.actions], actions: [runtime.run-action]}

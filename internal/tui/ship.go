@@ -87,7 +87,7 @@ func ship(m *model, names []string) tea.Cmd {
 	}
 	steps := []string{"build", "push", "deploy"}
 	desc := []string{"build the images", "", "roll the tag out (env vars next)"}
-	if r, ok := a.Runtime().(core.Registrar); ok && r.Registry() != "" {
+	if r, ok := core.As[core.Registrar](a.Runtime()); ok && r.Registry() != "" {
 		desc[1] = "push them to " + r.Registry()
 	} else {
 		steps, desc = []string{"build", "deploy"}, []string{desc[0], desc[2]}

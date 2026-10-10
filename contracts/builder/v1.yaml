@@ -1,7 +1,22 @@
 contract: builder/1
 kind: builder
 description: builds a service's image
+sources:
+  builder.run-query:
+    args: {query: string!}
+    fields: {}
+  builder.query-language:
+    fields: {language: string}
+  builder.ping:
+    fields: {}
+  builder.actions:
+    fields: {name: string, help: string, mutate: bool}
 actions:
   builder.build: {effect: write, args: {service: string!, tag: string, registry: string, push: bool, dir: string}, outputs: {image: string}}
+  builder.run-action: {effect: write, args: {name: string!, args: json}}
+  builder.push: {effect: write, args: {image: string!}}
 capabilities:
   push: {actions: [builder.push]}
+  query: {sources: [builder.run-query, builder.query-language]}
+  ping: {sources: [builder.ping]}
+  actions: {sources: [builder.actions], actions: [builder.run-action]}

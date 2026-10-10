@@ -317,6 +317,9 @@ func netPort(s string) uint16 {
 // environ is PATH, HOME, LANG, proxies and what the plugin declares; nothing else of jig's environment leaks.
 func (p *Plugin) environ(extra map[string]string) []string {
 	var out []string
+	if slices.Contains(p.Permissions.Env, "*") {
+		out = slices.DeleteFunc(os.Environ(), func(kv string) bool { return strings.HasPrefix(kv, "JIG_") })
+	}
 	for _, k := range slices.Concat([]string{"PATH", "HOME", "LANG", "LC_ALL", "TZ"}, proxyVars, p.Permissions.Env) {
 		if v, ok := os.LookupEnv(k); ok {
 			if k == "PATH" {
@@ -325,7 +328,7 @@ func (p *Plugin) environ(extra map[string]string) []string {
 			out = append(out, k+"="+v)
 		}
 	}
-	out = append(out, "JIG_PLUGIN="+p.Name, "JIG_PLUGIN_DIR="+p.Dir, "JIG_PROJECT="+p.h.Dir, "JIG_ENV="+p.h.Env,
+	out = append(out, "JIG_PLUGIN="+p.Name, "JIG_PLUGIN_DIR="+p.Dir, "JIG_PROJECT="+p.h.Dir, "JIG_FILE="+p.h.File, "JIG_ENV="+p.h.Env,
 		"JIG_CACHE="+p.cacheDir(), "JIG_PROTOCOL="+protocol.Version)
 	for k, v := range extra {
 		out = append(out, k+"="+p.expand(v))

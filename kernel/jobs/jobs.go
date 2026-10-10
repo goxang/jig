@@ -5,10 +5,12 @@ package jobs
 import (
 	"cmp"
 	"context"
+	"fmt"
 	"io"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/charmbracelet/x/ansi"
@@ -256,4 +258,15 @@ func Out(ctx context.Context) io.Writer {
 		return j
 	}
 	return io.Discard
+}
+
+var writers atomic.Int64
+
+// Writer is ctx carrying a job that copies everything written to it into w, so what a plugin prints
+// for a call lands in w; a nil w keeps ctx.
+func Writer(ctx context.Context, w io.Writer) context.Context {
+	if w == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, key{}, &Job{ID: fmt.Sprintf("w%d", writers.Add(1)), Start: time.Now(), Echo: w})
 }

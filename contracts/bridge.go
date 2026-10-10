@@ -5,12 +5,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os/exec"
+	"reflect"
 	"strconv"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/goxang/jig/core"
 	"github.com/goxang/jig/kernel/frames"
+	"github.com/goxang/jig/kernel/jobs"
 	"github.com/goxang/jig/protocol"
 	"github.com/goxang/jig/spec"
 )
@@ -22,11 +27,58 @@ type Caller interface {
 	Stream(ctx context.Context, name string, args protocol.Args) (<-chan protocol.StreamBatch, error)
 }
 
+// optional maps each optional core interface to the capability that serves it.
+var optional = []struct {
+	iface reflect.Type
+	cap   string
+}{
+	{reflect.TypeFor[core.Querier](), "query"},
+	{reflect.TypeFor[core.Pinger](), "ping"},
+	{reflect.TypeFor[core.Actioner](), "actions"},
+	{reflect.TypeFor[core.Browser](), "browse"},
+	{reflect.TypeFor[core.PathQuerier](), "path-query"},
+	{reflect.TypeFor[core.RowQuerier](), "row-query"},
+	{reflect.TypeFor[core.Editor](), "edit"},
+	{reflect.TypeFor[core.Snapshotter](), "snapshot"},
+	{reflect.TypeFor[core.Seeder](), "seed"},
+	{reflect.TypeFor[core.StateStore](), "state"},
+	{reflect.TypeFor[core.Registrar](), "registry"},
+	{reflect.TypeFor[core.ImageLoader](), "load-image"},
+	{reflect.TypeFor[core.Bridger](), "bridge"},
+	{reflect.TypeFor[core.Autoscaler](), "autoscale"},
+	{reflect.TypeFor[core.Resourcer](), "resources"},
+	{reflect.TypeFor[core.EnvReader](), "env"},
+	{reflect.TypeFor[core.Forwarder](), "forward"},
+	{reflect.TypeFor[core.Hosts](), "hosts"},
+	{reflect.TypeFor[core.Pusher](), "push"},
+	{reflect.TypeFor[core.LoadConfigured](), "configured"},
+	{reflect.TypeFor[core.LoadScaler](), "scale"},
+	{reflect.TypeFor[core.QueueInspector](), "inspect"},
+	{reflect.TypeFor[core.KVReader](), "all"},
+}
+
+func capOf(iface string) string {
+	for _, o := range optional {
+		if o.iface.Name() == iface {
+			return o.cap
+		}
+	}
+	return ""
+}
+
 // Bridge is component, served by plugin through the contract for kind, as the core interface that
-// kind's built-in screens and commands use. Every call carries the component's name, so one plugin
-// can serve several components.
-func Bridge(kind core.Kind, c Caller, plugin, component string) (any, error) {
-	b := base{c: c, plugin: plugin, comp: component}
+// kind's screens and commands use. Every call carries the component's name, so one plugin can serve
+// several components. The bridge has every optional interface of the kind, and core.As admits only
+// those whose capability pr provides.
+func Bridge(kind core.Kind, c Caller, plugin, component string, pr *protocol.Provides) (any, error) {
+	ct := ForKind(string(kind))
+	if ct == nil {
+		return nil, fmt.Errorf("no contract bridges the %s kind", kind)
+	}
+	if pr == nil {
+		pr = &protocol.Provides{}
+	}
+	b := &base{c: c, plugin: plugin, comp: component, contract: ct, pr: pr, prefix: strings.Split(ct.ID, "/")[0]}
 	switch kind {
 	case core.KindRuntime:
 		return &runtimeBridge{b}, nil
@@ -54,16 +106,29 @@ func Bridge(kind core.Kind, c Caller, plugin, component string) (any, error) {
 		return &loadBridge{b}, nil
 	case core.KindHosts:
 		return &hostsBridge{b}, nil
+	case core.KindQuery:
+		return &queryBridge{b}, nil
 	}
 	return nil, fmt.Errorf("no contract bridges the %s kind", kind)
 }
 
 type base struct {
-	c            Caller
-	plugin, comp string
+	c                    Caller
+	plugin, comp, prefix string
+	contract             *Contract
+	pr                   *protocol.Provides
+
+	mu    sync.Mutex
+	facts map[string]map[string]any
 }
 
-func (b base) args(a protocol.Args) protocol.Args {
+// Has says whether the plugin serves the optional interface named iface; the kind's own is always served.
+func (b *base) Has(iface string) bool {
+	cp := capOf(iface)
+	return cp == "" || b.contract.Has(b.pr, cp)
+}
+
+func (b *base) args(a protocol.Args) protocol.Args {
 	if a == nil {
 		a = protocol.Args{}
 	}
@@ -71,7 +136,7 @@ func (b base) args(a protocol.Args) protocol.Args {
 	return a
 }
 
-func (b base) rows(ctx context.Context, source string, a protocol.Args) ([]map[string]any, error) {
+func (b *base) rows(ctx context.Context, source string, a protocol.Args) ([]map[string]any, error) {
 	f, err := b.c.Query(ctx, b.plugin+"."+source, b.args(a))
 	if err != nil {
 		return nil, err
@@ -79,19 +144,53 @@ func (b base) rows(ctx context.Context, source string, a protocol.Args) ([]map[s
 	return frames.Rows(f), nil
 }
 
-func (b base) run(ctx context.Context, action string, a protocol.Args) (protocol.Args, error) {
-	res, err := b.c.Run(ctx, b.plugin+"."+action, b.args(a), false)
+// fact is a source's first row, asked once: what an interface answers without a context.
+func (b *base) fact(source string) map[string]any {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if r, ok := b.facts[source]; ok {
+		return r
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	rows, err := b.rows(ctx, source, nil)
+	if err != nil || len(rows) == 0 {
+		return map[string]any{}
+	}
+	if b.facts == nil {
+		b.facts = map[string]map[string]any{}
+	}
+	b.facts[source] = rows[0]
+	return rows[0]
+}
+
+func (b *base) run(ctx context.Context, action string, a protocol.Args) (protocol.Args, error) {
+	return b.runOut(ctx, nil, action, a)
+}
+
+// runOut runs action with what the plugin prints going to out.
+func (b *base) runOut(ctx context.Context, out io.Writer, action string, a protocol.Args) (protocol.Args, error) {
+	res, err := b.c.Run(jobs.Writer(ctx, out), b.plugin+"."+action, b.args(a), false)
 	if err != nil || res == nil {
 		return nil, err
 	}
 	return res.Outputs, nil
 }
 
-func (b base) table(ctx context.Context, source string, a protocol.Args) (core.Table, error) {
+func (b *base) do(ctx context.Context, action string, a protocol.Args) error {
+	_, err := b.run(ctx, action, a)
+	return err
+}
+
+func (b *base) table(ctx context.Context, source string, a protocol.Args) (core.Table, error) {
 	f, err := b.c.Query(ctx, b.plugin+"."+source, b.args(a))
 	if err != nil {
 		return core.Table{}, err
 	}
+	return tableOf(f), nil
+}
+
+func tableOf(f *protocol.Frame) core.Table {
 	var t core.Table
 	for _, fl := range f.Fields {
 		t.Columns = append(t.Columns, fl.Name)
@@ -103,21 +202,160 @@ func (b base) table(ctx context.Context, source string, a protocol.Args) (core.T
 		}
 		t.Rows = append(t.Rows, row)
 	}
-	return t, nil
+	if f.Meta != nil {
+		t.Note = f.Meta.Notice
+	}
+	return t
 }
 
-// command runs the argv an action answers (outputs.argv) on the caller's terminal.
+// command is the argv an action answers (outputs.argv, with env and dir), to run on the caller's terminal.
 func command(ctx context.Context, out protocol.Args) (*exec.Cmd, error) {
 	argv := strs(out["argv"])
 	if len(argv) == 0 {
 		return nil, fmt.Errorf("the plugin answered no argv to run")
 	}
-	return exec.CommandContext(ctx, argv[0], argv[1:]...), nil
+	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
+	cmd.Env, cmd.Dir = strs(out["env"]), str(out["dir"])
+	return cmd, nil
+}
+
+// ---- shared optional interfaces ----
+
+func (b *base) QueryLanguage() string { return str(b.fact(b.prefix + ".query-language")["language"]) }
+func (b *base) RunQuery(ctx context.Context, q string) (core.Table, error) {
+	return b.table(ctx, b.prefix+".run-query", protocol.Args{"query": q})
+}
+
+func (b *base) Ping(ctx context.Context) error {
+	_, err := b.rows(ctx, b.prefix+".ping", nil)
+	return err
+}
+
+func (b *base) Actions() []core.Action {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	rows, _ := b.rows(ctx, b.prefix+".actions", nil)
+	var out []core.Action
+	for _, r := range rows {
+		name := str(r["name"])
+		out = append(out, core.Action{Name: name, Help: str(r["help"]), Mutate: r["mutate"] == true,
+			Run: func(ctx context.Context, args []string, w io.Writer) error {
+				_, err := b.runOut(ctx, w, b.prefix+".run-action", protocol.Args{"name": name, "args": args})
+				return err
+			}})
+	}
+	return out
+}
+
+func (b *base) Browse(ctx context.Context, path []string) (core.Table, bool, error) {
+	f, err := b.c.Query(ctx, b.plugin+"."+b.prefix+".browse", b.args(protocol.Args{"path": path}))
+	if err != nil {
+		return core.Table{}, false, err
+	}
+	// A frame named "leaf" holds rows, not further levels.
+	return tableOf(f), f.Name == "leaf", nil
+}
+
+func (b *base) QueryAt(ctx context.Context, path []string, q string) (core.Table, error) {
+	return b.table(ctx, b.prefix+".query-at", protocol.Args{"path": path, "query": q})
+}
+
+func (b *base) SuggestQuery(ctx context.Context, path []string) string {
+	rows, _ := b.rows(ctx, b.prefix+".suggest", protocol.Args{"path": path})
+	if len(rows) == 0 {
+		return ""
+	}
+	return str(rows[0]["query"])
+}
+
+func (b *base) SuggestRowQuery(ctx context.Context, path []string, t core.Table, row int) string {
+	if row < 0 || row >= len(t.Rows) {
+		return ""
+	}
+	rows, _ := b.rows(ctx, b.prefix+".suggest-row", protocol.Args{"path": path, "columns": t.Columns, "row": t.Rows[row]})
+	if len(rows) == 0 {
+		return ""
+	}
+	return str(rows[0]["query"])
+}
+
+// Delete sends the chosen rows themselves; the plugin sees a table of just those.
+func (b *base) Delete(ctx context.Context, path []string, t core.Table, rows []int) error {
+	var sel [][]string
+	for _, i := range rows {
+		if i >= 0 && i < len(t.Rows) {
+			sel = append(sel, t.Rows[i])
+		}
+	}
+	return b.do(ctx, b.prefix+".delete-rows", protocol.Args{"path": path, "columns": t.Columns, "rows": sel})
+}
+
+func (b *base) Set(ctx context.Context, path []string, t core.Table, row, col int, value string) error {
+	if row < 0 || row >= len(t.Rows) {
+		return fmt.Errorf("no row %d", row)
+	}
+	return b.do(ctx, b.prefix+".set-cell", protocol.Args{"path": path, "columns": t.Columns, "row": t.Rows[row], "col": col, "value": value})
+}
+
+func (b *base) Snapshot(ctx context.Context, file string, log io.Writer) error {
+	_, err := b.runOut(ctx, log, b.prefix+".snapshot", protocol.Args{"file": file})
+	return err
+}
+
+func (b *base) Restore(ctx context.Context, file string, log io.Writer) error {
+	_, err := b.runOut(ctx, log, b.prefix+".restore", protocol.Args{"file": file})
+	return err
+}
+
+func (b *base) Seed(ctx context.Context, log io.Writer) error {
+	_, err := b.runOut(ctx, log, b.prefix+".seed", nil)
+	return err
+}
+
+func (b *base) Fresh(ctx context.Context) (bool, error) {
+	rows, err := b.rows(ctx, b.prefix+".fresh", nil)
+	return len(rows) > 0 && rows[0]["fresh"] == true, err
+}
+
+func (b *base) Host() string { return str(b.fact(b.prefix + ".seed-host")["service"]) }
+
+// stream reads log lines from a streaming source: frame rows, or bare lines.
+func (b *base) stream(ctx context.Context, source string, a protocol.Args) (<-chan core.LogLine, error) {
+	in, err := b.c.Stream(ctx, b.plugin+"."+source, b.args(a))
+	if err != nil {
+		return nil, err
+	}
+	out := make(chan core.LogLine, 64)
+	go func() {
+		defer close(out)
+		for batch := range in {
+			var lines []core.LogLine
+			if batch.Frame != nil {
+				for _, row := range frames.Rows(batch.Frame) {
+					lines = append(lines, core.LogLine{Time: when(row["time"]), Service: str(row["service"]), Instance: str(row["instance"]), Stream: str(row["stream"]), Text: str(row["text"])})
+				}
+			}
+			for _, l := range batch.Lines {
+				lines = append(lines, core.LogLine{Time: time.Now(), Text: l})
+			}
+			for _, l := range lines {
+				select {
+				case out <- l:
+				case <-ctx.Done():
+					return
+				}
+			}
+			if batch.Done || batch.Error != nil {
+				return
+			}
+		}
+	}()
+	return out, nil
 }
 
 // ---- runtime ----
 
-type runtimeBridge struct{ base }
+type runtimeBridge struct{ *base }
 
 func (r *runtimeBridge) Discover(ctx context.Context) ([]core.Workload, error) {
 	rows, err := r.rows(ctx, "runtime.discover", nil)
@@ -133,8 +371,7 @@ func (r *runtimeBridge) svc(ctx context.Context, action string, s *spec.Service,
 		a = protocol.Args{}
 	}
 	a["service"] = s.Name
-	_, err := r.run(ctx, action, a)
-	return err
+	return r.do(ctx, action, a)
 }
 
 func (r *runtimeBridge) Start(ctx context.Context, s *spec.Service) error {
@@ -159,32 +396,48 @@ func (r *runtimeBridge) Deploy(ctx context.Context, s *spec.Service, rel core.Re
 }
 
 func (r *runtimeBridge) Status(ctx context.Context, s *spec.Service) (core.Status, error) {
-	rows, err := r.rows(ctx, "runtime.status", protocol.Args{"services": []string{s.Name}})
+	st, err := r.StatusAll(ctx, []*spec.Service{s})
 	if err != nil {
 		return core.Status{Service: s.Name, State: core.StateUnknown, Message: err.Error()}, err
 	}
-	for _, row := range rows {
-		if str(row["service"]) == s.Name {
-			return statusOf(row), nil
-		}
+	return st[0], nil
+}
+
+// StatusAll is one runtime.status call; a service the plugin does not answer for is absent.
+func (r *runtimeBridge) StatusAll(ctx context.Context, services []*spec.Service) ([]core.Status, error) {
+	names := make([]string, len(services))
+	for i, s := range services {
+		names[i] = s.Name
 	}
-	return core.Status{Service: s.Name, State: core.StateAbsent}, nil
+	rows, err := r.rows(ctx, "runtime.status", protocol.Args{"services": names})
+	if err != nil {
+		return nil, err
+	}
+	by := map[string]core.Status{}
+	for _, row := range rows {
+		by[str(row["service"])] = statusOf(row)
+	}
+	out := make([]core.Status, len(services))
+	for i, n := range names {
+		st, ok := by[n]
+		if !ok {
+			st = core.Status{Service: n, State: core.StateAbsent}
+		}
+		out[i] = st
+	}
+	return out, nil
 }
 
 func statusOf(row map[string]any) core.Status {
 	st := core.Status{Service: str(row["service"]), State: core.State(str(row["state"])), Ready: integer(row["ready"]),
 		Desired: integer(row["desired"]), Image: str(row["image"]), Message: str(row["message"])}
-	insts, _ := row["instances"].([]any)
-	for _, i := range insts {
-		m, _ := i.(map[string]any)
-		st.Instances = append(st.Instances, core.Instance{ID: str(m["id"]), Host: str(m["host"]), IP: str(m["ip"]), State: core.State(str(m["state"])),
-			Ready: m["ready"] == true, Restarts: integer(m["restarts"]), Started: when(m["started"]), CPU: number(m["cpu"]), Memory: int64(number(m["memory"]))})
-	}
+	decode(row["instances"], &st.Instances)
+	decode(row["autoscale"], &st.Autoscale)
 	return st
 }
 
 func (r *runtimeBridge) Logs(ctx context.Context, s *spec.Service, o core.LogOptions) (<-chan core.LogLine, error) {
-	return r.stream(ctx, "runtime.logs", protocol.Args{"service": s.Name, "instance": o.Instance, "since": o.Since.String(), "tail": o.Tail, "follow": o.Follow})
+	return r.stream(ctx, "runtime.logs", protocol.Args{"service": s.Name, "instance": o.Instance, "since": o.Since.Seconds(), "tail": o.Tail, "follow": o.Follow})
 }
 
 func (r *runtimeBridge) Exec(ctx context.Context, s *spec.Service, o core.ExecOptions) error {
@@ -200,51 +453,96 @@ func (r *runtimeBridge) Exec(ctx context.Context, s *spec.Service, o core.ExecOp
 	return cmd.Run()
 }
 
-// stream reads log lines from a streaming source: frame rows, or bare lines.
-func (b base) stream(ctx context.Context, source string, a protocol.Args) (<-chan core.LogLine, error) {
-	in, err := b.c.Stream(ctx, b.plugin+"."+source, b.args(a))
+func (r *runtimeBridge) LoadState(ctx context.Context) (map[string]string, error) {
+	rows, err := r.rows(ctx, "runtime.state", nil)
+	out := map[string]string{}
+	for _, row := range rows {
+		out[str(row["key"])] = str(row["value"])
+	}
+	return out, err
+}
+
+func (r *runtimeBridge) SaveState(ctx context.Context, state map[string]string) error {
+	return r.do(ctx, "runtime.save-state", protocol.Args{"state": state})
+}
+
+func (r *runtimeBridge) Registry() string { return str(r.fact("runtime.registry")["registry"]) }
+
+func (r *runtimeBridge) LoadImage(ctx context.Context, image string) error {
+	return r.do(ctx, "runtime.load-image", protocol.Args{"image": image})
+}
+
+func (r *runtimeBridge) Bridge(ctx context.Context, s *spec.Service, ports map[int]string) error {
+	p := map[string]string{}
+	for k, v := range ports {
+		p[strconv.Itoa(k)] = v
+	}
+	return r.svc(ctx, "runtime.bridge", s, protocol.Args{"ports": p})
+}
+
+func (r *runtimeBridge) SetAutoscale(ctx context.Context, s *spec.Service, b core.Bounds) error {
+	return r.svc(ctx, "runtime.autoscale", s, protocol.Args{"min": b.Min, "max": b.Max, "cpu": b.CPU, "memory": b.Memory})
+}
+
+func (r *runtimeBridge) Resources(ctx context.Context, s *spec.Service) ([]core.Resources, error) {
+	rows, err := r.rows(ctx, "runtime.resources", protocol.Args{"service": s.Name})
+	var out []core.Resources
+	for _, row := range rows {
+		out = append(out, core.Resources{Container: str(row["container"]), CPURequest: str(row["cpu_request"]), CPULimit: str(row["cpu_limit"]),
+			MemRequest: str(row["mem_request"]), MemLimit: str(row["mem_limit"])})
+	}
+	return out, err
+}
+
+func (r *runtimeBridge) SetResources(ctx context.Context, s *spec.Service, res core.Resources) error {
+	return r.svc(ctx, "runtime.set-resources", s, protocol.Args{"container": res.Container, "cpu_request": res.CPURequest,
+		"cpu_limit": res.CPULimit, "mem_request": res.MemRequest, "mem_limit": res.MemLimit})
+}
+
+func (r *runtimeBridge) LiveEnv(ctx context.Context, s *spec.Service) (map[string]string, error) {
+	rows, err := r.rows(ctx, "runtime.env", protocol.Args{"service": s.Name})
+	out := map[string]string{}
+	for _, row := range rows {
+		out[str(row["name"])] = str(row["value"])
+	}
+	return out, err
+}
+
+func (r *runtimeBridge) Forward(ctx context.Context, t core.Target) (string, error) {
+	out, err := r.run(ctx, "runtime.forward", protocol.Args{"service": t.Service, "instance": t.Instance, "port": t.Port})
+	return str(out["addr"]), err
+}
+
+func (r *runtimeBridge) Hosts(ctx context.Context) ([]core.Host, error) {
+	rows, err := r.rows(ctx, "runtime.hosts", nil)
+	return hostsOf(rows), err
+}
+
+func (r *runtimeBridge) Shell(ctx context.Context, host string, cmd []string) (*exec.Cmd, error) {
+	out, err := r.run(ctx, "runtime.shell", protocol.Args{"host": host, "command": cmd})
 	if err != nil {
 		return nil, err
 	}
-	out := make(chan core.LogLine, 64)
-	go func() {
-		defer close(out)
-		for batch := range in {
-			var lines []core.LogLine
-			for _, row := range frames.Rows(batch.Frame) {
-				lines = append(lines, core.LogLine{Time: when(row["time"]), Service: str(row["service"]), Instance: str(row["instance"]), Stream: str(row["stream"]), Text: str(row["text"])})
-			}
-			for _, l := range batch.Lines {
-				lines = append(lines, core.LogLine{Time: time.Now(), Text: l})
-			}
-			for _, l := range lines {
-				select {
-				case out <- l:
-				case <-ctx.Done():
-					return
-				}
-			}
-			if batch.Done || batch.Error != nil {
-				return
-			}
-		}
-	}()
-	return out, nil
+	return command(ctx, out)
 }
 
 // ---- builder ----
 
-type builderBridge struct{ base }
+type builderBridge struct{ *base }
 
-// ponytail: build output goes to the job in ctx, not o.Out; pipe $/progress into o.Out if a caller needs it.
 func (b *builderBridge) Build(ctx context.Context, s *spec.Service, o core.BuildOptions) (string, error) {
-	out, err := b.run(ctx, "builder.build", protocol.Args{"service": s.Name, "tag": o.Tag, "registry": o.Registry, "push": o.Push, "dir": o.Dir})
+	out, err := b.runOut(ctx, o.Out, "builder.build", protocol.Args{"service": s.Name, "tag": o.Tag, "registry": o.Registry, "push": o.Push, "dir": o.Dir})
 	return str(out["image"]), err
+}
+
+func (b *builderBridge) Push(ctx context.Context, image string, w io.Writer) error {
+	_, err := b.runOut(ctx, w, "builder.push", protocol.Args{"image": image})
+	return err
 }
 
 // ---- observability ----
 
-type metricsBridge struct{ base }
+type metricsBridge struct{ *base }
 
 func (m *metricsBridge) Instant(ctx context.Context, q string) ([]core.Sample, error) {
 	rows, err := m.rows(ctx, "metrics.instant", protocol.Args{"query": q})
@@ -256,7 +554,7 @@ func (m *metricsBridge) Instant(ctx context.Context, q string) ([]core.Sample, e
 }
 
 func (m *metricsBridge) Range(ctx context.Context, q string, start, end time.Time, step time.Duration) ([]core.Series, error) {
-	rows, err := m.rows(ctx, "metrics.range", protocol.Args{"query": q, "start": start.Format(time.RFC3339), "end": end.Format(time.RFC3339), "step": step.String()})
+	rows, err := m.rows(ctx, "metrics.range", protocol.Args{"query": q, "start": seconds(start), "end": seconds(end), "step": step.Seconds()})
 	var out []core.Series
 	at := map[string]int{}
 	for _, r := range rows {
@@ -274,18 +572,14 @@ func (m *metricsBridge) Range(ctx context.Context, q string, start, end time.Tim
 
 func labels(r map[string]any) map[string]string {
 	out := map[string]string{}
-	if m, ok := r["labels"].(map[string]any); ok {
-		for k, v := range m {
-			out[k] = str(v)
-		}
-	}
+	decode(r["labels"], &out)
 	if len(out) == 0 && str(r["series"]) != "" {
 		out["series"] = str(r["series"])
 	}
 	return out
 }
 
-type tracesBridge struct{ base }
+type tracesBridge struct{ *base }
 
 func (t *tracesBridge) Services(ctx context.Context) ([]string, error) {
 	rows, err := t.rows(ctx, "traces.services", nil)
@@ -298,7 +592,7 @@ func (t *tracesBridge) Services(ctx context.Context) ([]string, error) {
 
 func (t *tracesBridge) Search(ctx context.Context, q core.TraceQuery) ([]core.TraceSummary, error) {
 	rows, err := t.rows(ctx, "traces.search", protocol.Args{"service": q.Service, "operation": q.Operation,
-		"min_duration": q.MinDuration.String(), "lookback": q.Lookback.String(), "limit": q.Limit})
+		"min_duration": q.MinDuration.Seconds(), "lookback": q.Lookback.Seconds(), "limit": q.Limit})
 	var out []core.TraceSummary
 	for _, r := range rows {
 		out = append(out, core.TraceSummary{ID: str(r["id"]), Root: str(r["root"]), Start: when(r["start"]), Duration: duration(r["duration"]),
@@ -311,22 +605,20 @@ func (t *tracesBridge) Trace(ctx context.Context, id string) ([]core.Span, error
 	rows, err := t.rows(ctx, "traces.get", protocol.Args{"id": id})
 	var out []core.Span
 	for _, r := range rows {
-		tags := map[string]string{}
-		if m, ok := r["tags"].(map[string]any); ok {
-			for k, v := range m {
-				tags[k] = str(v)
-			}
-		}
+		var tags map[string]string
+		decode(r["tags"], &tags)
 		out = append(out, core.Span{TraceID: cmp.Or(str(r["trace"]), id), ID: str(r["id"]), Parent: str(r["parent"]), Service: str(r["service"]),
 			Name: str(r["name"]), Start: when(r["start"]), Duration: duration(r["duration"]), Error: r["error"] == true, Tags: tags})
 	}
 	return out, err
 }
 
-type profilerBridge struct{ base }
+type profilerBridge struct{ *base }
 
 func (p *profilerBridge) Kinds() []string {
-	rows, _ := p.rows(context.Background(), "profiles.kinds", nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	rows, _ := p.rows(ctx, "profiles.kinds", nil)
 	var out []string
 	for _, r := range rows {
 		out = append(out, str(r["kind"]))
@@ -335,11 +627,11 @@ func (p *profilerBridge) Kinds() []string {
 }
 
 func (p *profilerBridge) Capture(ctx context.Context, r core.ProfileRequest) (core.Profile, error) {
-	out, err := p.run(ctx, "profiles.capture", protocol.Args{"service": r.Service.Name, "instance": r.Instance, "kind": r.Kind, "duration": r.Duration.String(), "dir": r.OutDir})
+	out, err := p.run(ctx, "profiles.capture", protocol.Args{"service": r.Service.Name, "instance": r.Instance, "kind": r.Kind, "duration": r.Duration.Seconds(), "dir": r.OutDir})
 	return core.Profile{Kind: cmp.Or(str(out["kind"]), r.Kind), Format: str(out["format"]), File: str(out["file"]), Summary: str(out["summary"])}, err
 }
 
-type debuggerBridge struct{ base }
+type debuggerBridge struct{ *base }
 
 func (d *debuggerBridge) Attach(ctx context.Context, s *spec.Service, instance string) (core.DebugSession, error) {
 	out, err := d.run(ctx, "debugger.attach", protocol.Args{"service": s.Name, "instance": instance})
@@ -347,21 +639,25 @@ func (d *debuggerBridge) Attach(ctx context.Context, s *spec.Service, instance s
 		return core.DebugSession{}, err
 	}
 	return core.DebugSession{Addr: str(out["addr"]), Hint: str(out["hint"]), Close: func() error {
-		_, err := d.run(context.Background(), "debugger.detach", protocol.Args{"service": s.Name})
-		return err
+		return d.do(context.Background(), "debugger.detach", protocol.Args{"service": s.Name})
 	}}, nil
 }
 
-type logsBridge struct{ base }
+type logsBridge struct{ *base }
 
 func (l *logsBridge) Logs(ctx context.Context, q core.LogQuery) (<-chan core.LogLine, error) {
-	return l.stream(ctx, "logs.query", protocol.Args{"services": q.Services, "instance": q.Instance, "since": q.Since.String(),
+	return l.stream(ctx, "logs.query", protocol.Args{"services": q.Services, "instance": q.Instance, "since": q.Since.Seconds(),
 		"tail": q.Tail, "follow": q.Follow, "match": q.Match, "regex": q.Regex})
 }
 
 // ---- data ----
 
-type databaseBridge struct{ base }
+type databaseBridge struct{ *base }
+
+// Has: a database always answers queries, through database.query.
+func (d *databaseBridge) Has(iface string) bool {
+	return iface == "Querier" || d.base.Has(iface)
+}
 
 func (d *databaseBridge) Query(ctx context.Context, db, q string) (core.Table, error) {
 	return d.table(ctx, "database.query", protocol.Args{"database": db, "query": q})
@@ -382,21 +678,25 @@ func (d *databaseBridge) Databases(ctx context.Context) ([]string, error) {
 }
 
 func (d *databaseBridge) CreateDatabase(ctx context.Context, name string) error {
-	_, err := d.run(ctx, "database.create", protocol.Args{"name": name})
-	return err
+	return d.do(ctx, "database.create", protocol.Args{"name": name})
 }
 
 func (d *databaseBridge) DropDatabase(ctx context.Context, name string) error {
-	_, err := d.run(ctx, "database.drop", protocol.Args{"name": name})
-	return err
+	return d.do(ctx, "database.drop", protocol.Args{"name": name})
 }
 
-func (d *databaseBridge) QueryLanguage() string { return "sql" }
+func (d *databaseBridge) QueryLanguage() string {
+	if d.base.Has("Querier") {
+		return d.base.QueryLanguage()
+	}
+	return "sql"
+}
+
 func (d *databaseBridge) RunQuery(ctx context.Context, q string) (core.Table, error) {
 	return d.Query(ctx, "", q)
 }
 
-type cacheBridge struct{ base }
+type cacheBridge struct{ *base }
 
 func (c *cacheBridge) Do(ctx context.Context, args ...string) (string, error) {
 	out, err := c.run(ctx, "cache.do", protocol.Args{"args": args})
@@ -412,7 +712,7 @@ func (c *cacheBridge) Info(ctx context.Context) (map[string]string, error) {
 	return out, err
 }
 
-type queueBridge struct{ base }
+type queueBridge struct{ *base }
 
 func (q *queueBridge) Queues(ctx context.Context) ([]core.Queue, error) {
 	rows, err := q.rows(ctx, "queue.list", nil)
@@ -425,16 +725,26 @@ func (q *queueBridge) Queues(ctx context.Context) ([]core.Queue, error) {
 }
 
 func (q *queueBridge) Purge(ctx context.Context, queue string) error {
-	_, err := q.run(ctx, "queue.purge", protocol.Args{"queue": queue})
-	return err
+	return q.do(ctx, "queue.purge", protocol.Args{"queue": queue})
 }
 
 func (q *queueBridge) Publish(ctx context.Context, target string, body []byte) error {
-	_, err := q.run(ctx, "queue.publish", protocol.Args{"target": target, "body": string(body)})
-	return err
+	return q.do(ctx, "queue.publish", protocol.Args{"target": target, "body": string(body)})
 }
 
-type kvBridge struct{ base }
+func (q *queueBridge) QueueInfo(ctx context.Context, queue string) (core.Table, error) {
+	return q.table(ctx, "queue.info", protocol.Args{"queue": queue})
+}
+
+func (q *queueBridge) Peek(ctx context.Context, queue string, n int) (core.Table, error) {
+	return q.table(ctx, "queue.peek", protocol.Args{"queue": queue, "n": n})
+}
+
+func (q *queueBridge) DeleteQueue(ctx context.Context, queue string) error {
+	return q.do(ctx, "queue.delete", protocol.Args{"queue": queue})
+}
+
+type kvBridge struct{ *base }
 
 func (k *kvBridge) Get(ctx context.Context, key string) ([]byte, bool, error) {
 	rows, err := k.rows(ctx, "kv.get", protocol.Args{"key": key})
@@ -445,13 +755,11 @@ func (k *kvBridge) Get(ctx context.Context, key string) ([]byte, bool, error) {
 }
 
 func (k *kvBridge) Put(ctx context.Context, key string, value []byte) error {
-	_, err := k.run(ctx, "kv.put", protocol.Args{"key": key, "value": string(value)})
-	return err
+	return k.do(ctx, "kv.put", protocol.Args{"key": key, "value": string(value)})
 }
 
 func (k *kvBridge) Delete(ctx context.Context, key string) error {
-	_, err := k.run(ctx, "kv.delete", protocol.Args{"key": key})
-	return err
+	return k.do(ctx, "kv.delete", protocol.Args{"key": key})
 }
 
 func (k *kvBridge) List(ctx context.Context, prefix string) ([]string, error) {
@@ -463,19 +771,21 @@ func (k *kvBridge) List(ctx context.Context, prefix string) ([]string, error) {
 	return out, err
 }
 
-type loadBridge struct{ base }
+func (k *kvBridge) All(ctx context.Context, prefix string) (map[string][]byte, error) {
+	rows, err := k.rows(ctx, "kv.all", protocol.Args{"prefix": prefix})
+	out := map[string][]byte{}
+	for _, r := range rows {
+		out[str(r["key"])] = []byte(str(r["value"]))
+	}
+	return out, err
+}
 
-func (l *loadBridge) Start(ctx context.Context) error {
-	_, err := l.run(ctx, "load.start", nil)
-	return err
-}
-func (l *loadBridge) Stop(ctx context.Context) error {
-	_, err := l.run(ctx, "load.stop", nil)
-	return err
-}
+type loadBridge struct{ *base }
+
+func (l *loadBridge) Start(ctx context.Context) error { return l.do(ctx, "load.start", nil) }
+func (l *loadBridge) Stop(ctx context.Context) error  { return l.do(ctx, "load.stop", nil) }
 func (l *loadBridge) SetRate(ctx context.Context, rps float64) error {
-	_, err := l.run(ctx, "load.rate", protocol.Args{"rps": rps})
-	return err
+	return l.do(ctx, "load.rate", protocol.Args{"rps": rps})
 }
 
 func (l *loadBridge) Status(ctx context.Context) (core.LoadStatus, error) {
@@ -486,28 +796,50 @@ func (l *loadBridge) Status(ctx context.Context) (core.LoadStatus, error) {
 	r := rows[0]
 	st := core.LoadStatus{Running: r["running"] == true, Rate: number(r["rate"]), Sent: int64(number(r["sent"])), Failed: int64(number(r["failed"])),
 		Latency: core.Latency{P50: duration(r["p50"]), P95: duration(r["p95"]), P99: duration(r["p99"])}}
-	if m, ok := r["extra"].(map[string]any); ok {
-		st.Extra = map[string]string{}
-		for k, v := range m {
-			st.Extra[k] = str(v)
-		}
-	}
+	decode(r["extra"], &st.Extra)
+	decode(r["per_instance"], &st.PerInstance)
 	return st, nil
+}
+
+func (l *loadBridge) ConfigKey() (string, string) {
+	f := l.fact("load.config")
+	return str(f["store"]), str(f["key"])
+}
+
+func (l *loadBridge) Services() []string { return strs(l.fact("load.config")["services"]) }
+
+func (l *loadBridge) Replicas(ctx context.Context) (int, error) {
+	rows, err := l.rows(ctx, "load.replicas", nil)
+	if err != nil || len(rows) == 0 {
+		return 0, err
+	}
+	return integer(rows[0]["replicas"]), nil
+}
+
+func (l *loadBridge) SetReplicas(ctx context.Context, n int) error {
+	return l.do(ctx, "load.set-replicas", protocol.Args{"replicas": n})
 }
 
 // ---- machines ----
 
-type hostsBridge struct{ base }
+type hostsBridge struct{ *base }
 
 func (h *hostsBridge) Hosts(ctx context.Context) ([]core.Host, error) {
 	rows, err := h.rows(ctx, "hosts.list", nil)
+	return hostsOf(rows), err
+}
+
+func hostsOf(rows []map[string]any) []core.Host {
 	var out []core.Host
 	for _, r := range rows {
-		out = append(out, core.Host{Name: str(r["name"]), Addr: str(r["addr"]), Roles: strs(r["roles"]), Ready: r["ready"] == true, Reason: str(r["reason"]),
-			OS: str(r["os"]), CPUs: integer(r["cpus"]), CPUUsed: number(r["cpu_used"]), MemTotal: int64(number(r["mem_total"])),
-			MemUsed: int64(number(r["mem_used"])), Load1: number(r["load1"])})
+		h := core.Host{Name: str(r["name"]), Addr: str(r["addr"]), Roles: strs(r["roles"]), Ready: r["ready"] == true, Reason: str(r["reason"]),
+			OS: str(r["os"]), Kernel: str(r["kernel"]), CPUs: integer(r["cpus"]), CPUUsed: number(r["cpu_used"]), MemTotal: int64(number(r["mem_total"])),
+			MemUsed: int64(number(r["mem_used"])), DiskTotal: int64(number(r["disk_total"])), DiskUsed: int64(number(r["disk_used"])), Load1: number(r["load1"])}
+		decode(r["labels"], &h.Labels)
+		decode(r["pods"], &h.Pods)
+		out = append(out, h)
 	}
-	return out, err
+	return out
 }
 
 func (h *hostsBridge) Shell(ctx context.Context, host string, cmd []string) (*exec.Cmd, error) {
@@ -518,7 +850,12 @@ func (h *hostsBridge) Shell(ctx context.Context, host string, cmd []string) (*ex
 	return command(ctx, out)
 }
 
-// ---- values off the wire: JSON numbers, RFC 3339 or unix-millisecond times, Go or millisecond durations ----
+type queryBridge struct{ *base }
+
+// Has: answering queries is the query kind itself.
+func (q *queryBridge) Has(iface string) bool { return iface == "Querier" || q.base.Has(iface) }
+
+// ---- values off the wire: JSON numbers, times as Unix seconds (or RFC 3339), durations as seconds (or Go's form) ----
 
 func str(v any) string {
 	switch t := v.(type) {
@@ -550,6 +887,13 @@ func number(v any) float64 {
 
 func integer(v any) int { return int(number(v)) }
 
+func seconds(t time.Time) float64 {
+	if t.IsZero() {
+		return 0
+	}
+	return float64(t.UnixNano()) / 1e9
+}
+
 func when(v any) time.Time {
 	if s, ok := v.(string); ok {
 		if t, err := time.Parse(time.RFC3339Nano, s); err == nil {
@@ -557,7 +901,7 @@ func when(v any) time.Time {
 		}
 	}
 	if n := number(v); n != 0 {
-		return time.UnixMilli(int64(n))
+		return time.Unix(0, int64(n*1e9))
 	}
 	return time.Time{}
 }
@@ -568,7 +912,7 @@ func duration(v any) time.Duration {
 			return d
 		}
 	}
-	return time.Duration(number(v) * float64(time.Millisecond))
+	return time.Duration(number(v) * float64(time.Second))
 }
 
 func strs(v any) []string {
@@ -583,4 +927,15 @@ func strs(v any) []string {
 		return out
 	}
 	return nil
+}
+
+// decode fills out from a JSON value, matching keys to Go field names without regard to case.
+func decode(v, out any) {
+	if v == nil {
+		return
+	}
+	b, err := json.Marshal(v)
+	if err == nil {
+		_ = json.Unmarshal(b, out)
+	}
 }

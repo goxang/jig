@@ -137,7 +137,7 @@ func (t *kvTab) load(m *model) tea.Cmd {
 		}
 		c, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
-		if r, ok := kv.(core.KVReader); ok {
+		if r, ok := core.As[core.KVReader](kv); ok {
 			values, err := r.All(c, prefix)
 			keys := make([]string, 0, len(values))
 			for k := range values {
@@ -833,7 +833,7 @@ func (t *kvTab) index(m *model) tea.Cmd {
 
 // readAll reads every key with its value: one call where the store can, else a Get per key.
 func readAll(ctx context.Context, kv core.KV) (map[string][]byte, error) {
-	if r, ok := kv.(core.KVReader); ok {
+	if r, ok := core.As[core.KVReader](kv); ok {
 		return r.All(ctx, "")
 	}
 	keys, err := kv.List(ctx, "")

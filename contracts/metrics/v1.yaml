@@ -8,3 +8,18 @@ sources:
   metrics.range:
     args: {query: string!, start: time!, end: time!, step: duration}
     fields: {time: time, series: string, labels: json, value: number}
+  metrics.run-query:
+    args: {query: string!}
+    fields: {}
+  metrics.query-language:
+    fields: {language: string}
+  metrics.ping:
+    fields: {}
+  metrics.actions:
+    fields: {name: string, help: string, mutate: bool}
+actions:
+  metrics.run-action: {effect: write, args: {name: string!, args: json}}
+capabilities:
+  query: {sources: [metrics.run-query, metrics.query-language]}
+  ping: {sources: [metrics.ping]}
+  actions: {sources: [metrics.actions], actions: [metrics.run-action]}

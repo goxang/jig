@@ -4,5 +4,46 @@ description: a key-value cache that takes commands (redis and the like)
 sources:
   cache.info:
     fields: {key: string, value: string}
+  cache.run-query:
+    args: {query: string!}
+    fields: {}
+  cache.query-language:
+    fields: {language: string}
+  cache.ping:
+    fields: {}
+  cache.actions:
+    fields: {name: string, help: string, mutate: bool}
+  cache.browse:
+    args: {path: json}
+    fields: {}
+  cache.query-at:
+    args: {path: json, query: string!}
+    fields: {}
+  cache.suggest:
+    args: {path: json}
+    fields: {query: string}
+  cache.suggest-row:
+    args: {path: json, columns: json, row: json}
+    fields: {query: string}
+  cache.fresh:
+    fields: {fresh: bool}
+  cache.seed-host:
+    fields: {service: string}
 actions:
   cache.do: {effect: write, args: {args: json!}, outputs: {reply: string}}
+  cache.run-action: {effect: write, args: {name: string!, args: json}}
+  cache.delete-rows: {effect: danger, args: {path: json, columns: json, rows: json}}
+  cache.set-cell: {effect: write, args: {path: json, columns: json, row: json, col: int!, value: string}}
+  cache.snapshot: {effect: write, args: {file: string!}}
+  cache.restore: {effect: danger, args: {file: string!}}
+  cache.seed: {effect: write}
+capabilities:
+  browse: {sources: [cache.browse]}
+  path-query: {sources: [cache.query-at, cache.suggest]}
+  row-query: {sources: [cache.suggest-row]}
+  edit: {actions: [cache.delete-rows, cache.set-cell]}
+  snapshot: {actions: [cache.snapshot, cache.restore]}
+  seed: {sources: [cache.fresh, cache.seed-host], actions: [cache.seed]}
+  query: {sources: [cache.run-query, cache.query-language]}
+  ping: {sources: [cache.ping]}
+  actions: {sources: [cache.actions], actions: [cache.run-action]}

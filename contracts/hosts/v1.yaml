@@ -3,7 +3,21 @@ kind: hosts
 description: machines the project runs on
 sources:
   hosts.list:
-    fields: {name: string, addr: string, roles: json, ready: bool, reason: string, os: string, cpus: int, cpu_used: number, mem_total: int, mem_used: int, load1: number}
+    fields: {name: string, addr: string, roles: json, ready: bool, reason: string, os: string, kernel: string, cpus: int, cpu_used: number, mem_total: int, mem_used: int, disk_total: int, disk_used: int, load1: number, labels: json, pods: json}
+  hosts.run-query:
+    args: {query: string!}
+    fields: {}
+  hosts.query-language:
+    fields: {language: string}
+  hosts.ping:
+    fields: {}
+  hosts.actions:
+    fields: {name: string, help: string, mutate: bool}
 actions:
   # shell answers outputs.argv: the command jig runs on the user's terminal
   hosts.shell: {effect: write, args: {host: string!, command: json}, outputs: {argv: json}}
+  hosts.run-action: {effect: write, args: {name: string!, args: json}}
+capabilities:
+  query: {sources: [hosts.run-query, hosts.query-language]}
+  ping: {sources: [hosts.ping]}
+  actions: {sources: [hosts.actions], actions: [hosts.run-action]}

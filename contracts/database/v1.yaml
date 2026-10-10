@@ -7,12 +7,50 @@ sources:
   database.query:
     args: {database: string, query: string!}
     fields: {}
+  database.run-query:
+    args: {query: string!}
+    fields: {}
+  database.query-language:
+    fields: {language: string}
+  database.ping:
+    fields: {}
+  database.actions:
+    fields: {name: string, help: string, mutate: bool}
+  database.browse:
+    args: {path: json}
+    fields: {}
+  database.query-at:
+    args: {path: json, query: string!}
+    fields: {}
+  database.suggest:
+    args: {path: json}
+    fields: {query: string}
+  database.suggest-row:
+    args: {path: json, columns: json, row: json}
+    fields: {query: string}
+  database.fresh:
+    fields: {fresh: bool}
+  database.seed-host:
+    fields: {service: string}
 actions:
   database.exec: {effect: write, args: {database: string, query: string!}, outputs: {rows: int}}
   database.create: {effect: write, args: {name: string!}}
   database.drop: {effect: danger, args: {name: string!}}
+  database.run-action: {effect: write, args: {name: string!, args: json}}
+  database.delete-rows: {effect: danger, args: {path: json, columns: json, rows: json}}
+  database.set-cell: {effect: write, args: {path: json, columns: json, row: json, col: int!, value: string}}
+  database.snapshot: {effect: write, args: {file: string!}}
+  database.restore: {effect: danger, args: {file: string!}}
+  database.seed: {effect: write}
 capabilities:
-  browse: {sources: [database.browse]}
-  edit: {actions: [database.delete-rows, database.set-cell]}
   complete: {sources: [database.complete]}
   running: {sources: [database.running], actions: [database.cancel]}
+  browse: {sources: [database.browse]}
+  path-query: {sources: [database.query-at, database.suggest]}
+  row-query: {sources: [database.suggest-row]}
+  edit: {actions: [database.delete-rows, database.set-cell]}
+  snapshot: {actions: [database.snapshot, database.restore]}
+  seed: {sources: [database.fresh, database.seed-host], actions: [database.seed]}
+  query: {sources: [database.run-query, database.query-language]}
+  ping: {sources: [database.ping]}
+  actions: {sources: [database.actions], actions: [database.run-action]}

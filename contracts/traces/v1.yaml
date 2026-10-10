@@ -10,3 +10,18 @@ sources:
   traces.get:
     args: {id: string!}
     fields: {trace: string, id: string, parent: string, service: string, name: string, start: time, duration: duration, error: bool, tags: json}
+  traces.run-query:
+    args: {query: string!}
+    fields: {}
+  traces.query-language:
+    fields: {language: string}
+  traces.ping:
+    fields: {}
+  traces.actions:
+    fields: {name: string, help: string, mutate: bool}
+actions:
+  traces.run-action: {effect: write, args: {name: string!, args: json}}
+capabilities:
+  query: {sources: [traces.run-query, traces.query-language]}
+  ping: {sources: [traces.ping]}
+  actions: {sources: [traces.actions], actions: [traces.run-action]}

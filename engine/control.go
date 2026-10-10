@@ -138,7 +138,7 @@ func (a *App) Deploy(ctx context.Context, name, tag string) error {
 // TagImage is the reference of s's image at tag in this environment's registry.
 func (a *App) TagImage(s *spec.Service, tag string) string {
 	reg := ""
-	if r, ok := a.runtime.(core.Registrar); ok {
+	if r, ok := core.As[core.Registrar](a.runtime); ok {
 		reg = r.Registry()
 	}
 	return core.ImageRef(s, reg, tag)
@@ -182,7 +182,7 @@ func (a *App) StatusAll(ctx context.Context, names []string) []core.Status {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if l, ok := rt.(core.StatusLister); ok {
+			if l, ok := core.As[core.StatusLister](rt); ok {
 				list := make([]*spec.Service, len(idx))
 				for j, i := range idx {
 					list[j] = svcs[i]
@@ -221,7 +221,7 @@ func (a *App) bridge(ctx context.Context, name string) error {
 	if err := a.Writable(); err != nil {
 		return err
 	}
-	b, ok := a.runtime.(core.Bridger)
+	b, ok := core.As[core.Bridger](a.runtime)
 	if !ok || !a.SharedElsewhere(name) {
 		return nil
 	}
@@ -316,7 +316,7 @@ func (a *App) RunQuery(ctx context.Context, comp, text string) (core.Table, erro
 			return core.Table{}, err
 		}
 	}
-	q, ok := v.(core.Querier)
+	q, ok := core.As[core.Querier](v)
 	if !ok {
 		return core.Table{}, fmt.Errorf("%s does not answer queries", comp)
 	}
@@ -408,7 +408,7 @@ func (a *App) ServiceEnv(ctx context.Context, name string) (env map[string]strin
 	for k := range a.EnvOverrides(name) {
 		overridden[k] = true
 	}
-	if r, ok := rt.(core.EnvReader); ok {
+	if r, ok := core.As[core.EnvReader](rt); ok {
 		if env, err = r.LiveEnv(ctx, s); err == nil {
 			return env, overridden, nil
 		}
@@ -501,7 +501,7 @@ func (a *App) SetAutoscale(ctx context.Context, name string, b core.Bounds) erro
 	if err != nil {
 		return err
 	}
-	as, ok := rt.(core.Autoscaler)
+	as, ok := core.As[core.Autoscaler](rt)
 	if !ok {
 		return fmt.Errorf("%s: the runtime has no autoscalers: %w", name, core.ErrUnsupported)
 	}
@@ -514,7 +514,7 @@ func (a *App) Resources(ctx context.Context, name string) ([]core.Resources, err
 	if err != nil {
 		return nil, err
 	}
-	rs, ok := rt.(core.Resourcer)
+	rs, ok := core.As[core.Resourcer](rt)
 	if !ok {
 		return nil, fmt.Errorf("%s: the runtime has no requests and limits: %w", name, core.ErrUnsupported)
 	}
@@ -530,7 +530,7 @@ func (a *App) SetResources(ctx context.Context, name string, r core.Resources) e
 	if err != nil {
 		return err
 	}
-	rs, ok := rt.(core.Resourcer)
+	rs, ok := core.As[core.Resourcer](rt)
 	if !ok {
 		return fmt.Errorf("%s: the runtime has no requests and limits: %w", name, core.ErrUnsupported)
 	}

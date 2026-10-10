@@ -356,7 +356,7 @@ func configured(a *engine.App, n string) bool {
 	case "manifests":
 		return rt == "kubernetes" || rt == "kind" || len(a.Spec.Manifests) > 0
 	case "hosts":
-		_, ok := a.Runtime().(core.Hosts)
+		_, ok := core.As[core.Hosts](a.Runtime())
 		return ok || has(core.KindHosts)
 	case "tests":
 		return len(a.SuiteNames()) > 0

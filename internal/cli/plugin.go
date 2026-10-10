@@ -272,7 +272,7 @@ func pluginCheck(ctx context.Context, w io.Writer, dir, name string) error {
 		}
 		ps := c.Check(pr)
 		if len(ps) == 0 {
-			ps = c.CheckFrames(ctx, h, name)
+			ps = c.CheckFrames(ctx, h, name, pr)
 		}
 		if len(ps) == 0 {
 			fmt.Fprintf(w, "%s %s\n", green("✓"), id)

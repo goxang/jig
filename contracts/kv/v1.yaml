@@ -7,7 +7,52 @@ sources:
     fields: {key: string}
   kv.get:
     args: {key: string!}
-    fields: {key: string, value: bytes, found: bool}
+    fields: {key: string, value: string, found: bool}
+  kv.run-query:
+    args: {query: string!}
+    fields: {}
+  kv.query-language:
+    fields: {language: string}
+  kv.ping:
+    fields: {}
+  kv.actions:
+    fields: {name: string, help: string, mutate: bool}
+  kv.browse:
+    args: {path: json}
+    fields: {}
+  kv.query-at:
+    args: {path: json, query: string!}
+    fields: {}
+  kv.suggest:
+    args: {path: json}
+    fields: {query: string}
+  kv.suggest-row:
+    args: {path: json, columns: json, row: json}
+    fields: {query: string}
+  kv.fresh:
+    fields: {fresh: bool}
+  kv.seed-host:
+    fields: {service: string}
+  kv.all:
+    args: {prefix: string}
+    fields: {key: string, value: string}
 actions:
   kv.put: {effect: write, args: {key: string!, value: string!}}
   kv.delete: {effect: danger, args: {key: string!}}
+  kv.run-action: {effect: write, args: {name: string!, args: json}}
+  kv.delete-rows: {effect: danger, args: {path: json, columns: json, rows: json}}
+  kv.set-cell: {effect: write, args: {path: json, columns: json, row: json, col: int!, value: string}}
+  kv.snapshot: {effect: write, args: {file: string!}}
+  kv.restore: {effect: danger, args: {file: string!}}
+  kv.seed: {effect: write}
+capabilities:
+  browse: {sources: [kv.browse]}
+  path-query: {sources: [kv.query-at, kv.suggest]}
+  row-query: {sources: [kv.suggest-row]}
+  edit: {actions: [kv.delete-rows, kv.set-cell]}
+  snapshot: {actions: [kv.snapshot, kv.restore]}
+  seed: {sources: [kv.fresh, kv.seed-host], actions: [kv.seed]}
+  all: {sources: [kv.all]}
+  query: {sources: [kv.run-query, kv.query-language]}
+  ping: {sources: [kv.ping]}
+  actions: {sources: [kv.actions], actions: [kv.run-action]}

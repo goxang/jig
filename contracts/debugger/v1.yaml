@@ -1,6 +1,21 @@
 contract: debugger/1
 kind: debugger
 description: attaches a debugger server to a service
+sources:
+  debugger.run-query:
+    args: {query: string!}
+    fields: {}
+  debugger.query-language:
+    fields: {language: string}
+  debugger.ping:
+    fields: {}
+  debugger.actions:
+    fields: {name: string, help: string, mutate: bool}
 actions:
   debugger.attach: {effect: write, args: {service: string!, instance: string}, outputs: {addr: string, hint: string}}
   debugger.detach: {effect: write, args: {service: string!}}
+  debugger.run-action: {effect: write, args: {name: string!, args: json}}
+capabilities:
+  query: {sources: [debugger.run-query, debugger.query-language]}
+  ping: {sources: [debugger.ping]}
+  actions: {sources: [debugger.actions], actions: [debugger.run-action]}

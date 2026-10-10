@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"context"
 	"os"
 	"sync"
 
@@ -25,7 +26,7 @@ func (a *App) Host() *host.Host {
 		if a.Env != nil {
 			env = a.Env.Name
 		}
-		a.plugins.h = host.New(host.Options{Dir: a.Spec.Dir, Env: env, StateDir: a.StateDir(),
+		a.plugins.h = host.New(host.Options{Dir: a.Spec.Dir, File: a.Spec.File, Env: env, StateDir: a.StateDir(),
 			Secret: func(name string) (string, bool) {
 				if v, ok := a.KnownSecrets()[name]; ok {
 					return v, true
@@ -76,7 +77,7 @@ func (a *App) newComponent(c *spec.Component) (any, plugin.Adapter, error) {
 		}
 	}
 	ad := plugin.Adapter{Kind: kind, Type: c.Type, Description: p.Description}
-	v, err := contracts.Bridge(kind, a.Host(), c.Type, c.Name)
+	v, err := contracts.Bridge(kind, a.Host(), c.Type, c.Name, p.Provides(context.Background()))
 	return v, ad, err
 }
 

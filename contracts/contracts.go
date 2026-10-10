@@ -102,10 +102,16 @@ type Problem struct {
 
 func (p Problem) String() string { return p.Name + ": " + p.Text }
 
-// Check compares what a plugin says it provides with c: every source and action is there, streams
-// stream, and a capability is all there or not at all.
+// Check compares what a plugin says it provides with c: every source and action outside a capability
+// is there, streams stream, and a capability is all there or not at all.
 func (c *Contract) Check(p *protocol.Provides) []Problem {
 	var out []Problem
+	optional := map[string]bool{}
+	for _, cp := range c.Caps {
+		for _, n := range slices.Concat(cp.Sources, cp.Actions) {
+			optional[n] = true
+		}
+	}
 	has := func(name string, src bool) bool {
 		if src {
 			_, ok := p.Sources[name]
@@ -117,6 +123,7 @@ func (c *Contract) Check(p *protocol.Provides) []Problem {
 	for _, n := range sortedKeys(c.Sources) {
 		s, ok := p.Sources[n]
 		switch {
+		case !ok && optional[n]:
 		case !ok:
 			out = append(out, Problem{n, "source missing"})
 		case c.Sources[n].Stream && !s.Stream:
@@ -125,7 +132,9 @@ func (c *Contract) Check(p *protocol.Provides) []Problem {
 	}
 	for _, n := range sortedKeys(c.Actions) {
 		if a, ok := p.Actions[n]; !ok {
-			out = append(out, Problem{n, "action missing"})
+			if !optional[n] {
+				out = append(out, Problem{n, "action missing"})
+			}
 		} else if want := c.Actions[n].Effect; want != "" && a.Effect != want {
 			out = append(out, Problem{n, "effect is " + a.Effect + ", the contract says " + want})
 		}
@@ -178,13 +187,13 @@ type Querier interface {
 	Query(ctx context.Context, name string, args protocol.Args) (*protocol.Frame, error)
 }
 
-// CheckFrames queries every source that needs no arguments and checks the frame's fields: each one
-// the contract names is present with its type (a plugin may add more).
-func (c *Contract) CheckFrames(ctx context.Context, q Querier, plugin string) []Problem {
+// CheckFrames queries every source p provides that needs no arguments and checks the frame's fields:
+// each one the contract names is present with its type (a plugin may add more).
+func (c *Contract) CheckFrames(ctx context.Context, q Querier, plugin string, p *protocol.Provides) []Problem {
 	var out []Problem
 	for _, n := range sortedKeys(c.Sources) {
 		s := c.Sources[n]
-		if s.Stream || slices.ContainsFunc(sortedKeys(s.Args), func(a string) bool { return strings.HasSuffix(s.Args[a], "!") }) {
+		if _, ok := p.Sources[n]; !ok || s.Stream || slices.ContainsFunc(sortedKeys(s.Args), func(a string) bool { return strings.HasSuffix(s.Args[a], "!") }) {
 			continue
 		}
 		f, err := q.Query(ctx, plugin+"."+n, protocol.Args{})

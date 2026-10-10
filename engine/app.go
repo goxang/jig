@@ -181,6 +181,15 @@ func (a *App) Component(name string) (any, error) {
 	if name == "runtime" && a.runtime != nil {
 		return a.runtime, nil
 	}
+	// a plugin serving a default component (default:profiler) is asked for it by name
+	if kind, ok := strings.CutPrefix(name, "default:"); ok && defaults[core.Kind(kind)] != "" {
+		a.mu.Lock()
+		_, have := a.Spec.Components[name]
+		a.mu.Unlock()
+		if !have {
+			return a.defaultComponent(core.Kind(kind), defaults[core.Kind(kind)])
+		}
+	}
 	a.mu.Lock()
 	e, ok := a.comps[name]
 	if !ok {
@@ -309,7 +318,7 @@ func All[T any](a *App, kind core.Kind) (map[string]T, map[string]error) {
 // Queriers lists every component that answers ad hoc queries, the runtime included.
 func (a *App) Queriers() map[string]core.Querier {
 	out := map[string]core.Querier{}
-	if q, ok := a.runtime.(core.Querier); ok {
+	if q, ok := core.As[core.Querier](a.runtime); ok {
 		out["runtime"] = q
 	}
 	for _, n := range a.componentNames() {
@@ -317,7 +326,7 @@ func (a *App) Queriers() map[string]core.Querier {
 			continue
 		}
 		if v, err := a.Component(n); err == nil {
-			if q, ok := v.(core.Querier); ok {
+			if q, ok := core.As[core.Querier](v); ok {
 				out[n] = q
 			}
 		}
@@ -399,7 +408,7 @@ func (a *App) Resolve(ctx context.Context, addr string) (string, error) {
 	if n == 0 {
 		return "", fmt.Errorf("%s: no port", addr)
 	}
-	f, ok := a.runtime.(core.Forwarder)
+	f, ok := core.As[core.Forwarder](a.runtime)
 	if !ok {
 		return "", fmt.Errorf("%s: runtime cannot reach services (no forwarding)", addr)
 	}
@@ -416,7 +425,7 @@ func (a *App) Resolve(ctx context.Context, addr string) (string, error) {
 // ---- state ----
 
 func (a *App) LoadState(ctx context.Context) (map[string]string, error) {
-	if s, ok := a.runtime.(core.StateStore); ok {
+	if s, ok := core.As[core.StateStore](a.runtime); ok {
 		return s.LoadState(ctx)
 	}
 	raw, err := os.ReadFile(filepath.Join(a.StateDir(), "state.json"))
@@ -448,7 +457,7 @@ func (a *App) SetState(ctx context.Context, kv map[string]string) error {
 			m[k] = v
 		}
 	}
-	if s, ok := a.runtime.(core.StateStore); ok {
+	if s, ok := core.As[core.StateStore](a.runtime); ok {
 		return s.SaveState(ctx, m)
 	}
 	if err := os.MkdirAll(a.StateDir(), 0o755); err != nil {

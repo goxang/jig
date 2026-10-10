@@ -275,7 +275,7 @@ func (l *Local) componentQuery(ctx context.Context, name string, args protocol.A
 	if err != nil {
 		return nil, err
 	}
-	m, ok := c.(core.Metrics)
+	m, ok := core.As[core.Metrics](c)
 	if !ok {
 		t, err := l.App.RunQuery(ctx, name, text)
 		if err != nil {

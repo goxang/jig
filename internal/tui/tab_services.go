@@ -983,7 +983,7 @@ func (t *servicesTab) editAutoscale(m *model, names []string, then func(context.
 	}
 	a := m.app
 	if cur == nil {
-		if _, ok := a.Runtime().(core.Autoscaler); !ok {
+		if _, ok := core.As[core.Autoscaler](a.Runtime()); !ok {
 			m.setStatus(m.app.Env.Name+": the runtime has no autoscalers", true)
 			return nil
 		}

@@ -21,9 +21,10 @@ import (
 var Version = "dev"
 
 type Options struct {
-	// Dir is the project; Env the environment calls run in.
-	Dir string
-	Env string
+	// Dir is the project, File its jig.yaml; Env the environment calls run in.
+	Dir  string
+	File string
+	Env  string
 	// StateDir keeps host/state values, per plugin: the project's .jig/<env>.
 	StateDir string
 	// Engine serves host/query and host/run.

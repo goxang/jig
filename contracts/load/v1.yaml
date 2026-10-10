@@ -3,8 +3,29 @@ kind: loadgen
 description: a load generator
 sources:
   load.status:
-    fields: {running: bool, rate: number, sent: int, failed: int, p50: duration, p95: duration, p99: duration, extra: json}
+    fields: {running: bool, rate: number, sent: int, failed: int, p50: duration, p95: duration, p99: duration, extra: json, per_instance: json}
+  load.run-query:
+    args: {query: string!}
+    fields: {}
+  load.query-language:
+    fields: {language: string}
+  load.ping:
+    fields: {}
+  load.actions:
+    fields: {name: string, help: string, mutate: bool}
+  load.config:
+    fields: {store: string, key: string, services: json}
+  load.replicas:
+    fields: {replicas: int}
 actions:
   load.start: {effect: write}
   load.stop: {effect: write}
   load.rate: {effect: write, args: {rps: number!}}
+  load.run-action: {effect: write, args: {name: string!, args: json}}
+  load.set-replicas: {effect: write, args: {replicas: int!}}
+capabilities:
+  configured: {sources: [load.config]}
+  scale: {sources: [load.replicas], actions: [load.set-replicas]}
+  query: {sources: [load.run-query, load.query-language]}
+  ping: {sources: [load.ping]}
+  actions: {sources: [load.actions], actions: [load.run-action]}

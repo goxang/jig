@@ -6,3 +6,18 @@ sources:
     stream: true
     args: {services: json, instance: string, since: duration, tail: int, follow: bool, match: string, regex: bool}
     fields: {time: time, service: string, instance: string, stream: string, text: string}
+  logs.run-query:
+    args: {query: string!}
+    fields: {}
+  logs.query-language:
+    fields: {language: string}
+  logs.ping:
+    fields: {}
+  logs.actions:
+    fields: {name: string, help: string, mutate: bool}
+actions:
+  logs.run-action: {effect: write, args: {name: string!, args: json}}
+capabilities:
+  query: {sources: [logs.run-query, logs.query-language]}
+  ping: {sources: [logs.ping]}
+  actions: {sources: [logs.actions], actions: [logs.run-action]}

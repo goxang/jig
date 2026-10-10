@@ -229,7 +229,7 @@ func (a *App) Reach(ctx context.Context, name string) error {
 	if err != nil {
 		return err
 	}
-	if p, ok := v.(core.Pinger); ok {
+	if p, ok := core.As[core.Pinger](v); ok {
 		return p.Ping(ctx)
 	}
 	switch c := v.(type) {

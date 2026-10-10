@@ -1,0 +1,13 @@
+contract: query/1
+kind: query
+description: answers ad hoc queries in its own language (HTTP requests, say)
+sources:
+  query.run-query:
+    args: {query: string!}
+    fields: {}
+  query.query-language:
+    fields: {language: string}
+  query.ping:
+    fields: {}
+capabilities:
+  ping: {sources: [query.ping]}

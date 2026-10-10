@@ -255,7 +255,7 @@ func (a *App) reportQuery(ctx context.Context, q spec.ReportQuery, from, to time
 		if err != nil {
 			return err
 		}
-		qr, ok := v.(core.Querier)
+		qr, ok := core.As[core.Querier](v)
 		if !ok {
 			return fmt.Errorf("%s does not answer queries", source)
 		}

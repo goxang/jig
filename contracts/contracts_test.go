@@ -10,7 +10,7 @@ import (
 )
 
 func TestContractsLoadAndCheck(t *testing.T) {
-	if len(IDs()) != 23 || Get("metrics").Kind != "metrics" || ForKind("messaging").ID != "queue/1" {
+	if len(IDs()) != 24 || Get("metrics").Kind != "metrics" || ForKind("messaging").ID != "queue/1" {
 		t.Fatalf("contracts: %v", IDs())
 	}
 	for _, id := range IDs() {
@@ -42,9 +42,39 @@ func TestBridgesImplementTheirKinds(t *testing.T) {
 		if c.Kind == "" {
 			continue
 		}
-		v, err := Bridge(core.Kind(c.Kind), nil, "p", "c")
+		v, err := Bridge(core.Kind(c.Kind), nil, "p", "c", nil)
 		if err != nil || !plugin.Implements(core.Kind(c.Kind), v) {
 			t.Errorf("%s: bridge %T does not implement %s (%v)", id, v, c.Kind, err)
 		}
+	}
+	for _, o := range optional {
+		found := false
+		for _, id := range IDs() {
+			if _, ok := Get(id).Caps[o.cap]; ok {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%s: no contract has capability %s", o.iface.Name(), o.cap)
+		}
+	}
+}
+
+func TestCapabilitiesGateOptionalInterfaces(t *testing.T) {
+	db, _ := Bridge(core.KindDatabase, nil, "p", "c", nil)
+	if _, ok := core.As[core.Browser](db); ok {
+		t.Fatal("browse served without the capability")
+	}
+	if _, ok := core.As[core.Querier](db); !ok {
+		t.Fatal("a database always answers queries")
+	}
+	ct := ForKind("database")
+	pr := &protocol.Provides{Sources: map[string]protocol.SourceSpec{}, Actions: map[string]protocol.ActionSpec{}}
+	for _, s := range ct.Caps["browse"].Sources {
+		pr.Sources[s] = protocol.SourceSpec{}
+	}
+	db, _ = Bridge(core.KindDatabase, nil, "p", "c", pr)
+	if _, ok := core.As[core.Browser](db); !ok {
+		t.Fatal("browse capability not admitted")
 	}
 }

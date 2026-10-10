@@ -10,6 +10,7 @@ import (
 	"hash/fnv"
 	"io"
 	"os/exec"
+	"reflect"
 	"regexp"
 	"strings"
 	"time"
@@ -614,4 +615,21 @@ type Seeder interface {
 	Seed(ctx context.Context, log io.Writer) error
 	Fresh(ctx context.Context) (bool, error)
 	Host() string
+}
+
+// Gated is a component whose optional interfaces depend on what serves it, such as a plugin that
+// provides only some of a contract's capabilities.
+type Gated interface {
+	Has(iface string) bool
+}
+
+// As is c as the interface T, when c implements it and, if gated, really serves it. Use it instead of
+// a type assertion for any interface a plugin-served component may have.
+func As[T any](c any) (T, bool) {
+	t, ok := c.(T)
+	if g, gated := c.(Gated); ok && gated && !g.Has(reflect.TypeFor[T]().Name()) {
+		var zero T
+		return zero, false
+	}
+	return t, ok
 }
