@@ -5,6 +5,11 @@ names one. `${NAME}` and `${NAME:-default}` expand anywhere, from the process en
 `jig secret set` values, then `secrets:` defaults, then `${env}` and `${project}`, then the environment's
 `vars`, then the project's `vars`. `$$` is a literal `$`.
 
+The file is composed from layers, lowest first: `include:` files, jig.yaml, then `.jig/local.yaml`
+(your own overrides, kept out of git). A higher layer wins key by key; `key: null` drops what a lower
+one says. Then each entry gets its section's `defaults:` and its `templates:` (`extends`). Expansion
+of `${...}` comes after.
+
 Editors with yaml-language-server (VS Code's YAML extension, JetBrains, Neovim) complete and check keys
 from jig's JSON Schema when the file's first line names it, as `jig init` writes:
 `# yaml-language-server: $schema=https://raw.githubusercontent.com/goxang/jig/main/spec/jig.schema.json`.
@@ -19,6 +24,9 @@ is out of date.
 | `default` | environment used when neither `-e` nor `$JIG_ENV` is given |
 | `vars` | variables for `${...}` |
 | `imports` | services from the files that already define them, read on every load so they stay the only definition: `- compose: deploy/compose.yml` (image, build, command, ports, env, `env_file`, depends_on and project volumes, under the compose names; `${VARS}` from the environment, then the compose file's `.env`), `- kubernetes: deploy/k8s` (a service per Deployment, StatefulSet and DaemonSet, named after it, with its image and container ports; a Kubernetes runtime without `manifests:` deploys from these folders), `- godev: .godev.yaml`. A service jig.yaml also defines is the imported one with jig.yaml's keys merged over it (`build: null` drops an imported key), so jig.yaml holds only what those files have no word for: a Go main to build, health, groups. A workload a jig.yaml service already claims through `k8s.workload` is not imported again under its own name |
+| `include` | globs of YAML files merged under jig.yaml, later files winning: `include: [jig.d/*.yaml]` |
+| `templates` | partial entries a service, component, task, query, environment, agent or view starts from with `extends: name` (or a list, applied in order); `${name}` in a template is the entry's name |
+| `defaults` | `section: {keys}`: what every entry of that section starts from, below its templates |
 | `services` | below |
 | `environments` | below |
 | `components` | below; shared by every environment |
@@ -40,6 +48,7 @@ is out of date.
 | key | |
 |---|---|
 | `role` | `app` (default), `infra`, or `load` (left out of `jig up`) |
+| `extends` | templates this service starts from, in order |
 | `groups` | names to address several services at once: `jig up core` |
 | `depends_on` | started first; `up` deploys in phases and waits for each, leaving dependencies that already run untouched |
 | `image` | image to run, or the repository name builds push to |

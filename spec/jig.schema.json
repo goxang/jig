@@ -1006,6 +1006,9 @@
           },
           "type": "array"
         },
+        "extends": {
+          "description": "templates this service starts from, in order"
+        },
         "groups": {
           "description": "names to address several services at once: jig up core",
           "items": {
@@ -1500,6 +1503,11 @@
         "boolean"
       ]
     },
+    "defaults": {
+      "additionalProperties": {},
+      "description": "section: {keys}: what every entry of that section starts from, below its templates",
+      "type": "object"
+    },
     "environments": {
       "additionalProperties": {
         "$ref": "#/definitions/Environment"
@@ -1525,6 +1533,17 @@
           ]
         },
         "type": "object"
+      },
+      "type": "array"
+    },
+    "include": {
+      "description": "globs of YAML files merged under jig.yaml, later files winning: include: [jig.d/*.yaml]",
+      "items": {
+        "type": [
+          "string",
+          "number",
+          "boolean"
+        ]
       },
       "type": "array"
     },
@@ -1594,6 +1613,11 @@
         "$ref": "#/definitions/Task"
       },
       "description": "name: [shell step, ...] or name: {help, steps}, run in order by jig task \u003cname\u003e",
+      "type": "object"
+    },
+    "templates": {
+      "additionalProperties": {},
+      "description": "partial entries a service, component, task, query, environment, agent or view starts from with extends: name (or a list, applied in order); ${name} in a template is the entry's name",
       "type": "object"
     },
     "tests": {

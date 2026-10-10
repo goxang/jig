@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"github.com/goxang/jig/kernel/jobs"
 	"slices"
 	"sort"
 	"strings"
@@ -329,7 +330,7 @@ func runShip(m *model, names, steps []string, tag, ref string, vars map[string]s
 		what += " from " + ref
 	}
 	return m.act(what, true, func(ctx context.Context) error {
-		out := jobOut(ctx)
+		out := jobs.Out(ctx)
 		if len(vars) > 0 {
 			fmt.Fprintf(out, "→ environment variables: %s\n", strings.Join(sortedKeys(vars), ", "))
 			b, err := setVars(ctx, a, vars)

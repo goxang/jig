@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/goxang/jig/kernel/jobs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -138,11 +139,11 @@ func (m *model) snapshot() *Session {
 	s.Sorts, s.Drafts, s.Errors = gridSorts, m.drafts, m.errLog
 	s.Activity = nil
 	for _, j := range m.jobList() {
-		end, _, err := j.state()
-		sj := savedJob{Label: j.label, Start: j.start, End: end, Lines: j.output()}
+		end, _, err := j.State()
+		sj := savedJob{Label: j.Label, Start: j.Start, End: end, Lines: j.Output()}
 		switch {
-		case end.IsZero() && j.log != "":
-			sj.Log, sj.Pid, sj.Lines = j.log, j.pid, nil
+		case end.IsZero() && j.Log != "":
+			sj.Log, sj.Pid, sj.Lines = j.Log, j.PID, nil
 		case end.IsZero():
 			sj.End, sj.Err = time.Now(), "still running when the session was saved"
 		case err != nil:
@@ -226,21 +227,21 @@ func (m *model) restore(s *Session) {
 		gridSorts[id] = st
 	}
 	m.drafts, m.errLog, m.views = s.Drafts, s.Errors, s.Views
-	m.jobsMu.Lock()
 	for _, sj := range s.Activity {
-		j := &job{label: sj.Label, start: sj.Start, end: sj.End, lines: sj.Lines, log: sj.Log, pid: sj.Pid}
+		var err error
 		if sj.Err != "" {
-			j.err = errors.New(sj.Err)
+			err = errors.New(sj.Err)
 		}
+		j := jobs.Restore(sj.Label, sj.Start, sj.End, sj.Lines, err)
+		j.Log, j.PID = sj.Log, sj.Pid
 		if sj.Log != "" && sj.End.IsZero() {
 			ctx, stop := context.WithCancel(context.Background())
-			j.stop = stop
-			j.killOnStop(ctx)
-			go func() { j.finish(j.follow()) }()
+			j.SetCancel(stop)
+			killOnStop(j, ctx)
+			go func() { j.Finish(follow(j)) }()
 		}
-		m.jobs = append(m.jobs, j)
+		m.jobs.Add(j)
 	}
-	m.jobsMu.Unlock()
 	for _, t := range m.tabs {
 		switch t := t.(type) {
 		case *logsTab:

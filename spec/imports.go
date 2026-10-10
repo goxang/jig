@@ -2,6 +2,7 @@ package spec
 
 import (
 	"fmt"
+	"github.com/goxang/jig/kernel/config"
 	"os"
 	"path/filepath"
 	"sort"
@@ -20,55 +21,68 @@ func RegisterImporter(name string, f Importer) { importers[name] = f }
 
 func Importers() []string { return keys(importers) }
 
-// applyImports adds imported services. A service jig.yaml also defines is the imported one with
-// jig.yaml's keys merged over it, so jig.yaml only carries what the other tool's file has no word for.
-func (p *Project) applyImports(root *yaml.Node) error {
-	own := mappingValue(root, "services")
-	claimed := map[string]string{}
-	for n, s := range p.Services {
-		claimed[s.workload(n)] = n
+// importFragment runs one `imports:` entry as a configuration layer below jig.yaml, so a service
+// jig.yaml also defines is the imported one with jig.yaml's keys over it. A workload a jig.yaml
+// service already claims under another name is left out.
+func importFragment(kind, path, dir string, root *yaml.Node) (*config.Doc, error) {
+	f, ok := importers[kind]
+	if !ok {
+		return nil, fmt.Errorf("unknown import %q; have %v", kind, Importers())
 	}
-	for _, imp := range p.Imports {
-		for kind, path := range imp {
-			f, ok := importers[kind]
-			if !ok {
-				return fmt.Errorf("unknown import %q; have %v", kind, Importers())
-			}
-			if !filepath.IsAbs(path) {
-				path = filepath.Join(p.Dir, path)
-			}
-			svcs, err := f(path, p.Dir)
-			if err != nil {
-				return fmt.Errorf("import %s %s: %w", kind, path, err)
-			}
-			if p.Services == nil {
-				p.Services = map[string]*Service{}
-			}
-			for n, s := range svcs {
-				if by, ok := claimed[s.workload(n)]; ok && by != n {
-					continue // jig.yaml names this workload's service differently
-				}
-				if _, ok := p.Services[n]; !ok {
-					p.Services[n] = s
-					continue
-				}
-				patch := mappingValue(own, n)
-				if patch == nil {
-					continue
-				}
-				var base yaml.Node
-				if err := base.Encode(s); err != nil {
-					return err
-				}
-				var out Service
-				if err := mergeNodes(&base, patch).Decode(&out); err != nil {
-					return fmt.Errorf("service %s over its import from %s: %w", n, path, err)
-				}
-				p.Services[n] = &out
-			}
+	path = os.ExpandEnv(path)
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(dir, path)
+	}
+	svcs, err := f(path, dir)
+	if err != nil {
+		return nil, fmt.Errorf("import %s %s: %w", kind, path, err)
+	}
+	var own map[string]*Service
+	if n := config.Value(root, "services"); n != nil {
+		_ = n.Decode(&own)
+	}
+	claimed := map[string]string{}
+	for n, s := range own {
+		if s != nil {
+			claimed[s.workload(n)] = n
 		}
 	}
-	return nil
+	out := map[string]*Service{}
+	for n, s := range svcs {
+		if by, ok := claimed[s.workload(n)]; ok && by != n {
+			continue
+		}
+		out[n] = s
+	}
+	var frag yaml.Node
+	if err := frag.Encode(map[string]any{"services": out}); err != nil {
+		return nil, err
+	}
+	prune(&frag)
+	return config.FromNode(&frag, path, "import "+kind), nil
+}
+
+// prune drops the zero values encoding a Service writes, so they cannot hide a template's keys.
+func prune(n *yaml.Node) bool {
+	switch n.Kind {
+	case yaml.MappingNode:
+		out := n.Content[:0]
+		for i := 0; i+1 < len(n.Content); i += 2 {
+			if !prune(n.Content[i+1]) {
+				out = append(out, n.Content[i], n.Content[i+1])
+			}
+		}
+		n.Content = out
+		return len(out) == 0
+	case yaml.SequenceNode:
+		for _, c := range n.Content {
+			prune(c)
+		}
+		return len(n.Content) == 0
+	case yaml.ScalarNode:
+		return n.Tag == "!!null" || n.Value == "" && n.Style == 0 || n.Tag == "!!bool" && n.Value == "false" || n.Tag == "!!int" && n.Value == "0"
+	}
+	return false
 }
 
 // workload is the Kubernetes workload service name stands for, kind/name in lower case: k8s.workload,

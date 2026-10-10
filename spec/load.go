@@ -3,6 +3,7 @@ package spec
 import (
 	"errors"
 	"fmt"
+	"github.com/goxang/jig/kernel/config"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -58,10 +59,14 @@ func LoadWith(file, env string, overrides map[string]string) (*Project, *Environ
 // LoadData is LoadWith on a jig.yaml already read (or never written: an inferred one); file is
 // where it stands, for its directory and messages.
 func LoadData(raw []byte, file, env string, overrides map[string]string) (*Project, *Environment, error) {
-	var root yaml.Node
-	if err := yaml.Unmarshal(raw, &root); err != nil {
-		return nil, nil, fmt.Errorf("%s: %w", file, err)
+	dir := filepath.Dir(file)
+	doc, err := config.Compose(raw, file, config.Options{Import: func(kind, path string, root *yaml.Node) (*config.Doc, error) {
+		return importFragment(kind, path, dir, root)
+	}})
+	if err != nil {
+		return nil, nil, err
 	}
+	root := doc.Root
 	if len(root.Content) == 0 {
 		return nil, nil, fmt.Errorf("%s: empty", file)
 	}
@@ -119,14 +124,11 @@ func LoadData(raw []byte, file, env string, overrides map[string]string) (*Proje
 		return "", false
 	}
 	unset := map[string]bool{}
-	expandTop(&root, env, lookup, func(name string) { unset[name] = true })
+	expandTop(root, env, lookup, func(name string) { unset[name] = true })
 
-	p := &Project{File: file, Dir: filepath.Dir(file), Unset: keys(unset), FromEnv: fromEnv}
+	p := &Project{File: file, Dir: dir, Unset: keys(unset), FromEnv: fromEnv, Config: doc}
 	if err := root.Decode(p); err != nil {
 		return nil, nil, fmt.Errorf("%s: %w", file, err)
-	}
-	if err := p.applyImports(&root); err != nil {
-		return nil, nil, err
 	}
 	if p.Services == nil {
 		p.Services = map[string]*Service{}
@@ -176,7 +178,7 @@ func LoadData(raw []byte, file, env string, overrides map[string]string) (*Proje
 	for n, t := range p.Tests {
 		t.Name = n
 	}
-	p.DashboardOrder, p.TestOrder, p.SectionOrder = mappingKeys(&root, "dashboards"), mappingKeys(&root, "tests"), mappingKeys(&root, "sections")
+	p.DashboardOrder, p.TestOrder, p.SectionOrder = mappingKeys(root, "dashboards"), mappingKeys(root, "tests"), mappingKeys(root, "sections")
 	for n, sec := range p.Sections {
 		sec.Name = n
 	}

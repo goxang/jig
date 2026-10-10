@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"io"
 	"strings"
 	"testing"
 	"time"
@@ -38,27 +37,6 @@ func TestHelpFilterKeepsLinesWithEveryWord(t *testing.T) {
 	}
 	if got := helpFilter(lines, ""); len(got) != 3 {
 		t.Fatalf("an empty filter keeps all, got %q", got)
-	}
-}
-
-func TestJobWaitsForInputAndTakesIt(t *testing.T) {
-	r, w := io.Pipe()
-	j := &job{stdin: w}
-	j.Write([]byte("step 1\npassword: "))
-	j.wrote = time.Now().Add(-time.Second)
-	if p, ok := j.waiting(); !ok || p != "password:" {
-		t.Fatalf("waiting = %q %v", p, ok)
-	}
-	got := make(chan string)
-	go func() { b := make([]byte, 64); n, _ := r.Read(b); got <- string(b[:n]) }()
-	if err := j.answer("s3cret"); err != nil {
-		t.Fatal(err)
-	}
-	if s := <-got; s != "s3cret\n" {
-		t.Fatalf("stdin got %q", s)
-	}
-	if _, ok := j.waiting(); ok {
-		t.Fatal("still waiting after the answer")
 	}
 }
 

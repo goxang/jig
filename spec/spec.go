@@ -3,6 +3,7 @@ package spec
 
 import (
 	"fmt"
+	"github.com/goxang/jig/kernel/config"
 	"sort"
 	"strings"
 	"time"
@@ -17,10 +18,17 @@ const (
 )
 
 type Project struct {
-	Version      int                     `yaml:"version"`
-	Name         string                  `yaml:"project"`
-	Default      string                  `yaml:"default"`
-	Imports      []Import                `yaml:"imports"`
+	Version int      `yaml:"version"`
+	Name    string   `yaml:"project"`
+	Default string   `yaml:"default"`
+	Imports []Import `yaml:"imports"`
+	// Include are globs of more YAML files merged under this one, later files winning.
+	Include []string `yaml:"include"`
+	// Templates are partial entries a service, component, task or query takes with `extends`;
+	// ${name} in one is the entry's name.
+	Templates map[string]yaml.Node `yaml:"templates"`
+	// Defaults are per section (services, tasks, ...) keys every entry starts from.
+	Defaults     map[string]yaml.Node    `yaml:"defaults"`
 	Vars         map[string]string       `yaml:"vars"`
 	Services     map[string]*Service     `yaml:"services"`
 	Environments map[string]*Environment `yaml:"environments"`
@@ -64,6 +72,8 @@ type Project struct {
 	Unset []string `yaml:"-"`
 	// FromEnv are the ${NAME}s the file took from the process environment, with their values.
 	FromEnv map[string]string `yaml:"-"`
+	// Config is the composed file, with where each value came from.
+	Config *config.Doc `yaml:"-"`
 
 	// Dir is where the project file lives; relative paths in it resolve from here.
 	Dir  string `yaml:"-"`
@@ -131,7 +141,9 @@ type AI struct {
 type Import map[string]string
 
 type Service struct {
-	Name      string            `yaml:"-"`
+	Name string `yaml:"-"`
+	// Extends names the templates this service starts from, in order.
+	Extends   yaml.Node         `yaml:"extends"`
 	Role      string            `yaml:"role"`
 	Groups    []string          `yaml:"groups"`
 	DependsOn []string          `yaml:"depends_on"`

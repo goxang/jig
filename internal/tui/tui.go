@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"github.com/goxang/jig/kernel/jobs"
 	"image/color"
 	"os"
 	"os/exec"
@@ -93,15 +94,14 @@ type model struct {
 	// drafts are inputs left with esc, by label, given back when the same input opens again
 	drafts     map[string]draft
 	showErrors bool
-	// jobs are the operations started this session (act, do, tasks), shown with their output under !
-	jobsMu sync.Mutex
-	saving sync.Mutex
+	saving     sync.Mutex
 	// views are the filters of each screen, carried over a reload and kept by a saved session
 	views map[string]map[string]string
 	// specAt is jig.yaml's modification time when it was read, to notice an edit
 	specAt    time.Time
 	specNoted bool
-	jobs      []*job
+	// jobs are the operations started this session (act, do, tasks), shown with their output under !
+	jobs      jobs.Manager
 	jobSel    int
 	jobScroll int
 	actErrors bool
@@ -572,7 +572,7 @@ func failed(ctx context.Context, label string, err error) statusMsg {
 func (m *model) runJob(ctx context.Context, label string, f func(ctx context.Context) error) tea.Msg {
 	ctx, j := m.startJob(ctx, label)
 	err := f(ctx)
-	j.finish(err)
+	j.Finish(err)
 	if err != nil {
 		return failed(ctx, label, err)
 	}
@@ -1553,8 +1553,8 @@ func (m *model) quit() tea.Cmd {
 	}
 	var tasks []string
 	for _, j := range m.jobList() {
-		if j.log != "" && j.running() {
-			tasks = append(tasks, j.label)
+		if j.Log != "" && j.Running() {
+			tasks = append(tasks, j.Label)
 		}
 	}
 	if busy := m.busy - len(tasks); busy > 0 {
@@ -1833,7 +1833,7 @@ func (m *model) runTask(name string, args []string) {
 		}
 		ctx, j := m.startJob(context.Background(), label)
 		fail := func(err error) tea.Cmd {
-			j.finish(err)
+			j.Finish(err)
 			return func() tea.Msg { return statusMsg{text: label + ": " + err.Error(), err: true} }
 		}
 		base, out, err := taskFiles()
@@ -1852,13 +1852,13 @@ func (m *model) runTask(name string, args []string) {
 		if err := cmd.Start(); err != nil {
 			return fail(err)
 		}
-		j.stdin, j.log, j.pid = in, base, cmd.Process.Pid
+		j.Stdin, j.Log, j.PID = in, base, cmd.Process.Pid
 		go func() { _ = cmd.Wait() }()
-		j.killOnStop(ctx)
+		killOnStop(j, ctx)
 		m.showErrors, m.actErrors, m.jobSel, m.jobScroll = true, false, 0, 0
 		return func() tea.Msg {
-			err := j.follow()
-			j.finish(err)
+			err := follow(j)
+			j.Finish(err)
 			switch {
 			case err == nil:
 				return statusMsg{}
@@ -1866,7 +1866,7 @@ func (m *model) runTask(name string, args []string) {
 				return statusMsg{text: label + ": stopped"}
 			}
 			text := strings.ReplaceAll(err.Error(), "\n ", " ·")
-			out := j.output()
+			out := j.Output()
 			if h := sh.Hint(strings.Join(out[max(0, len(out)-10):], "\n")); h != "" && !strings.Contains(text, h) {
 				text += "\n→ " + h
 			}
