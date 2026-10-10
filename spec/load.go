@@ -56,15 +56,31 @@ func LoadWith(file, env string, overrides map[string]string) (*Project, *Environ
 	return LoadData(raw, file, env, overrides)
 }
 
+// PluginDefaults returns the jig.yaml fragments of the project's plugins, lowest layer first; the
+// plugin host sets it.
+var PluginDefaults func(dir string, plugins map[string]*Plugin) []*config.Doc
+
 // LoadData is LoadWith on a jig.yaml already read (or never written: an inferred one); file is
 // where it stands, for its directory and messages.
 func LoadData(raw []byte, file, env string, overrides map[string]string) (*Project, *Environment, error) {
 	dir := filepath.Dir(file)
-	doc, err := config.Compose(raw, file, config.Options{Import: func(kind, path string, root *yaml.Node) (*config.Doc, error) {
+	opts := config.Options{Import: func(kind, path string, root *yaml.Node) (*config.Doc, error) {
 		return importFragment(kind, path, dir, root)
-	}})
+	}}
+	doc, err := config.Compose(raw, file, opts)
 	if err != nil {
 		return nil, nil, err
+	}
+	if PluginDefaults != nil {
+		var pl struct {
+			Plugins map[string]*Plugin `yaml:"plugins"`
+		}
+		_ = doc.Root.Decode(&pl)
+		if opts.Defaults = PluginDefaults(dir, pl.Plugins); len(opts.Defaults) > 0 {
+			if doc, err = config.Compose(raw, file, opts); err != nil {
+				return nil, nil, err
+			}
+		}
 	}
 	root := doc.Root
 	if len(root.Content) == 0 {

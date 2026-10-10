@@ -27,6 +27,7 @@ is out of date.
 | `include` | globs of YAML files merged under jig.yaml, later files winning: `include: [jig.d/*.yaml]` |
 | `templates` | partial entries a service, component, task, query, environment, agent or view starts from with `extends: name` (or a list, applied in order); `${name}` in a template is the entry's name |
 | `defaults` | `section: {keys}`: what every entry of that section starts from, below its templates |
+| `plugins` | `name: {path, version, off, ...config}`: a plugin from `path` instead of the installed store, a pinned `version`, `off: true` to disable it; every other key is the plugin's own config, checked against its schema. Plugins are found in the installed store, `~/.config/jig/plugins/*` and, once the workspace is trusted, `.jig/plugins/*`; the tasks, queries and other jig.yaml keys a plugin carries sit below jig.yaml |
 | `services` | below |
 | `environments` | below |
 | `components` | below; shared by every environment |

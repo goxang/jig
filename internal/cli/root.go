@@ -226,7 +226,9 @@ func runEcho(ctx context.Context, a *engine.App, action string, args protocol.Ar
 	var jm jobs.Manager
 	ctx, j := jm.Start(ctx, action)
 	j.Echo = os.Stdout
-	_, _, err := engine.NewLocal(a, &jm).Run(ctx, action, args, api.RunOpts{})
+	e := engine.NewLocal(a, &jm)
+	defer e.Close()
+	_, _, err := e.Run(ctx, action, args, api.RunOpts{})
 	j.Finish(err)
 	return err
 }

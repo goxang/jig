@@ -57,6 +57,7 @@ func serviceCommands() []*cobra.Command {
 					return err
 				}
 				e := engine.NewLocal(a, nil)
+				defer e.Close()
 				return parallelNames(names, func(n string) error {
 					if err := e.Service(ctx, action, n); err != nil {
 						return fmt.Errorf("%s: %w", n, err)

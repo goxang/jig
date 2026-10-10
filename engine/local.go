@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 
 	"github.com/goxang/jig/api"
 	"github.com/goxang/jig/core"
+	"github.com/goxang/jig/host"
 	"github.com/goxang/jig/kernel/actions"
 	"github.com/goxang/jig/kernel/audit"
 	"github.com/goxang/jig/kernel/catalog"
@@ -30,12 +32,14 @@ type sourceFunc func(ctx context.Context, args protocol.Args) (*protocol.Frame, 
 type Local struct {
 	App    *App
 	Bus    *events.Bus
+	Host   *host.Host
 	runner *actions.Runner
 	jobs   *jobs.Manager
 	me     identity.Subject
 
 	mu      sync.Mutex
 	sources map[string]sourceFunc
+	streams map[string]bool
 }
 
 var _ api.Engine = (*Local)(nil)
@@ -45,7 +49,7 @@ func NewLocal(a *App, jm *jobs.Manager) *Local {
 	if jm == nil {
 		jm = &jobs.Manager{}
 	}
-	l := &Local{App: a, Bus: events.NewBus(), jobs: jm, me: identity.Local(), sources: map[string]sourceFunc{}}
+	l := &Local{App: a, Bus: events.NewBus(), jobs: jm, me: identity.Local(), sources: map[string]sourceFunc{}, streams: map[string]bool{}}
 	envs := map[string]policy.Env{}
 	for n, e := range a.Spec.Environments {
 		envs[n] = policy.Env{Protected: e.Protected, Readonly: e.ReadOnly}
@@ -59,8 +63,48 @@ func NewLocal(a *App, jm *jobs.Manager) *Local {
 		Ask: func(context.Context, policy.Decision, string) error { return a.Guard() },
 	}
 	l.builtins()
+	l.plugins()
 	return l
 }
+
+// plugins registers every plugin's sources and actions, named <plugin>.<name>; their effects go
+// through the same policy, confirmation and audit as built-in actions.
+func (l *Local) plugins() {
+	a := l.App
+	l.Host = host.New(host.Options{Dir: a.Spec.Dir, Env: l.envName(), StateDir: a.StateDir(), Engine: l, Emit: l.Bus.Publish,
+		Secret: func(name string) (string, bool) {
+			if v, ok := a.KnownSecrets()[name]; ok {
+				return v, true
+			}
+			return os.LookupEnv(name)
+		}}, a.Spec.Plugins)
+	for _, p := range l.Host.Plugins() {
+		pr := p.Provides(context.Background())
+		for n, s := range pr.Sources {
+			name := p.Name + "." + n
+			l.sources[name] = func(ctx context.Context, args protocol.Args) (*protocol.Frame, error) {
+				return l.Host.Query(ctx, name, args)
+			}
+			l.streams[name] = s.Stream && p.Server != nil
+		}
+		for n, s := range pr.Actions {
+			name := p.Name + "." + n
+			act := actions.Action{Name: name, Effect: s.Effect, Help: s.Description, Args: s.Args,
+				Run: func(ctx context.Context, args protocol.Args) (*protocol.RunResult, error) {
+					return l.Host.Run(ctx, name, args, false)
+				}}
+			if s.Plan {
+				act.Plan = func(ctx context.Context, args protocol.Args) (*protocol.RunResult, error) {
+					return l.Host.Run(ctx, name, args, true)
+				}
+			}
+			_ = l.runner.Actions.Add(act)
+		}
+	}
+}
+
+// Close stops the plugin processes this engine started.
+func (l *Local) Close() { l.Host.Close() }
 
 func secretValues(a *App) []string {
 	var out []string
@@ -201,6 +245,12 @@ func (l *Local) Query(ctx context.Context, source string, args protocol.Args) (*
 
 // Stream answers a source that only queries with one batch.
 func (l *Local) Stream(ctx context.Context, source string, args protocol.Args) (<-chan protocol.StreamBatch, error) {
+	l.mu.Lock()
+	live := l.streams[source]
+	l.mu.Unlock()
+	if live {
+		return l.Host.Stream(ctx, source, args)
+	}
 	f, err := l.Query(ctx, source, args)
 	if err != nil {
 		return nil, err

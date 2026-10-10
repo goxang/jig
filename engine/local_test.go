@@ -79,3 +79,64 @@ func TestLocalCatalogSearchResolve(t *testing.T) {
 		t.Fatalf("status %v %v", f, err)
 	}
 }
+
+func TestLocalPlugins(t *testing.T) {
+	ctx := context.Background()
+	for _, k := range []string{"XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME"} {
+		t.Setenv(k, t.TempDir())
+	}
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".jig/plugins/demo"), 0o755)
+	os.WriteFile(filepath.Join(dir, ".jig/plugins/demo/jig-plugin.yaml"), []byte(`name: demo
+version: 0.1.0
+tasks:
+  plug: [echo from-plugin]
+  hi: [echo plugin-hi]
+sources:
+  nums: { run: "printf '[{\"n\":1},{\"n\":2}]'" }
+actions:
+  poke: { run: "echo poked", effect: write }
+`), 0o644)
+	file := filepath.Join(dir, "jig.yaml")
+	os.WriteFile(file, []byte("project: p\ndefault: dev\nenvironments: { dev: { runtime: fake } }\ntasks: { hi: [echo mine] }\n"), 0o644)
+
+	a, err := Open(file, "dev")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := a.Tasks()["plug"]; ok {
+		t.Fatal("an untrusted project plugin loaded")
+	}
+	a.Close()
+
+	t.Setenv("JIG_TRUST", "project")
+	a, err = Open(file, "dev")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer a.Close()
+	l := NewLocal(a, nil)
+	defer l.Close()
+	if _, ok := a.Tasks()["plug"]; !ok {
+		t.Fatal("the plugin's task is missing")
+	}
+	j, _, err := l.Run(ctx, "task.hi", nil, api.RunOpts{})
+	if err != nil || !strings.Contains(strings.Join(j.Output(), "\n"), "mine") {
+		t.Fatalf("jig.yaml should win over a plugin: %v %v", err, j.Output())
+	}
+	f, err := l.Query(ctx, "demo.nums", nil)
+	if err != nil || len(f.Columns) != 1 || len(f.Columns[0]) != 2 {
+		t.Fatalf("nums %+v %v", f, err)
+	}
+	if _, res, err := l.Run(ctx, "demo.poke", nil, api.RunOpts{}); err != nil || res.Message != "poked" {
+		t.Fatalf("poke %+v %v", res, err)
+	}
+	ai := identity.AI(l.Session(ctx))
+	if _, _, err := l.Run(ctx, "demo.poke", nil, api.RunOpts{As: &ai}); err == nil {
+		t.Fatal("the AI ran a plugin write without approval")
+	}
+	b, _ := os.ReadFile(filepath.Join(a.StateDir(), "audit.jsonl"))
+	if !strings.Contains(string(b), `"demo.poke"`) {
+		t.Errorf("plugin action not audited:\n%s", b)
+	}
+}

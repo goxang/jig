@@ -261,6 +261,8 @@ func Start(cmd *exec.Cmd, opts Options) (*Process, error) {
 	return &Process{Conn: New(out, in, opts), cmd: cmd, stdin: in}, nil
 }
 
+func (p *Process) Pid() int { return p.cmd.Process.Pid }
+
 // Close asks the plugin to shut down, waits up to grace for it to exit, then kills it.
 func (p *Process) Close(grace time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), grace)

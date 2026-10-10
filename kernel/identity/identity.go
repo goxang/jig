@@ -7,10 +7,11 @@ import (
 )
 
 const (
-	KindUser  = "user"
-	KindAI    = "ai"
-	KindAgent = "agent"
-	KindToken = "token"
+	KindUser   = "user"
+	KindAI     = "ai"
+	KindAgent  = "agent"
+	KindToken  = "token"
+	KindPlugin = "plugin"
 )
 
 type Subject struct {

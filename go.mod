@@ -14,11 +14,13 @@ require (
 	github.com/google/go-containerregistry v0.20.3
 	github.com/goxang/scrub v1.1.1
 	github.com/jackc/pgx/v5 v5.7.6
+	github.com/landlock-lsm/go-landlock v0.10.1
 	github.com/microsoft/go-mssqldb v1.9.5
 	github.com/redis/go-redis/v9 v9.18.0
 	github.com/spf13/cobra v1.10.2
 	github.com/twmb/franz-go v1.19.5
 	github.com/twmb/franz-go/pkg/kadm v1.16.1
+	golang.org/x/mod v0.42.0
 	golang.org/x/sync v0.22.0
 	golang.org/x/term v0.34.0
 	gopkg.in/yaml.v3 v3.0.1
@@ -69,4 +71,5 @@ require (
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.28.0 // indirect
 	gotest.tools/v3 v3.5.2 // indirect
+	kernel.org/pub/linux/libs/security/libcap/psx v1.2.77 // indirect
 )

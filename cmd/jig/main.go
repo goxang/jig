@@ -1,10 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"runtime/debug"
 
 	_ "github.com/goxang/jig/adapters/all"
+	"github.com/goxang/jig/host"
 	"github.com/goxang/jig/internal/cli"
 	"github.com/goxang/jig/internal/tui"
 )
@@ -41,7 +43,17 @@ func buildVersion() string {
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "__sandbox" {
+		if err := host.Sandbox(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(126)
+		}
+	}
+	if exe, err := os.Executable(); err == nil {
+		host.SandboxExe = exe
+	}
 	cli.Version = buildVersion()
+	host.Version = cli.Version
 	cli.UI = tui.Run
 	cli.Resume = tui.Resume
 	cli.AIChat = tui.Chat

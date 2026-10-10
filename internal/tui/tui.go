@@ -416,6 +416,9 @@ func run(ctx context.Context, a *engine.App, s *Session, init func(m *model)) er
 	}
 	program = tea.NewProgram(m, tea.WithContext(ctx))
 	_, err = program.Run()
+	if m.local != nil {
+		m.local.Close()
+	}
 	setPointer("default")
 	if err == tea.ErrProgramKilled {
 		return nil
@@ -583,6 +586,9 @@ func (m *model) runJob(ctx context.Context, label string, f func(ctx context.Con
 // eng is the Engine over the current app; actions it runs show as the model's jobs.
 func (m *model) eng() *engine.Local {
 	if m.local == nil || m.local.App != m.app {
+		if m.local != nil {
+			m.local.Close()
+		}
 		m.local = engine.NewLocal(m.app, &m.jobs)
 	}
 	return m.local

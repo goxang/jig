@@ -640,6 +640,35 @@
       },
       "type": "object"
     },
+    "Plugin": {
+      "additionalProperties": true,
+      "properties": {
+        "off": {
+          "description": "Disables the plugin.",
+          "type": [
+            "boolean",
+            "string"
+          ]
+        },
+        "path": {
+          "description": "Loads the plugin from a directory instead of the installed store.",
+          "type": [
+            "string",
+            "number",
+            "boolean"
+          ]
+        },
+        "version": {
+          "description": "The version or range to use, as jig plugin add writes it.",
+          "type": [
+            "string",
+            "number",
+            "boolean"
+          ]
+        }
+      },
+      "type": "object"
+    },
     "Probe": {
       "additionalProperties": false,
       "properties": {
@@ -1565,6 +1594,13 @@
         }
       ],
       "description": "OpenTelemetry for every app and load service"
+    },
+    "plugins": {
+      "additionalProperties": {
+        "$ref": "#/definitions/Plugin"
+      },
+      "description": "name: {path, version, off, ...config}: a plugin from path instead of the installed store, a pinned version, off: true to disable it; every other key is the plugin's own config, checked against its schema. Plugins are found in the installed store, ~/.config/jig/plugins/* and, once the workspace is trusted, .jig/plugins/*; the tasks, queries and other jig.yaml keys a plugin carries sit below jig.yaml",
+      "type": "object"
     },
     "project": {
       "description": "name; also the docker network and container prefix",

@@ -17,6 +17,18 @@ const (
 	RoleLoad  = "load"
 )
 
+// Plugin is one entry under plugins:.
+type Plugin struct {
+	// Path loads the plugin from a directory instead of the installed store.
+	Path string `yaml:"path,omitempty"`
+	// Version is the version or range to use, as jig plugin add writes it.
+	Version string `yaml:"version,omitempty"`
+	// Off disables the plugin.
+	Off bool `yaml:"off,omitempty"`
+	// Config is every other key, checked against the plugin's config schema.
+	Config map[string]any `yaml:",inline"`
+}
+
 type Project struct {
 	Version int      `yaml:"version"`
 	Name    string   `yaml:"project"`
@@ -28,7 +40,9 @@ type Project struct {
 	// ${name} in one is the entry's name.
 	Templates map[string]yaml.Node `yaml:"templates"`
 	// Defaults are per section (services, tasks, ...) keys every entry starts from.
-	Defaults     map[string]yaml.Node    `yaml:"defaults"`
+	Defaults map[string]yaml.Node `yaml:"defaults"`
+	// Plugins configures plugins by name: where one comes from, whether it is off, and its own keys.
+	Plugins      map[string]*Plugin      `yaml:"plugins"`
 	Vars         map[string]string       `yaml:"vars"`
 	Services     map[string]*Service     `yaml:"services"`
 	Environments map[string]*Environment `yaml:"environments"`
