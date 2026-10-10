@@ -3,13 +3,14 @@ package spec
 import (
 	"errors"
 	"fmt"
-	"github.com/goxang/jig/kernel/config"
 	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
 	"sort"
 	"strings"
+
+	"github.com/goxang/jig/kernel/config"
 
 	"gopkg.in/yaml.v3"
 )

@@ -17,7 +17,7 @@ import (
 	"sync"
 
 	"github.com/goxang/jig/core"
-	"github.com/goxang/jig/internal/scaffold"
+	"github.com/goxang/jig/scaffold"
 	"github.com/goxang/jig/plugin"
 	"github.com/goxang/jig/spec"
 )

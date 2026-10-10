@@ -14,7 +14,7 @@ Build and test with Go 1.26 and `GOTOOLCHAIN=local`. The UI is bubbletea, lipglo
 | change | where | also update |
 |---|---|---|
 | a jig.yaml key | the type in `spec/spec.go` (decoding) or the adapter's `Options` | a row in `docs/config.md`, then `go generate ./spec` (the schema's descriptions come from those tables; a test fails when it is stale) |
-| services from another tool's file | an `Importer` registered with `spec.RegisterImporter` (`internal/scaffold/import.go`: compose, kubernetes) | `imports` row in `docs/config.md`; `jig init` writes the import, never a copy |
+| services from another tool's file | a plugin importer (jig-plugins `cmd/jig-std`: compose, kubernetes, godev) | `imports` row in `docs/config.md`; `jig init` writes the import, never a copy |
 | a component type | `adapters/<kind>/<type>`, `plugin.Register` in `init()`, imported in `adapters/all` | the components table in `docs/config.md` |
 | an extra capability | an optional interface in `core` found by type assertion | nothing outside the adapter and its front end |
 | a command | `internal/cli`, thin over `engine` | `docs/guide.md`; shell completion in `complete.go` if it takes names |

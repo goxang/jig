@@ -8,6 +8,12 @@ import (
 	"github.com/goxang/jig/spec"
 )
 
+// jig-std serves these as plugin importers; tests load them in-process.
+func init() {
+	spec.RegisterImporter("compose", ImportCompose)
+	spec.RegisterImporter("kubernetes", ImportManifests)
+}
+
 func TestImportCompose(t *testing.T) {
 	dir := t.TempDir()
 	deploy := filepath.Join(dir, "deploy", "vds")

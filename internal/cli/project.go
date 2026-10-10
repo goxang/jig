@@ -17,7 +17,7 @@ import (
 
 	"github.com/goxang/jig/core"
 	"github.com/goxang/jig/engine"
-	"github.com/goxang/jig/internal/scaffold"
+	"github.com/goxang/jig/scaffold"
 	"github.com/goxang/jig/internal/viz"
 	"github.com/goxang/jig/manifest"
 	"github.com/goxang/jig/plugin"

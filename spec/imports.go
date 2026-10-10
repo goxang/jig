@@ -2,11 +2,11 @@ package spec
 
 import (
 	"fmt"
-	"github.com/goxang/jig/kernel/config"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
+
+	"github.com/goxang/jig/kernel/config"
 
 	"gopkg.in/yaml.v3"
 )
@@ -15,25 +15,25 @@ import (
 // the project's directory.
 type Importer func(path, dir string) (map[string]*Service, error)
 
-var importers = map[string]Importer{"godev": importGodev}
+var importers = map[string]Importer{}
 
 func RegisterImporter(name string, f Importer) { importers[name] = f }
 
 func Importers() []string { return keys(importers) }
 
+// PluginImport runs the installed plugin importer of that name on path, returning its jig.yaml
+// fragment; the plugin host sets it.
+var PluginImport func(dir, name, path string) (map[string]any, error)
+
 // importFragment runs one `imports:` entry as a configuration layer below jig.yaml, so a service
 // jig.yaml also defines is the imported one with jig.yaml's keys over it. A workload a jig.yaml
 // service already claims under another name is left out.
 func importFragment(kind, path, dir string, root *yaml.Node) (*config.Doc, error) {
-	f, ok := importers[kind]
-	if !ok {
-		return nil, fmt.Errorf("unknown import %q; have %v", kind, Importers())
-	}
 	path = os.ExpandEnv(path)
 	if !filepath.IsAbs(path) {
 		path = filepath.Join(dir, path)
 	}
-	svcs, err := f(path, dir)
+	frag, svcs, err := runImporter(kind, path, dir)
 	if err != nil {
 		return nil, fmt.Errorf("import %s %s: %w", kind, path, err)
 	}
@@ -54,12 +54,42 @@ func importFragment(kind, path, dir string, root *yaml.Node) (*config.Doc, error
 		}
 		out[n] = s
 	}
-	var frag yaml.Node
-	if err := frag.Encode(map[string]any{"services": out}); err != nil {
+	frag["services"] = out
+	var node yaml.Node
+	if err := node.Encode(frag); err != nil {
 		return nil, err
 	}
-	prune(&frag)
-	return config.FromNode(&frag, path, "import "+kind), nil
+	prune(&node)
+	return config.FromNode(&node, path, "import "+kind), nil
+}
+
+// runImporter splits what an importer returns into its services and the rest of its fragment.
+func runImporter(kind, path, dir string) (map[string]any, map[string]*Service, error) {
+	if f, ok := importers[kind]; ok {
+		svcs, err := f(path, dir)
+		return map[string]any{}, svcs, err
+	}
+	if PluginImport == nil {
+		return nil, nil, fmt.Errorf("no importer %q", kind)
+	}
+	frag, err := PluginImport(dir, kind, path)
+	if err != nil {
+		return nil, nil, err
+	}
+	var svcs map[string]*Service
+	if raw, ok := frag["services"]; ok {
+		b, err := yaml.Marshal(raw)
+		if err != nil {
+			return nil, nil, err
+		}
+		if err := yaml.Unmarshal(b, &svcs); err != nil {
+			return nil, nil, fmt.Errorf("the fragment's services: %w", err)
+		}
+	}
+	if frag == nil {
+		frag = map[string]any{}
+	}
+	return frag, svcs, nil
 }
 
 // prune drops the zero values encoding a Service writes, so they cannot hide a template's keys.
@@ -131,37 +161,4 @@ func mappingValue(n *yaml.Node, key string) *yaml.Node {
 		}
 	}
 	return nil
-}
-
-func importGodev(path, _ string) (map[string]*Service, error) {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	var f struct {
-		Services map[string]struct {
-			Path    string            `yaml:"path"`
-			Command []string          `yaml:"command"`
-			Args    []string          `yaml:"args"`
-			Env     map[string]string `yaml:"env"`
-			Group   []string          `yaml:"group"`
-		} `yaml:"services"`
-	}
-	if err := yaml.Unmarshal(raw, &f); err != nil {
-		return nil, err
-	}
-	out := map[string]*Service{}
-	for n, g := range f.Services {
-		s := &Service{Name: n, Groups: g.Group, Env: g.Env, Role: RoleApp}
-		switch {
-		case len(g.Command) > 0:
-			s.Run = &Run{Command: g.Command}
-		case g.Path != "":
-			s.Build = &Build{Go: g.Path}
-			s.Run = &Run{Args: g.Args}
-		}
-		sort.Strings(s.Groups)
-		out[n] = s
-	}
-	return out, nil
 }

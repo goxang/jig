@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/goxang/jig/internal/scaffold"
+	"github.com/goxang/jig/scaffold"
 )
 
 // initProject writes jig.yaml from what the directory already has; it guesses, the user edits.

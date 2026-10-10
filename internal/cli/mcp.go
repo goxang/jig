@@ -17,7 +17,7 @@ import (
 
 	"github.com/goxang/jig/ai"
 	"github.com/goxang/jig/engine"
-	"github.com/goxang/jig/internal/scaffold"
+	"github.com/goxang/jig/scaffold"
 )
 
 // mcpCommand serves jig to AI agents over the Model Context Protocol (JSON-RPC on stdio). Every tool

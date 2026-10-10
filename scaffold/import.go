@@ -11,12 +11,10 @@ import (
 	"github.com/goxang/jig/spec"
 )
 
-func init() { spec.RegisterImporter("compose", importCompose) }
-
-// importCompose reads a compose file's services as jig services under their compose names, so a
+// ImportCompose reads a compose file's services as jig services under their compose names, so a
 // docker runtime with compose: finds their containers. ${VARS} fill from the environment, then the
 // compose file's .env.
-func importCompose(path, dir string) (map[string]*spec.Service, error) {
+func ImportCompose(path, dir string) (map[string]*spec.Service, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -97,15 +95,10 @@ func sliceOf(v any) []string {
 	return l
 }
 
-func init() {
-	spec.RegisterImporter("kubernetes", importManifests)
-	spec.RegisterImporter("manifests", importManifests)
-}
-
-// importManifests makes a service of every Deployment, StatefulSet and DaemonSet under path, named
+// ImportManifests makes a service of every Deployment, StatefulSet and DaemonSet under path, named
 // after the workload, so the manifests stay the only definition: a Kubernetes runtime without
 // manifests: deploys from these folders.
-func importManifests(path, _ string) (map[string]*spec.Service, error) {
+func ImportManifests(path, _ string) (map[string]*spec.Service, error) {
 	set, err := manifest.Scan(path)
 	if err != nil {
 		return nil, err

@@ -14,7 +14,7 @@ import (
 	"golang.org/x/term"
 	"gopkg.in/yaml.v3"
 
-	"github.com/goxang/jig/internal/scaffold"
+	"github.com/goxang/jig/scaffold"
 	"github.com/goxang/jig/spec"
 )
 
