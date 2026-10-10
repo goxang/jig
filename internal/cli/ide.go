@@ -13,10 +13,12 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/goxang/jig/api"
 	"github.com/goxang/jig/core"
 	"github.com/goxang/jig/engine"
-	"github.com/goxang/jig/internal/ide"
 	"github.com/goxang/jig/internal/sh"
+	"github.com/goxang/jig/kernel/jobs"
+	"github.com/goxang/jig/protocol"
 )
 
 func ideCommand() *cobra.Command {
@@ -34,30 +36,21 @@ section of jig.yaml ("jig · <section>"):
 
 They run jig on this environment, so jig and GoLand see the same processes: what one starts or
 stops, the other shows. VS Code gets "jig: <service>" attach configs in .vscode/launch.json.`,
-		RunE: withApp(func(_ context.Context, a *engine.App, args []string) error {
-			names := a.Spec.ServiceNames()
+		RunE: withApp(func(ctx context.Context, a *engine.App, args []string) error {
+			var names []string
 			if len(args) > 0 {
 				var err error
 				if names, err = a.Targets(args, false); err != nil {
 					return err
 				}
 			}
-			r, err := ide.Write(a, names)
+			e := engine.NewLocal(a, &jobs.Manager{})
+			defer e.Close()
+			_, res, err := e.Run(ctx, "goland.ide", protocol.Args{"services": names, "open": open}, api.RunOpts{})
 			if err != nil {
 				return err
 			}
-			fmt.Printf("%s %d services (%d debuggable) in .idea/runConfigurations, folders %s\n", green("✓"), r.Services, r.Debug, strings.Join(r.Folders, ", "))
-			if r.VSCode != "" {
-				fmt.Println(dim("  VS Code attach configs in " + r.VSCode))
-			}
-			if !r.Dashboard {
-				fmt.Println(amber("  GoLand's Services view: + › Run Configuration Type › Shell Script and Go Remote"))
-			} else {
-				fmt.Println(dim("  Services view (alt+8) shows them; an open GoLand may need: + › Run Configuration Type › Shell Script"))
-			}
-			if open {
-				return ide.Open(a.Spec.Dir)
-			}
+			fmt.Println(green("✓") + " " + res.Message)
 			return nil
 		}),
 	}

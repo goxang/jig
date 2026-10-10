@@ -13,9 +13,10 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/goxang/jig/api"
 	"github.com/goxang/jig/core"
 	"github.com/goxang/jig/engine"
-	"github.com/goxang/jig/internal/ide"
+	"github.com/goxang/jig/protocol"
 	"github.com/goxang/jig/spec"
 )
 
@@ -234,18 +235,14 @@ func (t *servicesTab) listKey(m *model, k tea.KeyPressMsg) tea.Cmd {
 			return m.showMetrics(r.id)
 		}
 	case "o":
-		a := m.app
+		e := m.eng()
 		m.setStatus("writing the services into GoLand…", false)
 		return func() tea.Msg {
-			r, err := ide.Write(a, a.Spec.ServiceNames())
+			_, res, err := e.Run(context.Background(), "goland.ide", protocol.Args{"open": true}, api.RunOpts{})
 			if err != nil {
 				return statusMsg{text: "GoLand: " + err.Error(), err: true}
 			}
-			text := fmt.Sprintf("GoLand: %d services in %d folders (Services view, alt+8): run one for its live logs, stop stops it, · debug attaches", r.Services, len(r.Folders))
-			if err := ide.Open(a.Spec.Dir); err != nil {
-				text += " · " + err.Error()
-			}
-			return statusMsg{text: text}
+			return statusMsg{text: res.Message}
 		}
 	case "i":
 		if t.section == "infra" {
