@@ -3,7 +3,9 @@ package contracts
 import (
 	"testing"
 
+	"github.com/goxang/jig/core"
 	"github.com/goxang/jig/kernel/view"
+	"github.com/goxang/jig/plugin"
 	"github.com/goxang/jig/protocol"
 )
 
@@ -31,5 +33,18 @@ func TestContractsLoadAndCheck(t *testing.T) {
 	f := &protocol.Frame{Fields: []protocol.Field{{Name: "name", Type: "string"}, {Name: "messages", Type: "string"}}}
 	if ps := fieldProblems("queue.list", map[string]string{"name": "string", "messages": "int", "ready": "int"}, f); len(ps) != 2 {
 		t.Fatalf("field problems: %v", ps)
+	}
+}
+
+func TestBridgesImplementTheirKinds(t *testing.T) {
+	for _, id := range IDs() {
+		c := Get(id)
+		if c.Kind == "" {
+			continue
+		}
+		v, err := Bridge(core.Kind(c.Kind), nil, "p", "c")
+		if err != nil || !plugin.Implements(core.Kind(c.Kind), v) {
+			t.Errorf("%s: bridge %T does not implement %s (%v)", id, v, c.Kind, err)
+		}
 	}
 }

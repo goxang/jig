@@ -12,10 +12,13 @@ import (
 	"strings"
 	"time"
 
+	"gopkg.in/yaml.v3"
+
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
 	"github.com/goxang/jig/api"
+	"github.com/goxang/jig/contracts"
 	"github.com/goxang/jig/engine"
 	"github.com/goxang/jig/host"
 	"github.com/goxang/jig/kernel/frames"
@@ -827,6 +830,16 @@ func addViews(a *engine.App, all map[string]tab) []tab {
 			}
 			add("view:"+m.Name+"."+n, n, &v, m.Dir, remote)
 		}
+		for _, id := range m.Implements {
+			if c := contracts.Get(id); c != nil && c.View != nil {
+				var v view.View
+				if err := yaml.Unmarshal(c.View, &v); err != nil {
+					panic(err)
+				}
+				served(&v.Root, m.Name)
+				add("view:"+m.Name+"/"+c.ID, v.Title, &v, m.Dir, "")
+			}
+		}
 	}
 	if len(ms) > 0 || len(a.Spec.Plugins) > 0 {
 		v := view.View{Slot: "tab"}
@@ -844,6 +857,21 @@ func addViews(a *engine.App, all map[string]tab) []tab {
 		out = append([]tab{out[len(out)-1]}, out[:len(out)-1]...)
 	}
 	return out
+}
+
+// served points a contract's standard view at the plugin serving it: scm.mrs becomes <plugin>.scm.mrs.
+func served(root *protocol.Node, plugin string) {
+	view.Walk(root, func(n *protocol.Node) {
+		if n.Bind != nil && n.Bind.Source != "" {
+			n.Bind.Source = plugin + "." + n.Bind.Source
+		}
+		acts, _ := n.Props["actions"].([]any)
+		for _, a := range acts {
+			if am, ok := a.(map[string]any); ok && am["action"] != nil {
+				am["action"] = plugin + "." + fmt.Sprint(am["action"])
+			}
+		}
+	})
 }
 
 // pluginsView lists the plugins in use; its keys run `jig plugin ...`.

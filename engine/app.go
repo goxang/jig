@@ -52,6 +52,8 @@ type App struct {
 	envOverrides map[string]map[string]string // service → env set with SetEnv, nil until read
 
 	reached sync.Map // svc:// address → what local processes reach it at (otel)
+
+	plugins pluginHost
 }
 
 type entry struct {
@@ -108,7 +110,7 @@ func Open(file, env string) (*App, error) {
 	}
 	rc := *e.Runtime
 	rc.Name, rc.Kind = "runtime", string(core.KindRuntime)
-	v, _, err := plugin.New(a, &rc)
+	v, _, err := a.newComponent(&rc)
 	if err != nil {
 		return nil, err
 	}
@@ -192,7 +194,7 @@ func (a *App) Component(name string) (any, error) {
 			e.err = fmt.Errorf("no component %q in %s (have %v)", name, a.Spec.File, a.componentNames())
 			return
 		}
-		e.v, e.adapter, e.err = plugin.New(a, c)
+		e.v, e.adapter, e.err = a.newComponent(c)
 	})
 	return e.v, e.err
 }

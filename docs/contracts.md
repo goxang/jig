@@ -1,0 +1,27 @@
+# Contracts
+
+A contract is a versioned convention for a kind of tool: the sources and actions a plugin provides,
+their arguments, and the fields of the frames they answer. A plugin declares the ones it serves:
+
+```yaml
+name: gitlab
+implements: [scm/1, tracker/1]
+sources:
+  scm.mrs: { run: bin/mrs }        # answers id, title, author, state, source, target, updated, url
+```
+
+What implementing one gets you:
+
+- **a component**: a contract with a kind (`metrics/1`, `runtime/1`, `logs/1`, ...) lets the plugin
+  stand in for a built-in adapter: `components: {m: {type: myplugin}}`. jig's screens, CLI and AI use
+  it like any other metrics store. The component's config reaches the plugin in `configure`.
+- **a standard view**: `scm`, `tracker`, `docs`, `iac`, `vcs`, `registry` and `secrets` come with a
+  screen, added for every plugin that implements them.
+
+`jig plugin check <name>` checks a plugin against its contracts: every source and action is there,
+streams stream, effects match, optional capabilities are whole, and the sources that need no
+arguments answer frames with the contract's fields.
+
+The contracts are `runtime builder registry logs metrics traces profiles debugger database cache
+queue kv load tests hosts vcs scm tracker docs iac notify secrets ai`, each at version 1. Their
+definitions are in `contracts/<name>/v1.yaml`; a new version lives next to the old one.

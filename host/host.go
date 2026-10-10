@@ -33,6 +33,8 @@ type Options struct {
 	// Secret looks up a declared secret; nil reads the process environment.
 	Secret func(name string) (string, bool)
 	Emit   func(protocol.Event)
+	// Components are the project's components a plugin serves (type: <plugin>), by name; nil is none.
+	Components func(plugin string) map[string]protocol.Args
 	// Idle stops a plugin process after this long unused; zero is 10 minutes.
 	Idle time.Duration
 }
@@ -293,4 +295,11 @@ func (h *Host) stateSet(plugin, key string, v any) error {
 		return err
 	}
 	return writeAtomic(f, b, 0o600)
+}
+
+func (h *Host) components(plugin string) map[string]protocol.Args {
+	if h.Components == nil {
+		return nil
+	}
+	return h.Components(plugin)
 }

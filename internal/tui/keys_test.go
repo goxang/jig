@@ -1,8 +1,14 @@
 package tui
 
 import (
+	"strings"
+
+	"gopkg.in/yaml.v3"
+
 	"testing"
 	"time"
+
+	"github.com/goxang/jig/contracts"
 
 	"github.com/goxang/jig/engine"
 	"github.com/goxang/jig/kernel/view"
@@ -57,5 +63,23 @@ func TestBuiltinViewsLoad(t *testing.T) {
 	tabs := addViews(a, map[string]tab{})
 	if len(tabs) != 3 || tabs[0].name() != "Home" || tabs[1].name() != "B" || tabs[2].name() != "Plugins" {
 		t.Fatalf("tabs = %v", tabs)
+	}
+	var scm view.View
+	if err := yaml.Unmarshal(contracts.Get("scm").View, &scm); err != nil || scm.Title != "Merge requests" {
+		t.Fatal(err)
+	}
+	served(&scm.Root, "gl")
+	var got []string
+	view.Walk(&scm.Root, func(n *protocol.Node) {
+		if n.Bind != nil {
+			got = append(got, n.Bind.Source)
+		}
+		acts, _ := n.Props["actions"].([]any)
+		for _, a := range acts {
+			got = append(got, a.(map[string]any)["action"].(string))
+		}
+	})
+	if strings.Join(got, " ") != "gl.scm.mrs gl.scm.comment gl.scm.pipelines" {
+		t.Fatalf("served: %v", got)
 	}
 }

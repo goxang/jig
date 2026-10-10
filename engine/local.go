@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -73,13 +72,8 @@ func NewLocal(a *App, jm *jobs.Manager) *Local {
 // through the same policy, confirmation and audit as built-in actions.
 func (l *Local) plugins() {
 	a := l.App
-	l.Host = host.New(host.Options{Dir: a.Spec.Dir, Env: l.envName(), StateDir: a.StateDir(), Engine: l, Emit: l.Bus.Publish,
-		Secret: func(name string) (string, bool) {
-			if v, ok := a.KnownSecrets()[name]; ok {
-				return v, true
-			}
-			return os.LookupEnv(name)
-		}}, a.Spec.Plugins)
+	l.Host = a.Host()
+	l.Host.Engine, l.Host.Emit = l, l.Bus.Publish
 	for _, p := range l.Host.Plugins() {
 		pr := p.Provides(context.Background())
 		for n, s := range pr.Sources {

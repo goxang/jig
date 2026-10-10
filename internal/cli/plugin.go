@@ -15,6 +15,7 @@ import (
 	"golang.org/x/term"
 	"gopkg.in/yaml.v3"
 
+	"github.com/goxang/jig/contracts"
 	"github.com/goxang/jig/host"
 	"github.com/goxang/jig/spec"
 )
@@ -105,6 +106,12 @@ func pluginCommand() *cobra.Command {
 			sort.Slice(rows, func(i, j int) bool { return rows[i][0] < rows[j][0] })
 			printTable(os.Stdout, []string{"PLUGIN", "LATEST", "PUBLISHER", "DESCRIPTION"}, rows)
 			return nil
+		},
+	})
+	pc.AddCommand(&cobra.Command{
+		Use: "check <name>", Short: "check a plugin against the contracts it implements, live", Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return pluginCheck(cmd.Context(), os.Stdout, projectDir(), args[0])
 		},
 	})
 	pc.AddCommand(&cobra.Command{
@@ -243,6 +250,42 @@ func pluginConfig(dir string) map[string]*spec.Plugin {
 		return nil
 	}
 	return p.Plugins
+}
+
+func pluginCheck(ctx context.Context, w io.Writer, dir, name string) error {
+	h := host.New(host.Options{Dir: dir}, pluginConfig(dir))
+	defer h.Close()
+	p := h.Get(name)
+	if p == nil {
+		return fmt.Errorf("no plugin %s here", name)
+	}
+	if len(p.Implements) == 0 {
+		return fmt.Errorf("%s implements no contract", name)
+	}
+	pr, bad := p.Provides(ctx), 0
+	for _, id := range p.Implements {
+		c := contracts.Get(id)
+		if c == nil {
+			fmt.Fprintf(w, "%s %s\n", red("✗"), id+": no such contract")
+			bad++
+			continue
+		}
+		ps := c.Check(pr)
+		if len(ps) == 0 {
+			ps = c.CheckFrames(ctx, h, name)
+		}
+		if len(ps) == 0 {
+			fmt.Fprintf(w, "%s %s\n", green("✓"), id)
+		}
+		for _, pb := range ps {
+			fmt.Fprintf(w, "%s %s %s\n", red("✗"), id, pb)
+		}
+		bad += len(ps)
+	}
+	if bad > 0 {
+		return fmt.Errorf("%d problems", bad)
+	}
+	return nil
 }
 
 func pluginInfo(ctx context.Context, w io.Writer, dir string, m *host.Manifest) error {
