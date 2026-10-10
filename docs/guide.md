@@ -260,7 +260,13 @@ for your confirmation, and `O` on Metrics shows every panel again), `jig_file` (
 refused, delete needs `"confirm": true`), and `jig` for any other command.
 Each runs the CLI, so protections apply: changes to a protected environment need `"confirm": true`.
 
-`jig skill --install` puts a skill into `.claude/skills/jig` and `.agents/skills/jig`, so Claude Code, Codex,
+Plugins are reached through meta-tools instead of one tool each: `jig_find` ranks actions, sources and
+skills for a few words, `jig_call` runs an action, `jig_read` reads a source (wrapped as untrusted data),
+`jig_open` resolves a ref and `jig_skill` loads a plugin's skill. `jig mcp --flat` also lists every plugin
+action and source as its own tool. Writes by the assistant wait in `jig inbox`: it lists what each would
+do, `jig inbox approve <id>` runs one as the assistant (audited with you as approver), `reject` drops it.
+
+`jig skill --install` puts a skill into `.claude/skills/jig` and `.agents/skills/jig` (and each plugin's skills beside it), so Claude Code, Codex,
 opencode and others know how to write and extend jig.yaml (services, infrastructure, `otel:`, `ui.tabs`,
 dashboards, tests) and check it with `jig env`; `jig docs config` is the reference they read, and `jig docs <words>`
 prints only the sections that hold them (`jig docs tasks steps`), across every doc.

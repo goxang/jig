@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -16,25 +17,38 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/goxang/jig/ai"
+	"github.com/goxang/jig/ai/router"
 	"github.com/goxang/jig/engine"
+	"github.com/goxang/jig/host"
+	"github.com/goxang/jig/kernel/identity"
+	"github.com/goxang/jig/protocol"
 	"github.com/goxang/jig/scaffold"
+	"github.com/goxang/jig/skills"
 )
 
 // mcpCommand serves jig to AI agents over the Model Context Protocol (JSON-RPC on stdio). Every tool
 // runs this binary's own CLI, so agents get exactly what a person at the terminal gets, protections included.
 func mcpCommand() *cobra.Command {
-	return &cobra.Command{
+	var flat bool
+	c := &cobra.Command{
 		Use:   "mcp",
 		Short: "serve jig to AI agents over MCP (stdio): status, up, deploy, build, logs, queries, load, kv, tasks",
 		Long: `Add to an agent's MCP config:
 
   { "mcpServers": { "jig": { "command": "jig", "args": ["mcp"], "cwd": "/path/to/project" } } }
 
+Besides the jig_* tools for core commands, plugins are reached through a few meta-tools:
+jig_find ranks actions, sources and skills; jig_call runs an action (writes wait for approval in
+jig inbox); jig_read reads a source; jig_open a ref; jig_skill loads a skill. --flat lists every
+plugin action and source as its own tool instead, for clients that want that.
+
 Changes to a protected environment, and pushes over an existing image tag, need "confirm": true.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return serveMCP(cmd.Context(), os.Stdin, os.Stdout)
+			return serveMCP(cmd.Context(), os.Stdin, os.Stdout, flat)
 		},
 	}
+	c.Flags().BoolVar(&flat, "flat", false, "one tool per plugin action and source, besides the meta-tools")
+	return c
 }
 
 type rpcReq struct {
@@ -61,11 +75,20 @@ type mcpTool struct {
 	Description string         `json:"description"`
 	InputSchema map[string]any `json:"inputSchema"`
 	argv        func(a map[string]any) ([]string, error)
+	// meta is a router tool and fixed the args it adds (a --flat tool's action or source)
+	meta  string
+	fixed map[string]any
 }
 
-func serveMCP(ctx context.Context, in io.Reader, out io.Writer) error {
+func serveMCP(ctx context.Context, in io.Reader, out io.Writer, flat bool) error {
 	redactor := mcpRedactor()
 	tools := mcpTools()
+	if os.Getenv(ai.EnvAgent) != "" {
+		tools = nil // an agent reaches jig only through the router, which holds its tool globs
+	}
+	r, closeEngine := mcpRouter()
+	defer closeEngine()
+	tools = append(tools, routerTools(ctx, r, tools, flat)...)
 	byName := map[string]mcpTool{}
 	for _, t := range tools {
 		byName[t.Name] = t
@@ -128,7 +151,7 @@ func serveMCP(ctx context.Context, in io.Reader, out io.Writer) error {
 				resp.Error = &rpcErr{Code: -32602, Message: "unknown tool " + p.Name}
 				break
 			}
-			text, failed := callTool(ctx, t, p.Arguments)
+			text, failed := callTool(ctx, r, t, p.Arguments)
 			text = redactor.Redact(text)
 			resp.Result = map[string]any{"content": []any{map[string]any{"type": "text", "text": text}}, "isError": failed}
 		default:
@@ -139,6 +162,75 @@ func serveMCP(ctx context.Context, in io.Reader, out io.Writer) error {
 		}
 	}
 	return sc.Err()
+}
+
+// mcpRouter serves the meta-tools from an engine on the session's environment; nil without a project.
+func mcpRouter() (*router.Router, func()) {
+	if lock := os.Getenv(ai.EnvLock); lock != "" {
+		g.env = lock
+	}
+	a, err := engine.Open(g.file, g.env)
+	if err != nil {
+		return nil, func() {}
+	}
+	e := engine.NewLocal(a, nil)
+	me := identity.AI(e.Session(context.Background()))
+	sk := append([]host.Skill{host.ParseSkill(skills.Jig, "jig")}, e.Host.Skills()...)
+	r := &router.Router{E: e, As: &me, Skills: sk,
+		Approve: func(_ context.Context, what string, args map[string]any) bool {
+			_, err := approval(args, what, "AI: "+what+"  (on "+aiEnvLabel(a.Env.Name, a.Env.Protected)+")")
+			return err == nil
+		}}
+	if name := os.Getenv(ai.EnvAgent); name != "" {
+		me = identity.Agent(name, splitList(os.Getenv(ai.EnvApprove)), e.Session(context.Background()))
+		r.Allow = splitList(os.Getenv(ai.EnvTools))
+		r.Approve = func(context.Context, string, map[string]any) bool { return false } // nobody is there to confirm
+	}
+	return r, func() { e.Close(); a.Close() }
+}
+
+// routerTools are the meta-tools core's own tools do not already cover, as jig_<name>; flat adds one
+// per action and source.
+func routerTools(ctx context.Context, r *router.Router, have []mcpTool, flat bool) []mcpTool {
+	if r == nil {
+		return nil
+	}
+	taken := map[string]bool{}
+	for _, t := range have {
+		taken[t.Name] = true
+	}
+	var out []mcpTool
+	for _, t := range r.Tools() {
+		if n := "jig_" + t.Name; !taken[n] {
+			out = append(out, mcpTool{Name: n, Description: t.Description, InputSchema: t.InputSchema, meta: t.Name})
+		}
+	}
+	if !flat {
+		return out
+	}
+	toolName := func(n string) string { return "jig_" + strings.NewReplacer(".", "_", "/", "_").Replace(n) }
+	pr := r.E.Provides(ctx)
+	for n, a := range pr.Actions {
+		if taken[toolName(n)] {
+			continue
+		}
+		out = append(out, mcpTool{Name: toolName(n), Description: fmt.Sprintf("%s (%s): %s", n, a.Effect, a.Description), InputSchema: schemaOr(a.Args), meta: "call", fixed: map[string]any{"action": n}})
+	}
+	for n, src := range pr.Sources {
+		if taken[toolName(n)] {
+			continue
+		}
+		out = append(out, mcpTool{Name: toolName(n), Description: "read " + n + ": " + src.Description, InputSchema: schemaOr(src.Args), meta: "read", fixed: map[string]any{"source": n}})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
+}
+
+func schemaOr(s protocol.Schema) map[string]any {
+	if len(s) == 0 {
+		return map[string]any{"type": "object"}
+	}
+	return s
 }
 
 // mcpRedactor takes the project's secrets out of every tool result; nil with redact=false.
@@ -165,9 +257,19 @@ func instructions() string {
 
 // callTool runs a tool; serving an assistant started by jig (JIG_AI_ENV set), it first holds the
 // call to the session's environment, has the user confirm any change, and logs what ran.
-func callTool(ctx context.Context, t mcpTool, args map[string]any) (string, bool) {
+func callTool(ctx context.Context, r *router.Router, t mcpTool, args map[string]any) (string, bool) {
 	if args == nil {
 		args = map[string]any{}
+	}
+	if t.meta != "" {
+		if t.fixed != nil {
+			args = map[string]any{"action": t.fixed["action"], "source": t.fixed["source"], "args": args, "user_request": args["user_request"]}
+		}
+		text, failed := r.Call(ctx, t.meta, args)
+		if lock := os.Getenv(ai.EnvLock); lock != "" && t.meta == "call" {
+			audit(ai.AuditEntry{At: time.Now(), Env: lock, Command: fmt.Sprintf("call %v", args["action"]), Risk: ai.Change.String(), Result: map[bool]string{true: "failed", false: "ok"}[failed], Output: text})
+		}
+		return text, failed
 	}
 	switch t.Name {
 	case "jig_ui":
@@ -670,4 +772,15 @@ func mcpTools() []mcpTool {
 				return args, nil
 			}},
 	}
+}
+
+// splitList splits a comma list; "" gives an empty, non-nil list, so an agent without tools gets none.
+func splitList(s string) []string {
+	out := []string{}
+	for _, p := range strings.Split(s, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }

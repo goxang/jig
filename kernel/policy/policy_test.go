@@ -24,6 +24,9 @@ func TestLocalDefault(t *testing.T) {
 		{me, "danger", "local", Confirm},
 		{identity.AI(me), "write", "local", Approve},
 		{identity.AI(me), "read", "local", Allow},
+		{identity.Agent("fixer", []string{"x.*"}, me), "write", "local", Approve},
+		{identity.Agent("fixer", nil, me), "write", "local", Allow},
+		{identity.Agent("fixer", nil, me), "write", "loadtest2", Approve},
 	} {
 		if d, _ := c.Decide(Request{Subject: tc.s, Action: "x.y", Effect: tc.effect, Env: tc.env}, envs); d != tc.want {
 			t.Errorf("%s %s@%s = %s, want %s", tc.s, tc.effect, tc.env, d, tc.want)

@@ -11,6 +11,7 @@ import (
 
 	"github.com/goxang/jig/kernel/audit"
 	"github.com/goxang/jig/kernel/identity"
+	"github.com/goxang/jig/kernel/inbox"
 	"github.com/goxang/jig/kernel/jobs"
 	"github.com/goxang/jig/kernel/policy"
 	"github.com/goxang/jig/protocol"
@@ -75,6 +76,8 @@ type Runner struct {
 	Audit *audit.Log
 	// Ask settles a confirm or reauth decision: nil to go ahead, else why not.
 	Ask func(ctx context.Context, d policy.Decision, why string) error
+	// Inbox, when set, keeps writes that need approval until another person decides.
+	Inbox *inbox.Inbox
 }
 
 type Call struct {
@@ -101,7 +104,12 @@ func (r *Runner) Run(ctx context.Context, c Call) (_ *jobs.Job, _ *protocol.RunR
 	d, why := r.Policy.Decide(policy.Request{Subject: c.Subject, Action: c.Action, Effect: a.Effect, Env: c.Env}, r.Envs)
 	entry := audit.Entry{Subject: c.Subject, Action: c.Action, Args: c.Args, Effect: a.Effect, Env: c.Env, Decision: string(d)}
 	switch d {
-	case policy.Deny, policy.Approve:
+	case policy.Approve:
+		if r.Inbox != nil {
+			return nil, nil, r.hold(ctx, a, c, why)
+		}
+		fallthrough
+	case policy.Deny:
 		err = &protocol.Error{Code: protocol.CodeDenied, Message: fmt.Sprintf("%s: %s (%s)", c.Action, d, why)}
 	case policy.Confirm, policy.Reauth:
 		err = ErrDeclined
@@ -127,6 +135,63 @@ func (r *Runner) Run(ctx context.Context, c Call) (_ *jobs.Job, _ *protocol.RunR
 	}
 	err = errors.Join(err, r.log(a, entry))
 	return j, res, err
+}
+
+// hold puts c in the inbox with its plan, so the approver sees what it would do.
+func (r *Runner) hold(ctx context.Context, a Action, c Call, why string) error {
+	it := inbox.Item{Subject: c.Subject, Env: c.Env, Action: c.Action, Args: c.Args, Why: why}
+	if a.Plan != nil {
+		it.Plan, _ = a.Plan(ctx, c.Args)
+	}
+	it, err := r.Inbox.Add(it)
+	if err != nil {
+		return err
+	}
+	msg := fmt.Sprintf("%s waits for approval (%s): jig inbox approve %s", c.Action, why, it.ID)
+	entry := audit.Entry{Subject: c.Subject, Action: c.Action, Args: c.Args, Effect: a.Effect, Env: c.Env, Decision: string(policy.Approve), Error: msg}
+	return errors.Join(&protocol.Error{Code: protocol.CodeNeedsInput, Message: msg}, r.log(a, entry))
+}
+
+// Decide approves or rejects a pending item as by, who must be a person other than whoever asked.
+// An approved item runs as its subject, audited with the approver.
+func (r *Runner) Decide(ctx context.Context, id string, approve bool, by identity.Subject) (_ *protocol.RunResult, err error) {
+	if r.Inbox == nil {
+		return nil, errors.New("no inbox")
+	}
+	it, err := r.Inbox.Get(id)
+	if err != nil {
+		return nil, err
+	}
+	if it.Status != inbox.Pending {
+		return nil, fmt.Errorf("%s is already %s", id, it.Status)
+	}
+	if by.Kind != identity.KindUser || by.String() == it.Subject.String() {
+		return nil, &protocol.Error{Code: protocol.CodeDenied, Message: "only another person can decide " + id}
+	}
+	a, ok := r.Actions.Get(it.Action)
+	if !ok {
+		return nil, &protocol.Error{Code: protocol.CodeNotFound, Message: "no action " + it.Action}
+	}
+	it.By = by.String()
+	entry := audit.Entry{Subject: it.Subject, Action: it.Action, Args: it.Args, Effect: a.Effect, Env: it.Env, Decision: string(policy.Approve), Approver: it.By}
+	if !approve {
+		it.Status = inbox.Rejected
+		entry.Error = "rejected by " + it.By
+		return nil, errors.Join(r.Inbox.Put(it), r.log(a, entry))
+	}
+	j := jobs.From(ctx)
+	if j == nil {
+		ctx, j = r.Jobs.Start(ctx, it.Action)
+		defer func() { j.Finish(err) }()
+	}
+	res, err := a.Run(ctx, it.Args)
+	it.Status = inbox.Approved
+	if err != nil {
+		it.Status, it.Result, entry.Error = inbox.Failed, err.Error(), err.Error()
+	} else if res != nil {
+		it.Result, entry.Result = res.Message, res.Message
+	}
+	return res, errors.Join(err, r.Inbox.Put(it), r.log(a, entry))
 }
 
 func (r *Runner) log(a Action, e audit.Entry) error {

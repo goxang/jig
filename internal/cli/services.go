@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/goxang/jig/protocol"
 	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/goxang/jig/protocol"
 
 	"charm.land/lipgloss/v2"
 	"github.com/spf13/cobra"

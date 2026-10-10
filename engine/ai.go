@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -37,6 +38,25 @@ func (a *App) AI(sock string) (*ai.Runner, error) {
 		r.Redactor = a.Redactor()
 	}
 	return r, nil
+}
+
+// Agent is the runner for the jig.yaml agent name: the assistant's, as that agent and bounded to its
+// tools, which default to reading.
+func (a *App) Agent(name string) (*ai.Runner, *spec.Agent, error) {
+	ag, ok := a.Spec.Agents[name]
+	if !ok || ag == nil {
+		return nil, nil, fmt.Errorf("no agent %q in jig.yaml", name)
+	}
+	r, err := a.AI("")
+	if err != nil {
+		return nil, nil, err
+	}
+	tools := ag.Tools
+	if len(tools) == 0 {
+		tools = []string{"*:read"}
+	}
+	r.Agent = &ai.Agent{Name: name, Tools: tools, Approve: ag.Approve}
+	return r, ag, nil
 }
 
 // AuditFile is the log of what the assistant ran on this environment (ai.AuditEntry lines).

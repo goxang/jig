@@ -38,7 +38,7 @@ func TestAIChangesWaitForConfirmation(t *testing.T) {
 	}
 	tool := mcpTool{Name: "jig_x", argv: func(a map[string]any) ([]string, error) { return []string{"restart", "api"}, nil }}
 	read := mcpTool{Name: "jig_y", argv: func(a map[string]any) ([]string, error) { return []string{"status"}, nil }}
-	runFake := func(t mcpTool) { callTool(context.Background(), t, map[string]any{}) }
+	runFake := func(t mcpTool) { callTool(context.Background(), nil, t, map[string]any{}) }
 
 	runFake(read)
 	runFake(tool)
@@ -62,7 +62,7 @@ func TestAIChangesWaitForConfirmation(t *testing.T) {
 
 	_ = os.Remove(audit)
 	answer, always = ai.Reply{Text: "declined in jig"}, map[string]bool{}
-	if text, failed := callTool(context.Background(), tool, map[string]any{}); !failed {
+	if text, failed := callTool(context.Background(), nil, tool, map[string]any{}); !failed {
 		t.Fatalf("declined change ran: %s", text)
 	}
 	if es, _ := ai.ReadAudit(audit); len(es) != 1 || es[0].Result != "declined" {

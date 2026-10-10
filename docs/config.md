@@ -44,6 +44,8 @@ is out of date.
 | `otel` | OpenTelemetry for every app and load service (see below) |
 | `ui` | `{tabs, mode, logs}`: the screens and their order (left out, every screen the project configures something for); `mode: simple` starts newcomers on fewer screens, columns and keys (`V` switches); `logs` (see below) |
 | `keys` | the key preset: `jig` (the default) or `rig` (rig's keys). A personal choice, so usually in `.jig/local.yaml` or `~/.config/jig/config.yaml` |
+| `agents` | `name: {on, instructions, tools, approve}`: assistants that run on an event or a schedule (see below) |
+| `policy` | `{roles, bind}`: who may run which actions where (see below) |
 | `ai` | `{deny: [globs], instructions: text, ideas: {screen: [questions]}}`: project paths the assistant never reads (on top of `.env`, keys and `secrets/`), notes it gets with every turn, and the questions tab offers in an empty chat per screen (`all` for every screen) |
 
 ## services.<name>
@@ -347,6 +349,39 @@ whose query returns rows: each row's first number is checked, its other cells na
 fires under the thresholds. With no `alerts:`, nodes are watched for cpu and memory at 90% and 98%, disk at 97% and 98%.
 The TUI checks every 15s and shows the worst in its header (`A` lists all); `jig alerts` checks once and
 exits 2 when one is critical. Environments add their own `alerts:`.
+
+## agents
+
+```yaml
+agents:
+  triage:
+    on: alert.firing                 # an event topic glob, or { schedule: "*/30 9-18 * * 1-5" } (cron, local time)
+    instructions: Find why the alert fires and post a summary to the team channel.
+    tools: ["*:read", notify.send]   # action and source globs, each name[:effect]; left out, reads only
+    approve: [runtime.*]             # these wait in jig inbox even where agents may write
+```
+
+An agent is the assistant (`jig ai setup`) with a narrower reach: it reads project files but never edits
+them or runs a shell, and reaches jig only through `tools`. The event that fired it is in its prompt,
+marked as data. It acts as `agent:<name>`: its writes run unless they are dangerous, hit a protected
+environment or match `approve`; those wait in `jig inbox` for a person. `jig agent ls` lists them,
+`jig agent run <name>` runs one now, `jig agent watch` runs them on their triggers until stopped.
+
+## policy
+
+```yaml
+policy:
+  roles:
+    dev: { allow: ["*:read", "*@env/dev"], confirm: ["*:write"], deny: ["*:danger"] }
+    lead: { extends: dev, allow: ["*"] }
+    ai: { allow: ["*:read"], approve: ["*:write"] }
+  bind: { user:anna: lead, group:backend: dev, agent:triage: dev }
+```
+
+A rule is `action[:effect][@env/<name>]`, globs throughout. The most restrictive matching rule wins:
+deny, approve, reauth, confirm, then allow; an action no rule matches is denied. `ai` binds the
+assistant. Without `policy:` the local default applies: reads run, a `readonly` environment takes no
+writes, the assistant's writes wait in `jig inbox`, danger and protected environments ask first.
 
 ## otel
 

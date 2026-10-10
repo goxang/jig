@@ -5,14 +5,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/goxang/jig/api"
-	"github.com/goxang/jig/kernel/jobs"
-	"github.com/goxang/jig/protocol"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"strconv"
 	"syscall"
+
+	"github.com/goxang/jig/api"
+	"github.com/goxang/jig/kernel/jobs"
+	"github.com/goxang/jig/protocol"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -139,7 +140,7 @@ Run jig with no arguments for the terminal UI.`,
 	ac := aiCommand()
 	ac.GroupID = "obs"
 	root.AddCommand(ac)
-	for _, c := range append(projectCommands(), pluginCommand(), trustCommand(), doctorCommand(), kubeconfigCommand(), whyCommand(), docsCommand(), schemaCommand(), skillCommand(), themeCommand()) {
+	for _, c := range append(projectCommands(), pluginCommand(), trustCommand(), doctorCommand(), kubeconfigCommand(), whyCommand(), inboxCommand(), agentCommand(), docsCommand(), schemaCommand(), skillCommand(), themeCommand()) {
 		c.GroupID = "infra"
 		root.AddCommand(c)
 	}

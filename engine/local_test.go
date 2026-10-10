@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/goxang/jig/api"
 	"github.com/goxang/jig/kernel/identity"
@@ -45,12 +46,17 @@ func TestLocalRunsTasksThroughPolicy(t *testing.T) {
 	}
 	ai := identity.AI(l.Session(ctx))
 	var pe *protocol.Error
-	if _, _, err := l.Run(ctx, "task.hi", nil, api.RunOpts{As: &ai}); !errors.As(err, &pe) || pe.Code != protocol.CodeDenied {
+	if _, _, err := l.Run(ctx, "task.hi", nil, api.RunOpts{As: &ai}); !errors.As(err, &pe) || pe.Code != protocol.CodeNeedsInput || len(l.Inbox(ctx)) != 1 {
 		t.Fatalf("an AI write ran: %v", err)
 	}
 	b, _ := os.ReadFile(filepath.Join(l.App.StateDir(), "audit.jsonl"))
 	if strings.Count(string(b), "\n") != 2 {
 		t.Fatalf("audit:\n%s", b)
+	}
+	var changes []string
+	l.App.changeEvidence(time.Hour, func(e Evidence) { changes = append(changes, e.Summary) })
+	if len(changes) != 1 || !strings.Contains(changes[0], "ran task.hi") {
+		t.Fatalf("why sees the run but not the held write once: %q", changes)
 	}
 
 	p := openLocal(t, "shared")

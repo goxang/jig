@@ -32,7 +32,18 @@ const (
 	EnvKube      = "JIG_AI_KUBE"
 	// EnvBareTools has the MCP server list its tools without the jig_ prefix (opencode adds the server's name)
 	EnvBareTools = "JIG_MCP_BARE"
+	// EnvAgent names the jig.yaml agent the server acts as; EnvTools and EnvApprove are its globs, comma-separated.
+	EnvAgent   = "JIG_AI_AGENT"
+	EnvTools   = "JIG_AI_TOOLS"
+	EnvApprove = "JIG_AI_APPROVE"
 )
+
+// Agent is a jig.yaml agent: it reads files but never edits or runs a shell, and reaches jig only
+// through the tools its globs allow, as itself.
+type Agent struct {
+	Name           string
+	Tools, Approve []string
+}
 
 var proxyVars = []string{"HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy", "NO_PROXY", "no_proxy"}
 
@@ -54,6 +65,8 @@ type Runner struct {
 	Redactor *Redactor
 	// AuditFile is the JSONL file every action of the assistant is appended to.
 	AuditFile string
+	// Agent, when set, runs turns as that agent.
+	Agent *Agent
 
 	clientOnce sync.Once
 	client     *http.Client
@@ -215,6 +228,9 @@ func (r *Runner) mcpServer(s *Session) ([]string, map[string]string) {
 	if r.Kube {
 		env[EnvKube] = "1"
 	}
+	if r.Agent != nil {
+		env[EnvAgent], env[EnvTools], env[EnvApprove] = r.Agent.Name, strings.Join(r.Agent.Tools, ","), strings.Join(r.Agent.Approve, ",")
+	}
 	for _, v := range proxyVars {
 		env[v] = os.Getenv(v)
 	}
@@ -239,8 +255,12 @@ func (r *Runner) command(ctx context.Context, s *Session, msg string) (*exec.Cmd
 			}
 		}
 		settings, _ := json.Marshal(map[string]any{"permissions": map[string]any{"deny": deny}})
-		args := []string{"-p", "--output-format", "stream-json", "--verbose", "--tools", "Read,Grep,Glob,Edit,Write,Bash",
-			"--strict-mcp-config", "--mcp-config", string(mcp), "--allowedTools", "mcp__jig,Read,Grep,Glob,Edit,Write,Bash",
+		tools := "Read,Grep,Glob,Edit,Write,Bash"
+		if r.Agent != nil {
+			tools = "Read,Grep,Glob"
+		}
+		args := []string{"-p", "--output-format", "stream-json", "--verbose", "--tools", tools,
+			"--strict-mcp-config", "--mcp-config", string(mcp), "--allowedTools", "mcp__jig," + tools,
 			"--permission-mode", "dontAsk", "--setting-sources", "", "--settings", string(settings), "--append-system-prompt", prompt}
 		if r.Setup.Model != "" {
 			args = append(args, "--model", r.Setup.Model)
@@ -312,10 +332,11 @@ func (r *Runner) opencodeConfig(rules string, mcpArgv []string, mcpEnv map[strin
 	for _, p := range r.Scope.denied() {
 		read[p], read["**/"+strings.TrimPrefix(p, "**/")], read[filepath.Join(r.Scope.Dir, p)] = "ask", "ask", "ask"
 	}
-	cfg := map[string]any{
-		"instructions": []string{rules},
-		"permission":   map[string]any{"edit": "allow", "bash": "allow", "webfetch": "allow", "external_directory": "deny", "read": read},
+	perm := map[string]any{"edit": "allow", "bash": "allow", "webfetch": "allow", "external_directory": "deny", "read": read}
+	if r.Agent != nil {
+		perm["edit"], perm["bash"] = "deny", "deny"
 	}
+	cfg := map[string]any{"instructions": []string{rules}, "permission": perm}
 	// The user's own MCP servers would be extra tools, and a dead one stalls every start by ~30s.
 	mcp := map[string]any{}
 	for _, name := range r.userMCPs() {

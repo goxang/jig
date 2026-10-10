@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/goxang/jig/engine"
+	"github.com/goxang/jig/kernel/jobs"
 )
 
 func whyCommand() *cobra.Command {
@@ -38,7 +39,9 @@ have it apply the fix (each change waits for your yes), ask a follow-up, or pres
 		ValidArgsFunction: completeServices,
 		RunE: withApp(func(ctx context.Context, a *engine.App, args []string) error {
 			fmt.Fprintln(os.Stderr, dim("gathering evidence about "+strings.Join(args, " ")+" on "+a.Env.Name+"…"))
-			inc, err := a.InvestigateSymptom(ctx, args, since)
+			e := engine.NewLocal(a, &jobs.Manager{})
+			defer e.Close()
+			inc, err := a.InvestigateSymptom(ctx, args, since, e.Probes()...)
 			if err != nil {
 				return err
 			}

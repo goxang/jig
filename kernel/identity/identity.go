@@ -19,6 +19,8 @@ type Subject struct {
 	Name   string   `json:"name"`
 	Groups []string `json:"groups,omitempty"`
 	Roles  []string `json:"roles,omitempty"`
+	// Approve lists action globs an agent must get approved even where its writes are otherwise allowed.
+	Approve []string `json:"approve,omitempty"`
 }
 
 func (s Subject) String() string { return s.Kind + ":" + s.Name }
@@ -37,4 +39,9 @@ func Local() Subject {
 // AI is the assistant acting for on, with on's roles.
 func AI(on Subject) Subject {
 	return Subject{Kind: KindAI, Name: "ai@" + on.Name, Roles: on.Roles}
+}
+
+// Agent is a jig.yaml agent acting for on, with on's roles.
+func Agent(name string, approve []string, on Subject) Subject {
+	return Subject{Kind: KindAgent, Name: name, Roles: on.Roles, Approve: approve}
 }

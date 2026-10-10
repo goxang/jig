@@ -18,6 +18,10 @@ import (
 	"github.com/goxang/jig/ai"
 	"github.com/goxang/jig/core"
 	"github.com/goxang/jig/internal/viz"
+	"github.com/goxang/jig/kernel/audit"
+	"github.com/goxang/jig/kernel/frames"
+	"github.com/goxang/jig/kernel/policy"
+	"github.com/goxang/jig/protocol"
 )
 
 // Evidence is one fact jig why found, cited by its ID.
@@ -59,7 +63,10 @@ var errorLine = regexp.MustCompile(`(?i)\b(error|err=|panic|fatal|exception|time
 // state and restarts, health probes, the components they host, error lines in their logs, failed
 // traces, firing alerts and recent changes; then ranks the likely culprits. It needs no AI.
 // An empty service checks every service.
-func (a *App) Investigate(ctx context.Context, service string, window time.Duration) (*Incident, error) {
+// Probe adds evidence from somewhere App cannot reach alone, such as a plugin's contract sources.
+type Probe func(ctx context.Context, window time.Duration, add func(Evidence))
+
+func (a *App) Investigate(ctx context.Context, service string, window time.Duration, more ...Probe) (*Incident, error) {
 	var targets []string
 	if service != "" {
 		if _, err := a.Service(service); err != nil {
@@ -126,6 +133,10 @@ func (a *App) Investigate(ctx context.Context, service string, window time.Durat
 			add(Evidence{Kind: "alert", Bad: true, Summary: "alert firing: " + f.String()})
 		}
 	}()
+	for _, p := range more {
+		wg.Add(1)
+		go func() { defer wg.Done(); p(ctx, window, add) }()
+	}
 	wg.Wait()
 	a.changeEvidence(window, add)
 
@@ -265,7 +276,7 @@ func (a *App) traceEvidence(ctx context.Context, service string, window time.Dur
 
 // InvestigateSymptom investigates what the user described: the first service its words name (by
 // name, image or SERVICE_NAME), else every service.
-func (a *App) InvestigateSymptom(ctx context.Context, words []string, window time.Duration) (*Incident, error) {
+func (a *App) InvestigateSymptom(ctx context.Context, words []string, window time.Duration, more ...Probe) (*Incident, error) {
 	service := ""
 	for _, w := range words {
 		if n := a.serviceNamed(strings.Trim(w, ",.:;?!'\"")); n != "" {
@@ -273,7 +284,7 @@ func (a *App) InvestigateSymptom(ctx context.Context, words []string, window tim
 			break
 		}
 	}
-	inc, err := a.Investigate(ctx, service, window)
+	inc, err := a.Investigate(ctx, service, window, more...)
 	if err != nil {
 		return nil, err
 	}
@@ -352,6 +363,13 @@ func (a *App) changeEvidence(window time.Duration, add func(Evidence)) {
 	for _, e := range es {
 		if time.Since(e.At) < window && e.Risk != ai.Read.String() && e.Result == "ok" {
 			add(Evidence{Kind: "change", At: e.At, Summary: fmt.Sprintf("the assistant ran %s %s ago", e.Command, time.Since(e.At).Round(time.Second))})
+		}
+	}
+	writes, _ := audit.Read(filepath.Join(a.StateDir(), "audit.jsonl"))
+	for _, e := range writes {
+		if time.Since(e.Time) < window && e.Effect != protocol.EffectRead && e.Error == "" &&
+			(e.Decision != string(policy.Approve) || e.Approver != "") { // an approve without approver only waited
+			add(Evidence{Kind: "change", At: e.Time, Summary: fmt.Sprintf("%s ran %s %s ago", e.Subject, e.Action, time.Since(e.Time).Round(time.Second))})
 		}
 	}
 	if fi, err := os.Stat(filepath.Join(a.StateDir(), "state.json")); err == nil && time.Since(fi.ModTime()) < window {
@@ -565,4 +583,51 @@ func (inc *Incident) Markdown(w io.Writer, analysis string) {
 	}
 	fmt.Fprintf(w, "## Evidence\n\n")
 	inc.writeEvidence(w)
+}
+
+// Probes are the evidence the plugins' contracts add: failed pipelines and merged MRs from scm/1.
+func (l *Local) Probes() []Probe {
+	var out []Probe
+	if _, ok := l.sources["scm.pipelines"]; ok {
+		out = append(out, func(ctx context.Context, window time.Duration, add func(Evidence)) {
+			f, err := l.Query(ctx, "scm.pipelines", protocol.Args{"limit": 20})
+			if err != nil {
+				return
+			}
+			for _, r := range frames.Rows(f) {
+				at := unixTime(r["started"])
+				if time.Since(at) < window {
+					bad := r["status"] == "failed"
+					add(Evidence{Kind: "change", At: at, Bad: bad, Summary: fmt.Sprintf("pipeline %v on %v %v %s ago", r["id"], r["ref"], r["status"], time.Since(at).Round(time.Second))})
+				}
+			}
+		})
+	}
+	if _, ok := l.sources["scm.mrs"]; ok {
+		out = append(out, func(ctx context.Context, window time.Duration, add func(Evidence)) {
+			f, err := l.Query(ctx, "scm.mrs", protocol.Args{"state": "merged"})
+			if err != nil {
+				return
+			}
+			for _, r := range frames.Rows(f) {
+				if at := unixTime(r["updated"]); time.Since(at) < window {
+					add(Evidence{Kind: "change", At: at, Summary: fmt.Sprintf("MR %v %q by %v merged into %v %s ago", r["id"], r["title"], r["author"], r["target"], time.Since(at).Round(time.Second))})
+				}
+			}
+		})
+	}
+	return out
+}
+
+// unixTime reads a frame's time value: Unix seconds, as JSON numbers decode.
+func unixTime(v any) time.Time {
+	switch n := v.(type) {
+	case float64:
+		return time.Unix(int64(n), 0)
+	case int64:
+		return time.Unix(n, 0)
+	case int:
+		return time.Unix(int64(n), 0)
+	}
+	return time.Time{}
 }

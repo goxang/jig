@@ -7,6 +7,7 @@ import (
 
 	"github.com/goxang/jig/kernel/catalog"
 	"github.com/goxang/jig/kernel/identity"
+	"github.com/goxang/jig/kernel/inbox"
 	"github.com/goxang/jig/kernel/jobs"
 	"github.com/goxang/jig/protocol"
 )
@@ -91,3 +92,20 @@ func (f *Fake) Complete(context.Context, string, string, int) ([]protocol.Comple
 }
 
 func (f *Fake) Session(context.Context) identity.Subject { return f.Subject }
+
+func (f *Fake) Inbox(context.Context) []inbox.Item { return nil }
+
+func (f *Fake) Decide(_ context.Context, id string, _ bool) (*protocol.RunResult, error) {
+	return nil, &protocol.Error{Code: protocol.CodeNotFound, Message: "no inbox item " + id}
+}
+
+func (f *Fake) Provides(context.Context) protocol.Provides {
+	out := protocol.Provides{Sources: map[string]protocol.SourceSpec{}, Actions: map[string]protocol.ActionSpec{}}
+	for n := range f.Frames {
+		out.Sources[n] = protocol.SourceSpec{}
+	}
+	for n := range f.Results {
+		out.Actions[n] = protocol.ActionSpec{Effect: protocol.EffectWrite}
+	}
+	return out
+}

@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/goxang/jig/docs"
+	"github.com/goxang/jig/host"
 	"github.com/goxang/jig/skills"
 	"github.com/goxang/jig/spec"
 )
@@ -66,26 +67,40 @@ func schemaCommand() *cobra.Command {
 func skillCommand() *cobra.Command {
 	var install bool
 	c := &cobra.Command{
-		Use:   "skill",
-		Short: "the agent skill for working with jig: print it, or --install it into .claude/skills and .agents/skills",
-		RunE: func(*cobra.Command, []string) error {
-			if !install {
+		Use:   "skill [install]",
+		Short: "the agent skill for working with jig: print it, or install it and every active plugin's skills into .claude/skills and .agents/skills",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			if !install && (len(args) == 0 || args[0] != "install") {
 				fmt.Print(skills.Jig)
 				return nil
 			}
-			for _, dir := range []string{".claude/skills/jig", ".agents/skills/jig"} {
-				if err := os.MkdirAll(dir, 0o755); err != nil {
-					return err
+			all := []host.Skill{{Name: "jig", Body: skills.Jig}}
+			if a, err := open(); err == nil {
+				all = append(all, a.Host().Skills()...)
+				a.Close()
+			}
+			for _, sk := range all {
+				raw := sk.Body
+				if sk.Plugin != "" {
+					raw = fmt.Sprintf("---\nname: %s\ndescription: %s\n---\n%s", sk.Name, sk.Description, sk.Body)
 				}
-				p := filepath.Join(dir, "SKILL.md")
-				if err := os.WriteFile(p, []byte(skills.Jig), 0o644); err != nil {
-					return err
+				for _, root := range []string{".claude/skills", ".agents/skills"} {
+					dir := filepath.Join(root, sk.Name)
+					if err := os.MkdirAll(dir, 0o755); err != nil {
+						return err
+					}
+					p := filepath.Join(dir, "SKILL.md")
+					if err := os.WriteFile(p, []byte(raw), 0o644); err != nil {
+						return err
+					}
+					fmt.Println(green("✓") + " " + p)
 				}
-				fmt.Println(green("✓") + " " + p)
 			}
 			return nil
 		},
 	}
-	c.Flags().BoolVar(&install, "install", false, "write it into this project for Claude Code, Codex, opencode and other agents")
+	c.Flags().BoolVar(&install, "install", false, "same as jig skill install")
+	_ = c.Flags().MarkHidden("install")
 	return c
 }

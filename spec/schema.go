@@ -51,6 +51,7 @@ var (
 	componentType = reflect.TypeOf(Component{})
 	taskType      = reflect.TypeOf(Task{})
 	dashboardType = reflect.TypeOf(Dashboard{})
+	triggerType   = reflect.TypeOf(AgentTrigger{})
 	viewType      = reflect.TypeOf(view.View{})
 )
 
@@ -99,6 +100,11 @@ func (g *schemaGen) of(t reflect.Type) map[string]any {
 				// the layout (grid, tabs, ...) or the widget's own props
 				"additionalProperties": true,
 			}
+		})
+		return ref(t)
+	case triggerType:
+		g.define(t, func() any {
+			return map[string]any{"oneOf": []any{map[string]any{"type": "string", "description": "an event topic glob"}, g.object(t)}}
 		})
 		return ref(t)
 	case dashboardType:

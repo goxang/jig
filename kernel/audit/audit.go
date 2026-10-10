@@ -2,7 +2,10 @@
 package audit
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -93,4 +96,23 @@ func (l *Log) redact(args map[string]any) map[string]any {
 		}
 	}
 	return out
+}
+
+// Read is every entry of the log at path, oldest first; a missing log has none.
+func Read(path string) ([]Entry, error) {
+	raw, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var out []Entry
+	for _, line := range bytes.Split(raw, []byte("\n")) {
+		var e Entry
+		if json.Unmarshal(line, &e) == nil && e.Action != "" {
+			out = append(out, e)
+		}
+	}
+	return out, nil
 }

@@ -19,6 +19,7 @@ import (
 	"github.com/goxang/jig/kernel/events"
 	"github.com/goxang/jig/kernel/frames"
 	"github.com/goxang/jig/kernel/identity"
+	"github.com/goxang/jig/kernel/inbox"
 	"github.com/goxang/jig/kernel/jobs"
 	"github.com/goxang/jig/kernel/policy"
 	"github.com/goxang/jig/kernel/refs"
@@ -41,6 +42,7 @@ type Local struct {
 	mu      sync.Mutex
 	sources map[string]sourceFunc
 	streams map[string]bool
+	about   map[string]protocol.SourceSpec
 }
 
 var _ api.Engine = (*Local)(nil)
@@ -50,7 +52,7 @@ func NewLocal(a *App, jm *jobs.Manager) *Local {
 	if jm == nil {
 		jm = &jobs.Manager{}
 	}
-	l := &Local{App: a, Bus: events.NewBus(), jobs: jm, me: identity.Local(), sources: map[string]sourceFunc{}, streams: map[string]bool{}}
+	l := &Local{App: a, Bus: events.NewBus(), jobs: jm, me: identity.Local(), sources: map[string]sourceFunc{}, streams: map[string]bool{}, about: map[string]protocol.SourceSpec{}}
 	envs := map[string]policy.Env{}
 	for n, e := range a.Spec.Environments {
 		envs[n] = policy.Env{Protected: e.Protected, Readonly: e.ReadOnly}
@@ -58,12 +60,15 @@ func NewLocal(a *App, jm *jobs.Manager) *Local {
 	l.runner = &actions.Runner{
 		Actions: actions.NewRegistry(),
 		Envs:    envs,
+		Policy:  a.Spec.Policy,
 		Jobs:    jm,
 		Audit:   audit.Open(filepath.Join(a.StateDir(), "audit.jsonl"), secretValues(a)...),
 		// App.Guard asks once per session, or takes --yes or the TUI's confirm
-		Ask: func(context.Context, policy.Decision, string) error { return a.Guard() },
+		Ask:   func(context.Context, policy.Decision, string) error { return a.Guard() },
+		Inbox: inbox.Open(filepath.Join(a.StateDir(), "inbox")),
 	}
 	l.builtins()
+	l.pluginActions()
 	l.plugins()
 	return l
 }
@@ -82,6 +87,7 @@ func (l *Local) plugins() {
 				return l.Host.Query(ctx, name, args)
 			}
 			l.streams[name] = s.Stream && p.Server != nil
+			l.about[name] = s
 		}
 		for n, s := range pr.Actions {
 			name := p.Name + "." + n
@@ -154,6 +160,7 @@ func (l *Local) builtins() {
 			}})
 	}
 
+	l.about["services.status"] = protocol.SourceSpec{Description: "every service: state, readiness, restarts, image"}
 	l.sources["services.status"] = func(ctx context.Context, args protocol.Args) (*protocol.Frame, error) {
 		names := strs(args["services"])
 		if len(names) == 0 {
@@ -169,6 +176,7 @@ func (l *Local) builtins() {
 			{Name: "image", Type: protocol.TypeString}, {Name: "message", Type: protocol.TypeString},
 		}, rows), nil
 	}
+	l.about["plugins"] = protocol.SourceSpec{Description: "installed plugins: version, state, what they implement"}
 	l.sources["plugins"] = func(ctx context.Context, _ protocol.Args) (*protocol.Frame, error) {
 		ms, warns := host.Discover(l.App.Spec.Dir, l.App.Spec.Plugins)
 		var rows []map[string]any
@@ -190,6 +198,7 @@ func (l *Local) builtins() {
 		}
 		return frames.FromRows(fields, rows), nil
 	}
+	l.about["queries.run"] = protocol.SourceSpec{Description: "run a saved query from jig.yaml by name"}
 	l.sources["queries.run"] = func(ctx context.Context, args protocol.Args) (*protocol.Frame, error) {
 		name, _ := args["name"].(string)
 		var t core.Table
@@ -431,6 +440,29 @@ func (l *Local) Complete(context.Context, string, string, int) ([]protocol.Compl
 }
 
 func (l *Local) Session(context.Context) identity.Subject { return l.me }
+
+// Provides is every source and action this engine serves, for finding them by what they do.
+func (l *Local) Provides(context.Context) protocol.Provides {
+	out := protocol.Provides{Sources: map[string]protocol.SourceSpec{}, Actions: map[string]protocol.ActionSpec{}}
+	l.mu.Lock()
+	for n := range l.sources {
+		out.Sources[n] = l.about[n]
+	}
+	l.mu.Unlock()
+	for _, n := range l.runner.Actions.Names() {
+		a, _ := l.runner.Actions.Get(n)
+		out.Actions[n] = protocol.ActionSpec{Description: a.Help, Effect: a.Effect, Args: a.Args, Plan: a.Plan != nil}
+	}
+	return out
+}
+
+func (l *Local) Inbox(context.Context) []inbox.Item { return l.runner.Inbox.List() }
+
+func (l *Local) Decide(ctx context.Context, id string, approve bool) (*protocol.RunResult, error) {
+	res, err := l.runner.Decide(ctx, id, approve, l.me)
+	l.Bus.Publish(protocol.Event{Topic: "inbox.decided", Source: "core", Data: protocol.Args{"id": id, "approved": approve}})
+	return res, err
+}
 
 // Action is a registered action by name: its effect, help and argument schema.
 func (l *Local) Action(name string) (actions.Action, bool) { return l.runner.Actions.Get(name) }

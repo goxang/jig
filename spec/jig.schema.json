@@ -41,6 +41,70 @@
       },
       "type": "object"
     },
+    "Agent": {
+      "additionalProperties": false,
+      "properties": {
+        "approve": {
+          "items": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          },
+          "type": "array"
+        },
+        "instructions": {
+          "type": [
+            "string",
+            "number",
+            "boolean"
+          ]
+        },
+        "on": {
+          "$ref": "#/definitions/AgentTrigger"
+        },
+        "tools": {
+          "items": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "AgentTrigger": {
+      "oneOf": [
+        {
+          "description": "an event topic glob",
+          "type": "string"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "event": {
+              "type": [
+                "string",
+                "number",
+                "boolean"
+              ]
+            },
+            "schedule": {
+              "type": [
+                "string",
+                "number",
+                "boolean"
+              ]
+            }
+          },
+          "type": "object"
+        }
+      ]
+    },
     "Alert": {
       "additionalProperties": false,
       "properties": {
@@ -169,6 +233,28 @@
           "type": "object"
         }
       ]
+    },
+    "Config": {
+      "additionalProperties": false,
+      "properties": {
+        "bind": {
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          },
+          "type": "object"
+        },
+        "roles": {
+          "additionalProperties": {
+            "$ref": "#/definitions/Role"
+          },
+          "type": "object"
+        }
+      },
+      "type": "object"
     },
     "DashVar": {
       "additionalProperties": false,
@@ -911,6 +997,69 @@
       },
       "type": "object"
     },
+    "Role": {
+      "additionalProperties": false,
+      "properties": {
+        "allow": {
+          "items": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          },
+          "type": "array"
+        },
+        "approve": {
+          "items": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          },
+          "type": "array"
+        },
+        "confirm": {
+          "items": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          },
+          "type": "array"
+        },
+        "deny": {
+          "items": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          },
+          "type": "array"
+        },
+        "extends": {
+          "type": [
+            "string",
+            "number",
+            "boolean"
+          ]
+        },
+        "reauth": {
+          "items": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
     "Run": {
       "additionalProperties": false,
       "properties": {
@@ -1517,6 +1666,13 @@
     "^x-": {}
   },
   "properties": {
+    "agents": {
+      "additionalProperties": {
+        "$ref": "#/definitions/Agent"
+      },
+      "description": "name: {on, instructions, tools, approve}: assistants that run on an event or a schedule",
+      "type": "object"
+    },
     "ai": {
       "allOf": [
         {
@@ -1574,7 +1730,7 @@
       ]
     },
     "imports": {
-      "description": "services from the files that already define them, read on every load so they stay the only definition: - compose: deploy/compose.yml (image, build, command, ports, env, env_file, depends_on and project volumes, under the compose names; ${VARS} from the environment, then the compose file's .env), - kubernetes: deploy/k8s (a service per Deployment, StatefulSet and DaemonSet, named after it, with its image and container ports; a Kubernetes runtime without manifests: deploys from these folders), - godev: .godev.yaml. A service jig.yaml also defines is the imported one with jig.yaml's keys merged over it (build: null drops an imported key), so jig.yaml holds only what those files have no word for: a Go main to build, health, groups. A workload a jig.yaml service already claims through k8s.workload is not imported again under its own name",
+      "description": "services from the files that already define them, read on every load so they stay the only definition: - compose: deploy/compose.yml (image, build, command, ports, env, env_file, depends_on and project volumes, under the compose names; ${VARS} from the environment, then the compose file's .env), - kubernetes: deploy/k8s (a service per Deployment, StatefulSet and DaemonSet, named after it, with its image and container ports; a Kubernetes runtime without manifests: deploys from these folders), - godev: .godev.yaml, - rig: rig.yaml. Each one is a plugin importer (official ones: jig-std install; any plugin can add more); fragments are cached in .jig/cache/import by the files' sha256. A service jig.yaml also defines is the imported one with jig.yaml's keys merged over it (build: null drops an imported key), so jig.yaml holds only what those files have no word for: a Go main to build, health, groups. A workload a jig.yaml service already claims through k8s.workload is not imported again under its own name",
       "items": {
         "additionalProperties": {
           "type": [
@@ -1631,6 +1787,14 @@
       },
       "description": "name: {path, version, off, ...config}: a plugin from path instead of the installed store, a pinned version, off: true to disable it; every other key is the plugin's own config, checked against its schema. Plugins are found in the installed store, ~/.config/jig/plugins/* and, once the workspace is trusted, .jig/plugins/*; the tasks, queries and other jig.yaml keys a plugin carries sit below jig.yaml",
       "type": "object"
+    },
+    "policy": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/Config"
+        }
+      ],
+      "description": "{roles, bind}: who may run which actions where"
     },
     "project": {
       "description": "name; also the docker network and container prefix",

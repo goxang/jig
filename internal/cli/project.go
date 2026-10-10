@@ -5,22 +5,23 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/goxang/jig/protocol"
 	"io"
 	"os"
 	"slices"
 	"sort"
 	"strings"
 
+	"github.com/goxang/jig/protocol"
+
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
 	"github.com/goxang/jig/core"
 	"github.com/goxang/jig/engine"
-	"github.com/goxang/jig/scaffold"
 	"github.com/goxang/jig/internal/viz"
 	"github.com/goxang/jig/manifest"
 	"github.com/goxang/jig/plugin"
+	"github.com/goxang/jig/scaffold"
 	"github.com/goxang/jig/spec"
 )
 

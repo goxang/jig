@@ -5,15 +5,17 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/goxang/jig/spec"
 )
 
 func TestSetYAMLKeepsCommentsAndNests(t *testing.T) {
 	f := filepath.Join(t.TempDir(), "local.yaml")
 	os.WriteFile(f, []byte("# mine\nenv: dev\nplugins:\n"), 0o644)
-	if err := setYAML(f, []string{"plugins", "kube", "off"}, true); err != nil {
+	if err := spec.SetYAML(f, []string{"plugins", "kube", "off"}, true); err != nil {
 		t.Fatal(err)
 	}
-	if err := setYAML(f, []string{"plugins", "kube", "off"}, false); err != nil {
+	if err := spec.SetYAML(f, []string{"plugins", "kube", "off"}, false); err != nil {
 		t.Fatal(err)
 	}
 	raw, _ := os.ReadFile(f)

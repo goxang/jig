@@ -13,7 +13,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
-	"gopkg.in/yaml.v3"
 
 	"github.com/goxang/jig/contracts"
 	"github.com/goxang/jig/host"
@@ -189,7 +188,7 @@ func pluginCommand() *cobra.Command {
 					file = f
 				}
 				for _, n := range args {
-					if err := setYAML(file, []string{"plugins", n, "off"}, !on); err != nil {
+					if err := spec.SetYAML(file, []string{"plugins", n, "off"}, !on); err != nil {
 						return err
 					}
 					fmt.Printf("  %s %s %s\n", green("✓"), n, verb)
@@ -351,58 +350,3 @@ func tailFile(ctx context.Context, file string, follow bool) error {
 }
 
 // setYAML sets one nested key in a YAML file, keeping its comments and order.
-func setYAML(file string, path []string, value any) error {
-	var doc yaml.Node
-	raw, err := os.ReadFile(file)
-	if err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	if len(raw) > 0 {
-		if err := yaml.Unmarshal(raw, &doc); err != nil {
-			return fmt.Errorf("%s: %w", file, err)
-		}
-	}
-	if len(doc.Content) == 0 {
-		doc = yaml.Node{Kind: yaml.DocumentNode, Content: []*yaml.Node{{Kind: yaml.MappingNode}}}
-	}
-	n := doc.Content[0]
-	for i, k := range path {
-		if n.Kind != yaml.MappingNode {
-			return fmt.Errorf("%s: %s is not a mapping", file, strings.Join(path[:i], "."))
-		}
-		var next *yaml.Node
-		for j := 0; j+1 < len(n.Content); j += 2 {
-			if n.Content[j].Value == k {
-				next = n.Content[j+1]
-			}
-		}
-		if i == len(path)-1 {
-			var v yaml.Node
-			if err := v.Encode(value); err != nil {
-				return err
-			}
-			if next != nil {
-				*next = v
-			} else {
-				n.Content = append(n.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: k}, &v)
-			}
-			break
-		}
-		if next == nil || next.Kind == yaml.ScalarNode && next.Tag == "!!null" {
-			if next == nil {
-				next = &yaml.Node{}
-				n.Content = append(n.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: k}, next)
-			}
-			*next = yaml.Node{Kind: yaml.MappingNode}
-		}
-		n = next
-	}
-	out, err := yaml.Marshal(&doc)
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
-		return err
-	}
-	return os.WriteFile(file, out, 0o644)
-}

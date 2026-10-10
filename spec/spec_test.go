@@ -279,3 +279,13 @@ func TestTaskForms(t *testing.T) {
 		t.Fatalf("%+v", ts)
 	}
 }
+
+func TestAgentTrigger(t *testing.T) {
+	var as map[string]*Agent
+	if err := yaml.Unmarshal([]byte("a: {on: alert.*}\nb: {on: {schedule: '0 9 * * *'}}"), &as); err != nil {
+		t.Fatal(err)
+	}
+	if as["a"].On.Event != "alert.*" || as["b"].On.Schedule != "0 9 * * *" {
+		t.Fatalf("%+v %+v", as["a"].On, as["b"].On)
+	}
+}

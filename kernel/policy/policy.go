@@ -53,7 +53,8 @@ type Config struct {
 }
 
 // Decide answers req. For a subject no role binds, the local default applies: reads are allowed; a readonly
-// environment takes no writes; the AI's writes need approval; danger and writes to a protected
+// environment takes no writes; the AI's writes need approval; an agent's writes are allowed
+// unless dangerous, protected or matching its approve globs; danger and writes to a protected
 // environment need confirming. With roles, the most restrictive matching rule wins and nothing
 // matching is denied.
 func (c *Config) Decide(req Request, envs map[string]Env) (Decision, string) {
@@ -79,6 +80,9 @@ func (c *Config) Decide(req Request, envs map[string]Env) (Decision, string) {
 			return Allow, ""
 		case req.Subject.Kind == identity.KindAI:
 			return Approve, "the AI's writes need approval"
+		case req.Subject.Kind == identity.KindAgent && (req.Effect == protocol.EffectDanger || env.Protected ||
+			slices.ContainsFunc(req.Subject.Approve, func(g string) bool { return glob(g, req.Action) })):
+			return Approve, "agent " + req.Subject.Name + " needs approval for " + req.Action
 		case req.Effect == protocol.EffectDanger:
 			return Confirm, req.Action + " is dangerous"
 		case env.Protected:

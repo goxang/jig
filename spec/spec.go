@@ -10,6 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/goxang/jig/kernel/config"
+	"github.com/goxang/jig/kernel/policy"
 	"github.com/goxang/jig/kernel/view"
 )
 
@@ -78,6 +79,10 @@ type Project struct {
 	Keys string `yaml:"keys"`
 	// AI tells the assistant (`jig ai`, @ in the UI) about the project: paths it must not read, notes.
 	AI *AI `yaml:"ai"`
+	// Agents are AI agents that run on an event or a schedule with a limited set of tools.
+	Agents map[string]*Agent `yaml:"agents"`
+	// Policy binds users, groups and the AI to roles of allowed, confirmed and approved actions.
+	Policy *policy.Config `yaml:"policy"`
 	// Help is shown by `jig -h` under the project name: this project's own quick-start for its main
 	// CLI workflows (e.g. build/deploy/ship with a target database and image tag). Plain text, a few
 	// example command lines; left out, `jig -h` shows only its own generic help.
@@ -148,6 +153,31 @@ type LogsUI struct {
 	// caller, ...) until h shows them.
 	Fields []string `yaml:"fields"`
 	Hide   []string `yaml:"hide"`
+}
+
+// Agent is an agents: entry. On is an event pattern (alert.firing, action.*) or {schedule: <cron>};
+// Tools are the action and source globs it may use, each name[:effect]; Approve the writes that
+// wait in the inbox for a person, where every other write of its tools runs.
+type Agent struct {
+	On           AgentTrigger `yaml:"on"`
+	Instructions string       `yaml:"instructions"`
+	Tools        []string     `yaml:"tools"`
+	Approve      []string     `yaml:"approve"`
+}
+
+type AgentTrigger struct {
+	Event    string `yaml:"event"`
+	Schedule string `yaml:"schedule"`
+}
+
+// UnmarshalYAML takes a bare string as the event.
+func (t *AgentTrigger) UnmarshalYAML(n *yaml.Node) error {
+	if n.Kind == yaml.ScalarNode {
+		t.Event = n.Value
+		return nil
+	}
+	type plain AgentTrigger
+	return n.Decode((*plain)(t))
 }
 
 type AI struct {

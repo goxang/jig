@@ -10,6 +10,7 @@ import (
 
 	"github.com/goxang/jig/kernel/audit"
 	"github.com/goxang/jig/kernel/identity"
+	"github.com/goxang/jig/kernel/inbox"
 	"github.com/goxang/jig/kernel/jobs"
 	"github.com/goxang/jig/kernel/policy"
 	"github.com/goxang/jig/protocol"
@@ -50,5 +51,43 @@ func TestRunGoesThroughPolicyJobAndAudit(t *testing.T) {
 	b, _ := os.ReadFile(log)
 	if n := strings.Count(string(b), "\n"); n != 4 {
 		t.Fatalf("audited %d entries:\n%s", n, b)
+	}
+}
+
+func TestAIWritesWaitInTheInbox(t *testing.T) {
+	reg := NewRegistry()
+	ran := 0
+	_ = reg.Add(Action{Name: "runtime.restart", Effect: protocol.EffectWrite,
+		Run: func(context.Context, protocol.Args) (*protocol.RunResult, error) {
+			ran++
+			return &protocol.RunResult{Message: "restarted"}, nil
+		},
+		Plan: func(context.Context, protocol.Args) (*protocol.RunResult, error) {
+			return &protocol.RunResult{Message: "would restart"}, nil
+		}})
+	dir := t.TempDir()
+	r := &Runner{Actions: reg, Jobs: &jobs.Manager{}, Audit: audit.Open(filepath.Join(dir, "audit.jsonl")), Inbox: inbox.Open(dir)}
+	me := identity.Local()
+	_, _, err := r.Run(context.Background(), Call{Subject: identity.AI(me), Env: "local", Action: "runtime.restart"})
+	var pe *protocol.Error
+	if !errors.As(err, &pe) || pe.Code != protocol.CodeNeedsInput || ran != 0 {
+		t.Fatalf("AI write: %v ran=%d", err, ran)
+	}
+	items := r.Inbox.List()
+	if len(items) != 1 || items[0].Plan.Message != "would restart" {
+		t.Fatalf("inbox %+v", items)
+	}
+	if _, err := r.Decide(context.Background(), items[0].ID, true, identity.AI(me)); err == nil {
+		t.Fatal("the AI approved its own write")
+	}
+	if res, err := r.Decide(context.Background(), items[0].ID, true, me); err != nil || res.Message != "restarted" || ran != 1 {
+		t.Fatalf("approve: %v %v", res, err)
+	}
+	if _, err := r.Decide(context.Background(), items[0].ID, true, me); err == nil {
+		t.Fatal("approved twice")
+	}
+	raw, _ := os.ReadFile(filepath.Join(dir, "audit.jsonl"))
+	if !strings.Contains(string(raw), `"approver":"user:`+me.Name) {
+		t.Fatalf("audit %s", raw)
 	}
 }

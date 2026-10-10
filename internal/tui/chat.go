@@ -744,10 +744,10 @@ func (m *model) chatWhy(args []string) tea.Cmd {
 	cv.busy, cv.started, cv.scroll, cv.next = true, time.Now(), 0, ""
 	ctx, cancel := context.WithCancel(m.ctx)
 	cv.cancel = cancel
-	r, s, a := c.runner, cv.sess, m.app
+	r, s, a, probes := c.runner, cv.sess, m.app, m.eng().Probes()
 	return func() tea.Msg {
 		defer cancel()
-		inc, err := a.InvestigateSymptom(ctx, args, 15*time.Minute)
+		inc, err := a.InvestigateSymptom(ctx, args, 15*time.Minute, probes...)
 		if err != nil {
 			return chatDoneMsg{s: s, err: err}
 		}
