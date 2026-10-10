@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/goxang/jig/core"
 )
@@ -14,7 +14,7 @@ func TestInspectWalksLogLines(t *testing.T) {
 	lt := &logsTab{id: "svc", fixed: true, services: []string{"a"}, log: newLogView("svc:body", 100, nil)}
 	lt.log.add([]core.LogLine{{Text: `{"msg":"one"}`}, {Text: `{"msg":"two"}`}, {Text: `{"msg":"three"}`}})
 	lt.log.cur = 2
-	key := func(t tea.KeyType) { lt.keyHandled(m, tea.KeyMsg{Type: t}) }
+	key := func(t rune) { lt.keyHandled(m, tea.KeyPressMsg{Code: t}) }
 
 	key(tea.KeyEnter)
 	if lt.inspect == nil || lt.inTree {
@@ -34,7 +34,7 @@ func TestInspectWalksLogLines(t *testing.T) {
 	if lt.inspect != nil {
 		t.Fatal("esc from the fields goes back to the lines, a second esc closes")
 	}
-	if _, handled := lt.keyHandled(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("f")}); handled {
+	if _, handled := lt.keyHandled(m, keyOf("f")); handled {
 		t.Fatal("a log pinned to one service leaves f to its page")
 	}
 }

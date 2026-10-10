@@ -1,20 +1,24 @@
 package tui
 
-import tea "github.com/charmbracelet/bubbletea"
+import (
+	"unicode/utf8"
+
+	tea "charm.land/bubbletea/v2"
+)
 
 //go:generate sh -c "go run ./layoutgen > layouts.go && gofmt -w layouts.go"
 
 // latinKey turns a key typed on a non-Latin layout into the US key in its place, so q quits on a
 // Persian or Russian keyboard too; ok is false for a rune no known layout puts on a key.
-func latinKey(k tea.KeyMsg) (tea.KeyMsg, bool) {
-	if k.Type != tea.KeyRunes || len(k.Runes) != 1 || k.Runes[0] < 0x80 {
+func latinKey(k tea.KeyPressMsg) (tea.KeyPressMsg, bool) {
+	if utf8.RuneCountInString(k.Text) != 1 || k.Code < 0x80 {
 		return k, true
 	}
-	r, ok := layoutKeys[k.Runes[0]]
+	r, ok := layoutKeys[k.Code]
 	if !ok {
 		return k, false
 	}
-	k.Runes = []rune{r}
+	k.Code, k.Text = r, string(r)
 	return k, true
 }
 

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"gopkg.in/yaml.v3"
 
 	"github.com/goxang/jig/manifest"
@@ -153,7 +153,7 @@ func (t *manifestsTab) setFields(o *manifest.Object) {
 	t.fields, t.fieldsObj, t.fieldsID = tree, o, o.File+"#"+o.ID()
 }
 
-func (t *manifestsTab) fieldKey(m *model, k tea.KeyMsg) tea.Cmd {
+func (t *manifestsTab) fieldKey(m *model, k tea.KeyPressMsg) tea.Cmd {
 	n := t.fields.current()
 	switch k.String() {
 	case "esc":

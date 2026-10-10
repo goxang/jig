@@ -2,19 +2,20 @@ package tui
 
 import (
 	"fmt"
+	"image/color"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 
 	"github.com/goxang/jig/core"
 	"github.com/goxang/jig/internal/viz"
 )
 
 var (
-	cAccent, cGreen, cAmber, cRed, cPurple lipgloss.TerminalColor
-	cText, cDim                            lipgloss.TerminalColor
+	cAccent, cGreen, cAmber, cRed, cPurple color.Color
+	cText, cDim                            color.Color
 	// cPlaceholder reads on both the panel and the cursor line's background
-	cPlaceholder, cPanel, cBar lipgloss.TerminalColor
+	cPlaceholder, cPanel, cBar color.Color
 
 	sTitle, sDim, sAccent, sGreen, sAmber, sRed, sCursor, sSelected, sHover, sUnderline lipgloss.Style
 	sTabHover, sTabOn, sTabOff, sHeader, sBand, sSubOn, sSubOff, sKey                   lipgloss.Style
@@ -57,8 +58,8 @@ func applyTheme(t Theme) {
 	theme = t
 	d, l := fitTheme(t)
 	dark, light := d.sh, l.sh
-	c := func(dark, light string) lipgloss.TerminalColor {
-		return lipgloss.AdaptiveColor{Light: light, Dark: dark}
+	c := func(dark, light string) color.Color {
+		return viz.Adaptive{Light: light, Dark: dark}
 	}
 	cAccent, cGreen, cAmber, cRed, cPurple = c(d.accent, l.accent), c(d.green, l.green), c(d.amber, l.amber), c(d.red, l.red), c(d.purple, l.purple)
 	cText, cDim, cPlaceholder = c(d.text, l.text), c(d.dim, l.dim), c(d.ph, l.ph)
@@ -86,10 +87,10 @@ func applyTheme(t Theme) {
 	sKey = lipgloss.NewStyle().Foreground(cAccent).Bold(true)
 	if len(t.Series) > 0 {
 		term := l
-		if lipgloss.HasDarkBackground() {
+		if viz.Dark {
 			term = d
 		}
-		viz.Palette = make([]lipgloss.Color, len(t.Series))
+		viz.Palette = make([]color.Color, len(t.Series))
 		for i, s := range t.Series {
 			viz.Palette[i] = lipgloss.Color(readable(s, 2.5, term.term))
 		}
@@ -123,7 +124,7 @@ func (tb *toolbar) button(id, text string, on bool) {
 func (tb *toolbar) String() string { return tb.b.String() }
 
 // badge is bold text on bg, in black or white, whichever reads better on it.
-func badge(bg lipgloss.TerminalColor) lipgloss.Style {
+func badge(bg color.Color) lipgloss.Style {
 	ink := func(c string) string {
 		if contrast("#000000", c) >= contrast("#FFFFFF", c) {
 			return "#000000"
@@ -132,21 +133,22 @@ func badge(bg lipgloss.TerminalColor) lipgloss.Style {
 	}
 	st := lipgloss.NewStyle().Background(bg).Bold(true)
 	switch c := bg.(type) {
-	case lipgloss.AdaptiveColor:
-		return st.Foreground(lipgloss.AdaptiveColor{Light: ink(c.Light), Dark: ink(c.Dark)})
-	case lipgloss.Color:
-		return st.Foreground(lipgloss.Color(ink(string(c))))
+	case viz.Adaptive:
+		return st.Foreground(viz.Adaptive{Light: ink(c.Light), Dark: ink(c.Dark)})
+	case nil:
+		return st
+	default:
+		return st.Foreground(lipgloss.Color(ink(hex(c))))
 	}
-	return st
 }
 
 // panel draws a titled, rounded box exactly w×h.
 func panel(title, body string, w, h int, focused bool) string {
-	var border lipgloss.TerminalColor = cPanel
+	var border color.Color = cPanel
 	if focused {
 		border = cAccent
 	}
-	st := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(border).Width(w - 2).Height(h - 2).MaxHeight(h)
+	st := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(border).Width(w).Height(h).MaxHeight(h)
 	box := st.Render(clip(body, w-2, h-2))
 	if title == "" {
 		return box
@@ -297,4 +299,9 @@ func bytesText(n int64) string {
 
 func num(f float64) string {
 	return strings.TrimSuffix(fmt.Sprintf("%.1f", f), ".0")
+}
+
+func hex(c color.Color) string {
+	r, g, b, _ := c.RGBA()
+	return fmt.Sprintf("#%02X%02X%02X", r>>8, g>>8, b>>8)
 }

@@ -7,28 +7,23 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/termenv"
+	"charm.land/lipgloss/v2"
+	"golang.org/x/term"
 
 	"github.com/goxang/jig/core"
 )
 
-var out = lipgloss.NewRenderer(os.Stdout)
+// plain drops colour: NO_COLOR, --brief, or stdout not a terminal.
+var plain = os.Getenv("NO_COLOR") != "" || brief || !term.IsTerminal(int(os.Stdout.Fd()))
 
 var ansi = regexp.MustCompile(`\x1b\[[0-9;]*[A-Za-z]`)
 
-func init() {
-	if os.Getenv("NO_COLOR") != "" || brief {
-		out.SetColorProfile(termenv.Ascii)
-	}
-}
-
 var (
-	bold  = out.NewStyle().Bold(true).Render
-	dim   = out.NewStyle().Faint(true).Render
-	red   = out.NewStyle().Foreground(lipgloss.Color("1")).Render
-	green = out.NewStyle().Foreground(lipgloss.Color("2")).Render
-	amber = out.NewStyle().Foreground(lipgloss.Color("3")).Render
+	bold  = paint(lipgloss.NewStyle().Bold(true))
+	dim   = paint(lipgloss.NewStyle().Faint(true))
+	red   = paint(lipgloss.NewStyle().Foreground(lipgloss.Color("1")))
+	green = paint(lipgloss.NewStyle().Foreground(lipgloss.Color("2")))
+	amber = paint(lipgloss.NewStyle().Foreground(lipgloss.Color("3")))
 )
 
 func stateText(s core.State) string {
@@ -53,9 +48,7 @@ const briefRows = 100
 
 func setBrief(on bool) {
 	brief = on
-	if on {
-		out.SetColorProfile(termenv.Ascii)
-	}
+	plain = plain || on
 }
 
 func cut(s string, n int) string {
@@ -135,4 +128,13 @@ func bytesText(n int64) string {
 		return fmt.Sprintf("%.0fKi", float64(n)/(1<<10))
 	}
 	return "-"
+}
+
+func paint(st lipgloss.Style) func(...string) string {
+	return func(s ...string) string {
+		if plain {
+			return strings.Join(s, " ")
+		}
+		return st.Render(s...)
+	}
 }

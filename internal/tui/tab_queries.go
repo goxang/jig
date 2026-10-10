@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/goxang/jig/ai"
 	"github.com/goxang/jig/core"
@@ -366,7 +366,7 @@ func (t *queriesTab) update(m *model, msg tea.Msg) tea.Cmd {
 		if msg.gen == m.gen {
 			t.langs = msg.langs
 		}
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		if t.focusRes {
 			switch msg.String() {
 			case "/":

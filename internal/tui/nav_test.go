@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/goxang/jig/spec"
 )
@@ -104,7 +104,7 @@ func TestPickerEscReturnsToTheParent(t *testing.T) {
 		return nil
 	})
 	parent := m.picker
-	m.picker.key(m, tea.KeyMsg{Type: tea.KeyEnter})
+	m.picker.key(m, tea.KeyPressMsg{Code: tea.KeyEnter})
 	if m.prompt == nil || m.picker != nil {
 		t.Fatal("enter did not open the input")
 	}

@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"golang.org/x/term"
 	"gopkg.in/yaml.v3"
 
@@ -227,7 +227,7 @@ type candPicker struct {
 
 func pickCandidates(cs []scaffold.Candidate) ([]scaffold.Candidate, error) {
 	m := &candPicker{all: cs, marked: map[int]bool{}, h: 24}
-	res, err := tea.NewProgram(m, tea.WithAltScreen(), tea.WithOutput(os.Stderr)).Run()
+	res, err := tea.NewProgram(m, tea.WithOutput(os.Stderr)).Run()
 	if err != nil {
 		return nil, err
 	}
@@ -261,10 +261,10 @@ func (p *candPicker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		p.h = msg.Height
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		vis := p.visible()
 		if p.typing {
-			switch msg.Type {
+			switch msg.Code {
 			case tea.KeyEnter:
 				p.typing = false
 			case tea.KeyEsc:
@@ -273,8 +273,8 @@ func (p *candPicker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if p.filter != "" {
 					p.filter = p.filter[:len(p.filter)-1]
 				}
-			case tea.KeyRunes, tea.KeySpace:
-				p.filter += string(msg.Runes)
+			default:
+				p.filter += msg.Text
 			}
 			p.sel = 0
 			return p, nil
@@ -293,7 +293,7 @@ func (p *candPicker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			p.sel = max(0, p.sel-10)
 		case "pgdown":
 			p.sel = min(len(vis)-1, p.sel+10)
-		case " ", "x":
+		case "space", "x":
 			if p.sel < len(vis) {
 				p.marked[vis[p.sel]] = !p.marked[vis[p.sel]]
 				p.sel = min(len(vis)-1, p.sel+1)
@@ -321,7 +321,13 @@ var (
 	pCursor = lipgloss.NewStyle().Background(lipgloss.Color("#2F5A9E")).Bold(true)
 )
 
-func (p *candPicker) View() string {
+func (p *candPicker) View() tea.View {
+	v := tea.NewView(p.render())
+	v.AltScreen = true
+	return v
+}
+
+func (p *candPicker) render() string {
 	vis := p.visible()
 	n := 0
 	for _, on := range p.marked {

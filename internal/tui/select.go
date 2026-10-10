@@ -3,8 +3,8 @@ package tui
 import (
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -78,9 +78,9 @@ func cells(line string) []rune {
 	return out
 }
 
-func (m *model) selectTo(e tea.MouseMsg) tea.Cmd {
+func (m *model) selectTo(e mouseEvent) tea.Cmd {
 	s := m.sel
-	held := e.Action == tea.MouseActionMotion && e.Button == tea.MouseButtonLeft
+	held := e.Action == mouseMotion && e.Button == tea.MouseLeft
 	x, y := min(max(e.X, s.left), s.right-1), min(max(e.Y, s.top), s.bottom-1)
 	if held {
 		if !s.dragged && x == s.x0 && y == s.y0 {

@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"image/color"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -19,10 +20,10 @@ import (
 	"sync"
 	"time"
 
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/atotto/clipboard"
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/goxang/jig/ai"
@@ -412,7 +413,7 @@ func run(ctx context.Context, a *engine.App, s *Session, init func(m *model)) er
 	if init != nil {
 		init(m)
 	}
-	program = tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseAllMotion(), tea.WithContext(ctx))
+	program = tea.NewProgram(m, tea.WithContext(ctx))
 	_, err = program.Run()
 	setPointer("default")
 	if err == tea.ErrProgramKilled {
@@ -461,11 +462,8 @@ func execProcess(c *exec.Cmd, fn tea.ExecCallback) tea.Cmd {
 
 func tick() tea.Cmd { return tea.Tick(time.Second, func(time.Time) tea.Msg { return tickMsg{} }) }
 
-// crumb is a jump from screen from to screen to; a direct one goes back on the first esc.
-type crumb struct {
-	from, to int
-	direct   bool
-}
+// crumb is a jump from screen from to screen to.
+type crumb struct{ from, to int }
 
 // rooted is a screen that knows whether esc has nothing left to close in it.
 type rooted interface{ atRoot() bool }
@@ -480,22 +478,13 @@ func (m *model) jump(i int) tea.Cmd {
 	return cmd
 }
 
-// jumpDirect is jump whose esc or backspace comes straight back, whatever is open on screen i.
-func (m *model) jumpDirect(i int) tea.Cmd {
-	cmd := m.jump(i)
-	if n := len(m.trail); n > 0 && m.trail[n-1].to == i {
-		m.trail[n-1].direct = true
-	}
-	return cmd
-}
-
 // back returns to the screen the last jump came from.
 func (m *model) back() (tea.Cmd, bool) {
 	n := len(m.trail)
 	if n == 0 || m.trail[n-1].to != m.active {
 		return nil, false
 	}
-	if r, ok := m.tabs[m.active].(rooted); ok && !r.atRoot() && !m.trail[n-1].direct {
+	if r, ok := m.tabs[m.active].(rooted); ok && !r.atRoot() {
 		return nil, false
 	}
 	rest, c := m.trail[:n-1], m.trail[n-1]
@@ -682,7 +671,7 @@ func (m *model) errorsView(h int) string {
 	}
 	b.WriteString(keyHints(append(keys, [2]string{"esc", "close"})))
 	body := clip(b.String(), w, max(3, h-6))
-	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(border).Padding(1, 2).Width(w).
+	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(border).Padding(1, 2).Width(w + 2).
 		Render(sTitle.Render(title) + "\n\n" + body)
 }
 
@@ -800,11 +789,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.w, m.h = msg.Width, msg.Height
 		return m, nil
 	case execDoneMsg:
-		inner := func() tea.Msg { return msg.msg }
-		if m.mouseOff {
-			return m, inner
-		}
-		return m, batch(tea.EnableMouseAllMotion, inner)
+		return m, func() tea.Msg { return msg.msg }
 	case thenMsg:
 		return m, msg()
 	case tickMsg:
@@ -934,7 +919,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, batch(m.openTab(m.active), m.fetchServices())
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		if !m.typingText() {
 			k, ok := latinKey(msg)
 			if !ok {
@@ -945,7 +930,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.key(msg)
 	case tea.MouseMsg:
-		return m, m.mouse(msg)
+		return m, m.mouse(mouseOf(msg))
 	}
 	if cmd, ok := m.chatUpdate(msg); ok {
 		return m, cmd
@@ -958,45 +943,45 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, batch(cmds...)
 }
 
-func (m *model) mouse(e tea.MouseMsg) tea.Cmd {
+func (m *model) mouse(e mouseEvent) tea.Cmd {
 	m.hx, m.hy = e.X, e.Y
 	m.pointerAt(e.X, e.Y)
-	if m.dragZone != "" && (e.Action == tea.MouseActionMotion || e.Action == tea.MouseActionRelease) {
+	if m.dragZone != "" && (e.Action == mouseMotion || e.Action == mouseRelease) {
 		return m.dragTo(e)
 	}
-	if m.splitting != "" && (e.Action == tea.MouseActionMotion || e.Action == tea.MouseActionRelease) {
+	if m.splitting != "" && (e.Action == mouseMotion || e.Action == mouseRelease) {
 		m.splitDrag(e)
 		return nil
 	}
-	if name := m.borderAt(e.X, e.Y); name != "" && e.Action == tea.MouseActionPress && e.Button == tea.MouseButtonLeft && m.picker == nil {
+	if name := m.borderAt(e.X, e.Y); name != "" && e.Action == mousePress && e.Button == tea.MouseLeft && m.picker == nil {
 		m.splitting, m.sel = name, nil
 		return nil
 	}
 	if p := m.prompt; p != nil && !p.popup {
-		if m.inputDrag && (e.Action == tea.MouseActionMotion || e.Action == tea.MouseActionRelease) {
+		if m.inputDrag && (e.Action == mouseMotion || e.Action == mouseRelease) {
 			p.input.SetCursor(p.off + e.X - m.inputX)
-			m.inputDrag = e.Action != tea.MouseActionRelease
+			m.inputDrag = e.Action != mouseRelease
 			return nil
 		}
-		if z, ok := m.zoneAt(e.X, e.Y); ok && z.id == "prompt:input" && e.Action == tea.MouseActionPress && e.Button == tea.MouseButtonLeft {
+		if z, ok := m.zoneAt(e.X, e.Y); ok && z.id == "prompt:input" && e.Action == mousePress && e.Button == tea.MouseLeft {
 			p.input.SetCursor(p.off + z.x)
 			p.sel = textSel{on: true, anchor: p.input.Position()}
 			m.inputDrag, m.inputX = true, e.X-z.x
 			return nil
 		}
 	}
-	if c := m.chat; c != nil && c.selecting && (e.Action == tea.MouseActionMotion || e.Action == tea.MouseActionRelease) {
+	if c := m.chat; c != nil && c.selecting && (e.Action == mouseMotion || e.Action == mouseRelease) {
 		phase := dragMove
-		if e.Action == tea.MouseActionRelease {
+		if e.Action == mouseRelease {
 			phase = dragRelease
 		}
 		c.drag(m, e.X-c.bx, e.Y-c.by, phase)
 		return nil
 	}
-	if m.sel != nil && (e.Action == tea.MouseActionMotion || e.Action == tea.MouseActionRelease) {
+	if m.sel != nil && (e.Action == mouseMotion || e.Action == mouseRelease) {
 		return m.selectTo(e)
 	}
-	if c := m.chat; c != nil && c.open && m.picker == nil && e.Action == tea.MouseActionPress && e.Button == tea.MouseButtonLeft {
+	if c := m.chat; c != nil && c.open && m.picker == nil && e.Action == mousePress && e.Button == tea.MouseLeft {
 		if z, ok := m.zoneAt(e.X, e.Y); ok && z.id == "chat:body" {
 			c.focus = true
 			c.input.Focus()
@@ -1004,17 +989,17 @@ func (m *model) mouse(e tea.MouseMsg) tea.Cmd {
 			return nil
 		}
 	}
-	if e.Action == tea.MouseActionPress && e.Button == tea.MouseButtonLeft && e.Y != 1 {
+	if e.Action == mousePress && e.Button == tea.MouseLeft && e.Y != 1 {
 		m.selectStart(e.X, e.Y)
 	}
-	if e.Action == tea.MouseActionMotion {
+	if e.Action == mouseMotion {
 		return nil
 	}
-	if (m.confirm != nil || m.prompt != nil) && e.Action == tea.MouseActionPress && e.Button == tea.MouseButtonLeft {
+	if (m.confirm != nil || m.prompt != nil) && e.Action == mousePress && e.Button == tea.MouseLeft {
 		if z, ok := m.zoneAt(e.X, e.Y); ok && (z.id == "confirm:yes" || z.id == "confirm:no") {
-			key := tea.KeyMsg{Type: tea.KeyEnter}
+			key := tea.KeyPressMsg{Code: tea.KeyEnter}
 			if z.id == "confirm:no" {
-				key = tea.KeyMsg{Type: tea.KeyEsc}
+				key = tea.KeyPressMsg{Code: tea.KeyEsc}
 			}
 			return m.key(key)
 		}
@@ -1022,53 +1007,53 @@ func (m *model) mouse(e tea.MouseMsg) tea.Cmd {
 	if m.confirm != nil || m.prompt != nil {
 		return nil
 	}
-	if c := m.chat; c != nil && c.open && m.picker == nil && !m.help && !m.showAlerts && !m.showErrors && e.Action == tea.MouseActionPress {
+	if c := m.chat; c != nil && c.open && m.picker == nil && !m.help && !m.showAlerts && !m.showErrors && e.Action == mousePress {
 		z, ok := m.zoneAt(e.X, e.Y)
 		inChat := ok && (z.id == "chat" || z.id == "chat:body")
 		switch {
-		case inChat && (e.Button == tea.MouseButtonWheelLeft || e.Shift && e.Button == tea.MouseButtonWheelUp):
+		case inChat && (e.Button == tea.MouseWheelLeft || e.Shift && e.Button == tea.MouseWheelUp):
 			c.hoff = max(0, c.hoff-4)
 			return nil
-		case inChat && (e.Button == tea.MouseButtonWheelRight || e.Shift && e.Button == tea.MouseButtonWheelDown):
+		case inChat && (e.Button == tea.MouseWheelRight || e.Shift && e.Button == tea.MouseWheelDown):
 			c.hoff += 4
 			return nil
-		case inChat && e.Button == tea.MouseButtonWheelUp:
+		case inChat && e.Button == tea.MouseWheelUp:
 			c.scroll += 3
 			return nil
-		case inChat && e.Button == tea.MouseButtonWheelDown:
+		case inChat && e.Button == tea.MouseWheelDown:
 			c.scroll = max(0, c.scroll-3)
 			return nil
-		case inChat && e.Button == tea.MouseButtonLeft:
+		case inChat && e.Button == tea.MouseLeft:
 			c.focus = true
 			c.input.Focus()
 			return nil
-		case e.Button == tea.MouseButtonLeft:
+		case e.Button == tea.MouseLeft:
 			c.focus = false
 		}
 	}
 	switch e.Button {
-	case tea.MouseButtonWheelLeft, tea.MouseButtonWheelRight:
-		key := tea.KeyMsg{Type: tea.KeyLeft}
-		if e.Button == tea.MouseButtonWheelRight {
-			key = tea.KeyMsg{Type: tea.KeyRight}
+	case tea.MouseWheelLeft, tea.MouseWheelRight:
+		key := tea.KeyPressMsg{Code: tea.KeyLeft}
+		if e.Button == tea.MouseWheelRight {
+			key = tea.KeyPressMsg{Code: tea.KeyRight}
 		}
 		if m.picker == nil && !m.help && !m.showAlerts && !m.showErrors {
 			return m.tabs[m.active].update(m, key)
 		}
 		return nil
-	case tea.MouseButtonWheelUp, tea.MouseButtonWheelDown:
+	case tea.MouseWheelUp, tea.MouseWheelDown:
 		if e.Shift && m.picker == nil {
 			// shift+wheel scrolls sideways, as most terminals do
-			key := tea.KeyMsg{Type: tea.KeyRight}
-			if e.Button == tea.MouseButtonWheelUp {
-				key = tea.KeyMsg{Type: tea.KeyLeft}
+			key := tea.KeyPressMsg{Code: tea.KeyRight}
+			if e.Button == tea.MouseWheelUp {
+				key = tea.KeyPressMsg{Code: tea.KeyLeft}
 			}
 			return m.tabs[m.active].update(m, key)
 		}
-		up := e.Button == tea.MouseButtonWheelUp
-		key := tea.KeyMsg{Type: tea.KeyDown}
+		up := e.Button == tea.MouseWheelUp
+		key := tea.KeyPressMsg{Code: tea.KeyDown}
 		if up {
-			key = tea.KeyMsg{Type: tea.KeyUp}
+			key = tea.KeyPressMsg{Code: tea.KeyUp}
 		}
 		if m.help {
 			return m.helpKey(key)
@@ -1094,7 +1079,7 @@ func (m *model) mouse(e tea.MouseMsg) tea.Cmd {
 		}
 		return m.tabs[m.active].update(m, key)
 	}
-	if e.Action != tea.MouseActionPress || e.Button != tea.MouseButtonLeft {
+	if e.Action != mousePress || e.Button != tea.MouseLeft {
 		return nil
 	}
 	if m.help {
@@ -1132,9 +1117,9 @@ func (m *model) mouse(e tea.MouseMsg) tea.Cmd {
 }
 
 // dragTo hands a move or the release of a drag to the tab, in cells relative to the zone it began on.
-func (m *model) dragTo(e tea.MouseMsg) tea.Cmd {
+func (m *model) dragTo(e mouseEvent) tea.Cmd {
 	phase := dragMove
-	if e.Action == tea.MouseActionRelease {
+	if e.Action == mouseRelease {
 		phase = dragRelease
 	}
 	id := m.dragZone
@@ -1285,7 +1270,7 @@ func stripHit(h hit, id string) (int, bool) {
 	return i, err == nil
 }
 
-func (m *model) key(k tea.KeyMsg) tea.Cmd {
+func (m *model) key(k tea.KeyPressMsg) tea.Cmd {
 	again := m.quitArmed == k.String()
 	m.quitArmed = ""
 	if k.String() == "ctrl+c" && m.prompt == nil && (m.chat == nil || !m.chat.open || !m.chat.focus) {
@@ -1309,7 +1294,7 @@ func (m *model) key(k tea.KeyMsg) tea.Cmd {
 	s := k.String()
 	free := m.prompt == nil && (m.chat == nil || !m.chat.open || !m.chat.focus) && len(m.tabs) > 0 && !m.tabs[m.active].typing()
 	if free && m.picker == nil && (s == "ctrl+left" || s == "ctrl+right") {
-		k = tea.KeyMsg{Type: map[bool]tea.KeyType{true: tea.KeyShiftLeft, false: tea.KeyShiftRight}[s == "ctrl+left"]}
+		k = tea.KeyPressMsg{Code: map[bool]rune{true: tea.KeyLeft, false: tea.KeyRight}[s == "ctrl+left"], Mod: tea.ModShift}
 	} else if (s == "alt+left" || s == "alt+right" || free && (s == "shift+left" || s == "shift+right")) && len(m.tabs) > 0 {
 		if m.confirm != nil && m.confirm.cancel != nil {
 			m.confirm.cancel()
@@ -1505,10 +1490,10 @@ func (m *model) key(k tea.KeyMsg) tea.Cmd {
 			m.mouseOff = !m.mouseOff
 			if m.mouseOff {
 				m.setStatus("mouse off: select and copy with the mouse; M turns it back on", false)
-				return tea.DisableMouse
+				return nil
 			}
 			m.setStatus("mouse on", false)
-			return tea.EnableMouseAllMotion
+			return nil
 		case "tab":
 			return m.openTab((m.active + 1) % len(m.tabs))
 		case "shift+tab":
@@ -2090,7 +2075,16 @@ func (m *model) fetchKubeconfig(env string) tea.Cmd {
 	return nil
 }
 
-func (m *model) View() string {
+func (m *model) View() tea.View {
+	v := tea.NewView(m.render())
+	v.AltScreen = true
+	if !m.mouseOff {
+		v.MouseMode = tea.MouseModeAllMotion
+	}
+	return v
+}
+
+func (m *model) render() string {
 	if m.w == 0 {
 		return "loading…"
 	}
@@ -2311,7 +2305,7 @@ func (m *model) interaction() (box, keys string) {
 }
 
 // boxed draws a full-width box with title in its top border, border in color, rows inside.
-func boxed(title string, rows []string, w int, color lipgloss.TerminalColor) string {
+func boxed(title string, rows []string, w int, color color.Color) string {
 	bc := lipgloss.NewStyle().Foreground(color)
 	t := " " + title + " "
 	if lipgloss.Width(t) > w-4 {
@@ -2331,7 +2325,7 @@ func (m *model) boxRowY() int { return m.h - 4 }
 
 func (m *model) confirmBox() string {
 	c := m.confirm
-	color, title := lipgloss.TerminalColor(cAmber), "confirm"
+	color, title := color.Color(cAmber), "confirm"
 	if m.app.Env.Protected {
 		color, title = cRed, "confirm · PROTECTED environment "+m.app.Env.Name
 	}
@@ -2400,7 +2394,7 @@ func (m *model) promptBox() string {
 		}
 		rows = append(rows, wrapped[max(0, len(wrapped)-8):]...)
 	}
-	p.input.Width = room
+	p.input.SetWidth(room)
 	m.zones = append(m.zones, zone{id: "prompt:input", x: 4, y: m.boxRowY(), w: room, h: 1})
 	in := inputView(p.input, p.sel, room, &p.off)
 	if p.input.Value() == "" && p.template != "" {
@@ -2480,7 +2474,7 @@ func helpFilter(lines []string, q string) []string {
 
 // helpKey drives the open help overlay: typing filters it, the arrows scroll, esc clears the filter
 // and then closes, ? and f1 close.
-func (m *model) helpKey(k tea.KeyMsg) tea.Cmd {
+func (m *model) helpKey(k tea.KeyPressMsg) tea.Cmd {
 	last := max(0, len(helpFilter(m.helpLines(), m.helpQuery))-1)
 	switch k.String() {
 	case "esc":
@@ -2510,8 +2504,8 @@ func (m *model) helpKey(k tea.KeyMsg) tea.Cmd {
 	case "ctrl+h", "ctrl+w", "alt+backspace", "ctrl+u":
 		m.helpQuery, m.helpScroll = "", 0
 	default:
-		if k.Type == tea.KeyRunes || k.Type == tea.KeySpace {
-			m.helpQuery, m.helpScroll = m.helpQuery+string(k.Runes), 0
+		if k.Text != "" {
+			m.helpQuery, m.helpScroll = m.helpQuery+k.Text, 0
 		}
 	}
 	return nil
@@ -2548,12 +2542,12 @@ func (m *model) helpView(h int) string {
 	for i, l := range visible {
 		visible[i] = truncate(l, w)
 	}
-	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(cAccent).Padding(1, 2).Width(w + 6).
+	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(cAccent).Padding(1, 2).Width(w + 8).
 		Render(sTitle.Render(title) + "\n" + search + "\n\n" + strings.Join(visible, "\n"))
 }
 
 // listKeys moves a selection with the usual keys and reports whether the key was one of them.
-func listKeys(k tea.KeyMsg, sel *int, n int) bool {
+func listKeys(k tea.KeyPressMsg, sel *int, n int) bool {
 	switch k.String() {
 	case "up", "k":
 		*sel = max(0, *sel-1)
@@ -2614,5 +2608,5 @@ func (m *model) promptPopup() string {
 	if p.described != "" && p.describedFor == p.input.Value() {
 		content += "\n\n" + panel("✦ ai suggests", ansi.Wrap(p.described, w-6, " ,")+sDim.Render("  (tab takes it)"), w-2, 5, false)
 	}
-	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(cAccent).Padding(0, 1).Width(w).Render(content)
+	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(cAccent).Padding(0, 1).Width(w + 2).Render(content)
 }

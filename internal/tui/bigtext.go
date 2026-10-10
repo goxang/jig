@@ -1,9 +1,10 @@
 package tui
 
 import (
+	"image/color"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 // a three-row digit font for stat tiles, Grafana's "big value" in a terminal
@@ -26,7 +27,7 @@ var glyphs = map[rune][3]string{
 }
 
 // big renders s in the tile font; characters without a glyph sit small on the baseline.
-func big(s string, color lipgloss.TerminalColor) string {
+func big(s string, color color.Color) string {
 	var rows [3]strings.Builder
 	for _, r := range s {
 		g, ok := glyphs[r]
@@ -42,7 +43,7 @@ func big(s string, color lipgloss.TerminalColor) string {
 }
 
 // tile is a stat panel: title, a big value, and a small line under it.
-func tile(title, value, sub string, color lipgloss.TerminalColor, w int) string {
+func tile(title, value, sub string, color color.Color, w int) string {
 	body := big(value, color)
 	if lipgloss.Width(body) > w-4 {
 		body = "\n" + lipgloss.NewStyle().Foreground(color).Bold(true).Render(value) + "\n"

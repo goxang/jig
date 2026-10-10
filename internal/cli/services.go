@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
@@ -415,7 +415,7 @@ func serviceColor(name string) func(...string) string {
 	if h < 0 {
 		h = -h
 	}
-	return out.NewStyle().Foreground(lipgloss.Color(palette[h%len(palette)])).Render
+	return paint(lipgloss.NewStyle().Foreground(lipgloss.Color(palette[h%len(palette)])))
 }
 
 func parallelNames(names []string, f func(string) error) error {

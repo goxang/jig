@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/goxang/jig/core"
 	"github.com/goxang/jig/engine"
@@ -480,7 +480,7 @@ func (t *kvTab) update(m *model, msg tea.Msg) tea.Cmd {
 			return nil
 		}
 		return t.saveIn(m, msg.comp, msg.key, raw)
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		if t.inTree {
 			return t.treeKey(m, msg)
 		}
@@ -715,7 +715,7 @@ func (t *kvTab) setTree() {
 	t.tree, t.treeFor = tree, t.valueFor
 }
 
-func (t *kvTab) treeKey(m *model, k tea.KeyMsg) tea.Cmd {
+func (t *kvTab) treeKey(m *model, k tea.KeyPressMsg) tea.Cmd {
 	n := t.tree.current()
 	switch k.String() {
 	case "s":

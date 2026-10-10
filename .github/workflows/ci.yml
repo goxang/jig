@@ -25,7 +25,7 @@ jobs:
           go-version-file: go.mod
       - run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
       - run: go vet ./...
-      - run: go run honnef.co/go/tools/cmd/staticcheck@2025.1.1 ./...
+      - run: go run honnef.co/go/tools/cmd/staticcheck@v0.8.1 ./...
       - run: shellcheck install.sh
 
   test:
@@ -41,20 +41,6 @@ jobs:
           go-version-file: go.mod
       - run: go test -race -count=1 ./...
 
-  test-windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-      # failures as annotations too: they read without a login, unlike the log
-      - shell: bash
-        run: |
-          set +e
-          go test -count=1 ./... 2>&1 | tee out.txt; rc=${PIPESTATUS[0]}
-          grep -aiE 'fail|panic|error|undefined|cannot|_test\.go:[0-9]+' out.txt | grep -av '^ok' | head -40 | while IFS= read -r l; do echo "::error::${l//$'\r'/}"; done
-          exit "$rc"
 
   version:
     runs-on: ubuntu-latest
@@ -90,7 +76,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        target: [linux/amd64, linux/arm64, darwin/amd64, darwin/arm64, windows/amd64]
+        target: [linux/amd64, linux/arm64, darwin/amd64, darwin/arm64]
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
@@ -111,16 +97,11 @@ jobs:
           TAG: ${{ needs.version.outputs.tag }}
         run: |
           os=${TARGET%/*} arch=${TARGET#*/} bin=jig
-          [ "$os" = windows ] && bin=jig.exe
           dir=$(mktemp -d)
           GOOS=$os GOARCH=$arch CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$TAG" -o "$dir/$bin" ./cmd/jig
           cp README.md "$dir/"
           mkdir -p dist
-          if [ "$os" = windows ]; then
-            (cd "$dir" && zip -q "$OLDPWD/dist/jig_${os}_${arch}.zip" "$bin" README.md)
-          else
-            tar -C "$dir" -czf "dist/jig_${os}_${arch}.tar.gz" "$bin" README.md
-          fi
+          tar -C "$dir" -czf "dist/jig_${os}_${arch}.tar.gz" "$bin" README.md
           echo "ASSET=jig_${os}_${arch}" >> "$GITHUB_ENV"
       - if: needs.version.outputs.skip != '1'
         uses: actions/upload-artifact@v4
@@ -130,7 +111,7 @@ jobs:
           retention-days: 1
 
   release:
-    needs: [version, lint, test, test-windows, build]
+    needs: [version, lint, test, build]
     if: github.event_name == 'push' && needs.version.outputs.skip != '1'
     runs-on: ubuntu-latest
     permissions:

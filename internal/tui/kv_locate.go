@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 // kvSourceFiles are the files a kv component names in files: (globs from the project directory):

@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"image/color"
 	"math"
 	"net"
 	"path"
@@ -15,8 +16,8 @@ import (
 	"sync"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/goxang/jig/core"
 	"github.com/goxang/jig/engine"
@@ -328,16 +329,6 @@ func (t *metricsTab) switchDash(m *model, i int) tea.Cmd {
 	return t.reload(m)
 }
 
-// showDash shows the dashboard called name.
-func (t *metricsTab) showDash(m *model, name string) tea.Cmd {
-	t.init()
-	if i := slices.Index(t.dashNames(m), name); i >= 0 {
-		return t.switchDash(m, i)
-	}
-	m.setStatus("no dashboard "+name, true)
-	return nil
-}
-
 // jump shows the first dashboard with a $service variable, set to service: the Services screen's g.
 func (t *metricsTab) jump(m *model, service string) tea.Cmd {
 	t.init()
@@ -410,7 +401,7 @@ func (t *metricsTab) update(m *model, msg tea.Msg) tea.Cmd {
 		if msg.gen == m.gen && msg.dash == t.dashName(m) {
 			t.data = msg.data
 		}
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		if t.zoom {
 			return t.viewKey(m, msg)
 		}
@@ -419,7 +410,7 @@ func (t *metricsTab) update(m *model, msg tea.Msg) tea.Cmd {
 	return nil
 }
 
-func (t *metricsTab) gridKey(m *model, k tea.KeyMsg) tea.Cmd {
+func (t *metricsTab) gridKey(m *model, k tea.KeyPressMsg) tea.Cmd {
 	_, ps := t.items(m)
 	switch k.String() {
 	case "left", "h":
@@ -815,7 +806,7 @@ func value(l viz.Line, at time.Time, ok bool) float64 {
 	return viz.LineStats(l).Last
 }
 
-func thresholdColor(p spec.Panel, v float64, def lipgloss.Color) lipgloss.Color {
+func thresholdColor(p spec.Panel, v float64, def color.Color) color.Color {
 	switch {
 	case p.Crit != nil && v >= *p.Crit:
 		return lipgloss.Color(theme.Red)
@@ -857,7 +848,7 @@ func (t *metricsTab) click(m *model, h hit) tea.Cmd {
 	case id == "mcopy":
 		t.copyQuery(m)
 	case id == "mfilter":
-		return t.viewKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
+		return t.viewKey(m, keyOf("/"))
 	case id == "mpod":
 		return t.openPod(m)
 	case strings.HasPrefix(id, "mvar:"):
@@ -926,9 +917,9 @@ func (t *metricsTab) wheel(m *model, z hit, up bool) (tea.Cmd, bool) {
 		return t.reload(m), true
 	}
 	if t.zoom {
-		k := tea.KeyMsg{Type: tea.KeyDown}
+		k := tea.KeyPressMsg{Code: tea.KeyDown}
 		if up {
-			k = tea.KeyMsg{Type: tea.KeyUp}
+			k = tea.KeyPressMsg{Code: tea.KeyUp}
 		}
 		t.legend.key(k)
 		t.hl = true
@@ -994,7 +985,7 @@ func (t *metricsTab) keepFocusVisible() {
 
 // ---- view mode ----
 
-func (t *metricsTab) viewKey(m *model, k tea.KeyMsg) tea.Cmd {
+func (t *metricsTab) viewKey(m *model, k tea.KeyPressMsg) tea.Cmd {
 	_, ps := t.items(m)
 	if t.focus >= len(ps) {
 		t.zoom = false
@@ -1022,7 +1013,7 @@ func (t *metricsTab) viewKey(m *model, k tea.KeyMsg) tea.Cmd {
 		}
 	case "v", "z":
 		t.zoom = false
-	case " ":
+	case "space":
 		if n, ok := sel(); ok {
 			st.hidden[n] = !st.hidden[n]
 		}
@@ -1105,7 +1096,7 @@ func (t *metricsTab) header(m *model, w int) string {
 	if t.source != "" {
 		src = sDim.Render(" from ") + sAccent.Render(t.source)
 	}
-	line1 := sAccent.Render(" ☰ ") + truncate(m.strip("mdash", 3, 0, names, t.dashIndex(m)), max(0, w-rw-3-lipgloss.Width(src))) + src
+	line1 := sAccent.Render(" ≡ ") + truncate(m.strip("mdash", 3, 0, names, t.dashIndex(m)), max(0, w-rw-3-lipgloss.Width(src))) + src
 	line1 += strings.Repeat(" ", max(0, w-lipgloss.Width(line1)-rw)) + right
 
 	line1 += "\n" + m.stripRule(3, w)
@@ -1544,7 +1535,7 @@ func tableBody(p spec.Panel, ls []viz.Line, hidden map[int]bool, at time.Time, h
 			break
 		}
 		val := padLeft(viz.Human(r.v, p.Unit), 10)
-		if c := thresholdColor(p, r.v, ""); c != "" {
+		if c := thresholdColor(p, r.v, nil); c != nil {
 			val = lipgloss.NewStyle().Foreground(c).Render(val)
 		}
 		b.WriteString("\n" + padRight(r.name, nw) + val + padLeft(viz.Human(r.s.Min, p.Unit), 10) + padLeft(viz.Human(r.s.Max, p.Unit), 10) + padLeft(viz.Human(r.s.Mean, p.Unit), 10))

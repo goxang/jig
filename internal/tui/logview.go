@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/goxang/jig/core"
@@ -75,7 +75,7 @@ func (v *logView) clearSel() { v.selecting, v.dragged = false, false }
 
 // key handles the log's own keys; vertical says whether ↑↓ and the page keys are the log's (on a
 // service page they move the instance list, and the shifted ones scroll the log).
-func (v *logView) key(m *model, k tea.KeyMsg, vertical bool) bool {
+func (v *logView) key(m *model, k tea.KeyPressMsg, vertical bool) bool {
 	s := k.String()
 	if !vertical {
 		switch s {

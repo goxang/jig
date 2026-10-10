@@ -3,7 +3,7 @@ package viz
 import (
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 type Rel struct {
@@ -14,8 +14,8 @@ type Rel struct {
 
 var (
 	boxStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#5794F2")).Bold(true)
-	arrow     = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#6E6E6E", Dark: "#7A7A7A"})
-	nodeStyle = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#222222", Dark: "#E0E0E0"})
+	arrow     = lipgloss.NewStyle().Foreground(Adaptive{Light: "#6E6E6E", Dark: "#7A7A7A"})
+	nodeStyle = lipgloss.NewStyle().Foreground(Adaptive{Light: "#222222", Dark: "#E0E0E0"})
 	missing   = lipgloss.NewStyle().Foreground(lipgloss.Color("#F2495C"))
 	kindStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#B877D9"))
 )

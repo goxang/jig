@@ -8,9 +8,10 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/goxang/jig/internal/viz"
 	"github.com/goxang/jig/manifest"
@@ -200,8 +201,8 @@ func (t *manifestsTab) typing() bool { return t.filtering }
 
 // filterKey takes a key while the list filters as typed: enter keeps the filter, esc drops it,
 // arrows still move. It reports whether it used the key.
-func (t *manifestsTab) filterKey(k tea.KeyMsg) bool {
-	switch k.Type {
+func (t *manifestsTab) filterKey(k tea.KeyPressMsg) bool {
+	switch k.Code {
 	case tea.KeyEnter:
 		t.filtering = false
 	case tea.KeyEsc:
@@ -212,10 +213,11 @@ func (t *manifestsTab) filterKey(k tea.KeyMsg) bool {
 		} else {
 			t.filtering = false
 		}
-	case tea.KeyRunes, tea.KeySpace:
-		t.filter, t.sel, t.offset = t.filter+string(k.Runes), 0, 0
 	default:
-		return false
+		if k.Text == "" {
+			return false
+		}
+		t.filter, t.sel, t.offset = t.filter+k.Text, 0, 0
 	}
 	return true
 }
@@ -460,7 +462,7 @@ func (t *manifestsTab) update(m *model, msg tea.Msg) tea.Cmd {
 			t.live = msg.set
 			t.show()
 		}
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		if t.issues != "" {
 			if s := msg.String(); s == "esc" || s == "i" || s == "I" || s == "left" {
 				t.issues = ""
@@ -538,7 +540,7 @@ func (t *manifestsTab) update(m *model, msg tea.Msg) tea.Cmd {
 			case t.tree && t.cwd != "" && t.cwd != filepath.Dir(t.cwd):
 				t.cwd, t.sel, t.offset = filepath.Dir(t.cwd), 0, 0
 			}
-		case " ":
+		case "space":
 			if e, ok := t.current(); ok && e.dir == "" {
 				t.marked[e.id()] = !t.marked[e.id()]
 				if !t.marked[e.id()] {
@@ -601,8 +603,8 @@ func (t *manifestsTab) update(m *model, msg tea.Msg) tea.Cmd {
 			m.setStatus("looking for manifest folders…", false)
 			return func() tea.Msg { return manifestFoldersMsg{root: root, folders: manifest.Folders(root)} }
 		default:
-			if msg.Type == tea.KeyRunes && !msg.Alt && len(msg.Runes) == 1 {
-				t.filtering, t.filter, t.sel, t.offset = true, string(msg.Runes), 0, 0
+			if utf8.RuneCountInString(msg.Text) == 1 && msg.Mod&tea.ModAlt == 0 {
+				t.filtering, t.filter, t.sel, t.offset = true, msg.Text, 0, 0
 			}
 		}
 	}
@@ -738,7 +740,7 @@ func (t *manifestsTab) view(m *model, w, h int) string {
 func (t *manifestsTab) mode(m *model, i int) tea.Cmd {
 	var cmd tea.Cmd
 	if (i == 0) != t.cluster {
-		cmd = t.update(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
+		cmd = t.update(m, keyOf(string('c')))
 	}
 	if i > 0 && (i == 2) != t.tree {
 		t.tree, t.sel, t.offset, t.file = i == 2, 0, 0, ""
@@ -771,7 +773,7 @@ func (t *manifestsTab) click(m *model, h hit) tea.Cmd {
 		if i := t.offset + h.y; i < len(t.entries()) {
 			t.sel = i
 			if h.double {
-				return t.update(m, tea.KeyMsg{Type: tea.KeyEnter})
+				return t.update(m, tea.KeyPressMsg{Code: tea.KeyEnter})
 			}
 		}
 	}
@@ -965,7 +967,7 @@ func rels(es []manifest.Edge, incoming bool) []viz.Rel {
 	return out
 }
 
-var kindColors = map[string]lipgloss.Color{
+var kindColors = map[string]string{
 	"Deployment": "#5794F2", "StatefulSet": "#5794F2", "DaemonSet": "#5794F2", "Job": "#8AB8FF", "CronJob": "#8AB8FF",
 	"Service": "#73BF69", "Ingress": "#96D98D", "ConfigMap": "#F2CC0C", "Secret": "#FF780A",
 	"HorizontalPodAutoscaler": "#B877D9", "PersistentVolumeClaim": "#FFB357",
@@ -980,7 +982,7 @@ func kindColor(k string) string {
 	if !ok {
 		return sDim.Render(short)
 	}
-	return lipgloss.NewStyle().Foreground(c).Render(short)
+	return lipgloss.NewStyle().Foreground(lipgloss.Color(c)).Render(short)
 }
 
 // colorYAML tints keys so a manifest reads at a glance.

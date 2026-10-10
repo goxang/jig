@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/goxang/jig/engine"
@@ -64,7 +64,7 @@ func (b *envBox) shown() []int {
 }
 
 // key handles a key of the open box; done says it closes.
-func (b *envBox) key(k tea.KeyMsg) (edit, done bool) {
+func (b *envBox) key(k tea.KeyPressMsg) (edit, done bool) {
 	shown := b.shown()
 	pos := max(0, slices.Index(shown, b.sel))
 	move := func(d int) {
@@ -73,10 +73,10 @@ func (b *envBox) key(k tea.KeyMsg) (edit, done bool) {
 		}
 	}
 	if b.typing {
-		switch k.Type {
+		switch k.Code {
 		case tea.KeyEnter, tea.KeyDown, tea.KeyUp:
 			b.typing = false
-			if k.Type != tea.KeyEnter {
+			if k.Code != tea.KeyEnter {
 				return b.key(k)
 			}
 		case tea.KeyEsc:
@@ -85,8 +85,8 @@ func (b *envBox) key(k tea.KeyMsg) (edit, done bool) {
 			if r := []rune(b.filter); len(r) > 0 {
 				b.filter = string(r[:len(r)-1])
 			}
-		case tea.KeyRunes, tea.KeySpace:
-			b.filter += string(k.Runes)
+		default:
+			b.filter += k.Text
 		}
 		if s := b.shown(); len(s) > 0 && !slices.Contains(s, b.sel) {
 			b.sel = s[0]
@@ -163,7 +163,7 @@ func (b *envBox) view(h int) string {
 	case b.filter != "":
 		title += sDim.Render("  search ") + sAmber.Render(b.filter) + sDim.Render(" (esc clears)")
 	}
-	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(cAccent).Padding(1, 2).Width(w + 6).
+	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(cAccent).Padding(1, 2).Width(w + 8).
 		Render(title + "\n" + strings.TrimRight(body.String(), "\n") + "\n\n" + sDim.Render(footer))
 }
 

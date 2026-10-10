@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/goxang/jig/ai"
 	"github.com/goxang/jig/core"
 )
@@ -34,11 +34,11 @@ func TestDataEscapeFromQuery(t *testing.T) {
 	d.query, d.queryAt = "select 1", []string{"x"}
 	m := &model{ctx: context.Background(), ai: &ai.Runner{}}
 
-	d.key(m, tea.KeyMsg{Type: tea.KeyEsc})
+	d.key(m, tea.KeyPressMsg{Code: tea.KeyEsc})
 	if m.prompt == nil || m.prompt.input.Value() != "select 1" {
 		t.Fatalf("esc on a query result should reopen the popup with the query, got %+v", m.prompt)
 	}
-	m.key(tea.KeyMsg{Type: tea.KeyEsc})
+	m.key(tea.KeyPressMsg{Code: tea.KeyEsc})
 	if m.prompt != nil || d.query != "" {
 		t.Fatalf("a second esc should leave the query, prompt %v query %q", m.prompt, d.query)
 	}
@@ -48,7 +48,7 @@ func TestCtrlCStopsWorkBeforeQuitting(t *testing.T) {
 	m := &model{ctx: context.Background()}
 	ctx := m.work()
 	m.busy = 1
-	if cmd := m.key(tea.KeyMsg{Type: tea.KeyCtrlC}); cmd != nil {
+	if cmd := m.key(keyOf("ctrl+c")); cmd != nil {
 		t.Fatal("ctrl+c with work in flight should stop it, not quit")
 	}
 	if ctx.Err() == nil || m.busy != 0 {

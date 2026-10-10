@@ -6,7 +6,8 @@ description: Change jig itself (github.com/goxang/jig): add or fix an adapter, a
 # Working on jig
 
 Map: `docs/design.md` (packages, component kinds, optional interfaces). Rules: `AGENTS.md`.
-Build and test with `GOTOOLCHAIN=local` (Go 1.23, deps pinned to the last 1.23 releases).
+Build and test with Go 1.26 and `GOTOOLCHAIN=local`. The UI is bubbletea, lipgloss and bubbles v2
+(`charm.land/...`); the full plan to 1.0 is `docs/plan.md`.
 
 ## Where a change goes
 
@@ -23,7 +24,9 @@ Build and test with `GOTOOLCHAIN=local` (Go 1.23, deps pinned to the last 1.23 r
 
 ## The UI's ground rules
 
-- Never `tea.Batch`: bubbletea 1.3.7 runs a batch inside its loop and freezes keys. Use `batch(...)`.
+- Never `tea.Batch`: bubbletea runs a batch inside its loop and freezes keys. Use `batch(...)`.
+- lipgloss v2 `Width`/`Height` include the border; widths come from `ansi.StringWidth` (Unicode 16, so
+  some symbols such as ☰ are 2 cells wide).
 - Slow work goes off the loop: a `tea.Cmd` returning a message; to continue on the loop with its
   result, return `thenMsg(func() tea.Cmd {...})`.
 - A change the user starts goes through `m.act(label, dangerous, f)` (asks where needed) or `m.do`:
@@ -48,13 +51,11 @@ section of `docs/config.md`.
 
 ## Portability
 
-- Every host process goes through `internal/sh`: `sh.New(...)` for tools, `sh.Shell()` for a POSIX
-  shell (Git for Windows' sh on Windows), `proc_unix.go` / `proc_windows.go` for syscalls. Never
-  `exec.Command("sh", ...)` on the host.
-- Paths written into jig.yaml use `/` (`filepath.ToSlash`); paths read from it go through `filepath`.
+- Linux and macOS only. Every host process goes through `internal/sh`: `sh.New(...)` for tools and
+  `sh`, `proc_unix.go` for syscalls. Never `exec.Command(...)` on the host.
 - Output that redraws (`\r`, spinners) only on a terminal (`term.IsTerminal`); plain lines on a pipe.
 - Terminals differ: VTE eats ctrl+shift+↑↓, some eat alt+arrows. Give a key a second binding.
-- CI builds five targets and tests on Linux, macOS and Windows; a Windows failure blocks the release.
+- CI builds four targets (linux, darwin × amd64, arm64) and tests on Linux and macOS.
 
 ## Test
 

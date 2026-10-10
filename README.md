@@ -40,8 +40,7 @@ it all from one CLI and one terminal UI.
 curl -fsSL https://raw.githubusercontent.com/goxang/jig/main/install.sh | sh
 ```
 
-Linux and macOS (amd64, arm64). Windows: the `.zip` on the [releases page](https://github.com/goxang/jig/releases).
-With Go 1.23+: `go install github.com/goxang/jig/cmd/jig@latest`.
+Linux and macOS (amd64, arm64). With Go 1.26+: `go install github.com/goxang/jig/cmd/jig@latest`.
 
 ## Start
 

@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/atotto/clipboard"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -141,7 +141,7 @@ func (m *model) chainBack(restore func() tea.Cmd) {
 	}
 }
 
-func (p *picker) key(m *model, k tea.KeyMsg) tea.Cmd {
+func (p *picker) key(m *model, k tea.KeyPressMsg) tea.Cmd {
 	vis := p.visible()
 	if p.showDetail {
 		switch k.String() {
@@ -193,7 +193,7 @@ func (p *picker) key(m *model, k tea.KeyMsg) tea.Cmd {
 		p.sel = max(0, p.sel-10)
 	case "pgdown":
 		p.sel = min(max(len(vis)-1, 0), p.sel+10)
-	case " ", "ctrl+@", "insert":
+	case "space", "ctrl+space", "insert":
 		// space marks in a multi picker until a filter is typed, then it types (words match apart)
 		if p.multi && (k.String() != " " || p.filter == "") {
 			if p.sel < len(vis) {
@@ -201,7 +201,7 @@ func (p *picker) key(m *model, k tea.KeyMsg) tea.Cmd {
 				p.marked[it] = !p.marked[it]
 				p.unmarked = p.unmarked || !p.marked[it]
 			}
-		} else if k.String() == " " {
+		} else if k.String() == "space" {
 			p.filter, p.sel = p.filter+" ", 0
 		}
 	case "ctrl+d":
@@ -247,8 +247,8 @@ func (p *picker) key(m *model, k tea.KeyMsg) tea.Cmd {
 			p.filter, p.sel = p.filter+strings.TrimSpace(v), 0
 		}
 	default:
-		if k.Type == tea.KeyRunes {
-			p.filter += string(k.Runes)
+		if k.Text != "" {
+			p.filter += k.Text
 			p.sel = 0
 		}
 	}

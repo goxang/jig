@@ -5,12 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"image/color"
 	"regexp"
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/goxang/jig/core"
 	"github.com/goxang/jig/engine"
@@ -239,21 +240,21 @@ func (t *logsTab) update(m *model, msg tea.Msg) tea.Cmd {
 			return nil
 		}
 		return next(t.id, msg.gen, msg.stream, t.ch)
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		return t.key(m, msg)
 	}
 	return nil
 }
 
 // key handles a key on the log; false (nil cmd) also when the key is not a log key, see handled.
-func (t *logsTab) key(m *model, msg tea.KeyMsg) tea.Cmd {
+func (t *logsTab) key(m *model, msg tea.KeyPressMsg) tea.Cmd {
 	cmd, _ := t.keyHandled(m, msg)
 	return cmd
 }
 
 // keyHandled is key, saying whether the key was the log's: a service page embedding the log
 // offers the rest to its own keys.
-func (t *logsTab) keyHandled(m *model, msg tea.KeyMsg) (tea.Cmd, bool) {
+func (t *logsTab) keyHandled(m *model, msg tea.KeyPressMsg) (tea.Cmd, bool) {
 	{
 		if t.inspect != nil && !t.inTree {
 			switch s := msg.String(); s {
@@ -428,7 +429,7 @@ func (t *logsTab) logPanel(m *model, title string, nameW int, re *regexp.Regexp,
 	return panel(title, body, w, h, focused)
 }
 
-func colorFor(name string) lipgloss.Color {
+func colorFor(name string) color.Color {
 	h := 0
 	for _, c := range name {
 		h = h*31 + int(c)

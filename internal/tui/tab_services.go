@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/goxang/jig/core"
 	"github.com/goxang/jig/engine"
@@ -199,7 +199,7 @@ func (t *servicesTab) update(m *model, msg tea.Msg) tea.Cmd {
 		if t.lt != nil {
 			return t.lt.update(m, msg)
 		}
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		if t.open_ != "" {
 			return t.detailKey(m, msg)
 		}
@@ -208,7 +208,7 @@ func (t *servicesTab) update(m *model, msg tea.Msg) tea.Cmd {
 	return nil
 }
 
-func (t *servicesTab) listKey(m *model, k tea.KeyMsg) tea.Cmd {
+func (t *servicesTab) listKey(m *model, k tea.KeyPressMsg) tea.Cmd {
 	if t.list.key(k) {
 		return nil
 	}
@@ -217,7 +217,7 @@ func (t *servicesTab) listKey(m *model, k tea.KeyMsg) tea.Cmd {
 		if r, ok := t.list.current(); ok {
 			return t.openService(m, r.id, "")
 		}
-	case " ":
+	case "space":
 		if r, ok := t.list.current(); ok {
 			t.marked[r.id] = !t.marked[r.id]
 		}
@@ -418,7 +418,7 @@ func (t *servicesTab) closeLogs() {
 	}
 }
 
-func (t *servicesTab) detailKey(m *model, k tea.KeyMsg) tea.Cmd {
+func (t *servicesTab) detailKey(m *model, k tea.KeyPressMsg) tea.Cmd {
 	if t.prof != nil && t.prof.svc == t.open_ {
 		if t.prof.grid.key(k) {
 			return nil
@@ -488,7 +488,7 @@ func (t *servicesTab) detailKey(m *model, k tea.KeyMsg) tea.Cmd {
 	case "a":
 		return t.ops(m, "h", []string{name})
 	case "S":
-		k = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")}
+		k = keyOf("s")
 		t.detail = ""
 	case "h":
 		t.detail = ""

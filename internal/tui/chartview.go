@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/goxang/jig/core"
 	"github.com/goxang/jig/internal/viz"
@@ -133,7 +133,7 @@ func (c *chartView) view(m *model, x, y, w, h int) string {
 }
 
 // key reports false for esc, which closes the view.
-func (c *chartView) key(m *model, k tea.KeyMsg) bool {
+func (c *chartView) key(m *model, k tea.KeyPressMsg) bool {
 	if c.legend.key(k) {
 		c.hl = true
 		return true
@@ -149,7 +149,7 @@ func (c *chartView) key(m *model, k tea.KeyMsg) bool {
 		default:
 			return false
 		}
-	case " ":
+	case "space":
 		if ok {
 			c.hidden[r.id] = !c.hidden[r.id]
 		}
@@ -284,9 +284,9 @@ func (c *chartView) wheel(h hit, up bool) bool {
 		c.win.zoomAround(f, up, c.from, c.to)
 		return true
 	}
-	k := tea.KeyMsg{Type: tea.KeyDown}
+	k := tea.KeyPressMsg{Code: tea.KeyDown}
 	if up {
-		k = tea.KeyMsg{Type: tea.KeyUp}
+		k = tea.KeyPressMsg{Code: tea.KeyUp}
 	}
 	c.legend.key(k)
 	c.hl = true

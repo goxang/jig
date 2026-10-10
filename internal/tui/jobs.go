@@ -13,9 +13,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/goxang/jig/internal/sh"
@@ -360,11 +360,11 @@ func (m *model) activityView(h int) string {
 	}
 	keys = append(keys, [2]string{"esc", "close"})
 	body := strings.Join(list, "\n") + "\n" + sDim.Render(strings.Repeat("─", w-6)) + "\n" + strings.Join(shown, "\n") + "\n\n" + keyHints(keys)
-	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(cAccent).Padding(0, 1).Width(w).
+	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(cAccent).Padding(0, 1).Width(w + 2).
 		Render(sTitle.Render("activity: what you started this session") + "\n\n" + body)
 }
 
-func (m *model) activityKey(k tea.KeyMsg) tea.Cmd {
+func (m *model) activityKey(k tea.KeyPressMsg) tea.Cmd {
 	js := m.jobList()
 	var j *job
 	if !m.actErrors && len(js) > 0 {

@@ -7,6 +7,7 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"strings"
@@ -25,9 +26,17 @@ var docRow = regexp.MustCompile("^\\| `([a-z_]+)` \\| (.+) \\|$")
 func schemaDescriptions(t *testing.T) func(typ, key string) string {
 	descs := map[string]string{}
 	fset := token.NewFileSet()
-	pkgs, err := parser.ParseDir(fset, ".", func(fi os.FileInfo) bool { return !strings.HasSuffix(fi.Name(), "_test.go") }, parser.ParseComments)
-	if err != nil {
-		t.Fatal(err)
+	names, _ := filepath.Glob("*.go")
+	var files []*ast.File
+	for _, n := range names {
+		if strings.HasSuffix(n, "_test.go") {
+			continue
+		}
+		f, err := parser.ParseFile(fset, n, nil, parser.ParseComments)
+		if err != nil {
+			t.Fatal(err)
+		}
+		files = append(files, f)
 	}
 	types := map[string]reflect.Type{}
 	var walk func(t reflect.Type)
@@ -44,7 +53,7 @@ func schemaDescriptions(t *testing.T) func(typ, key string) string {
 		}
 	}
 	walk(reflect.TypeOf(Project{}))
-	for _, f := range pkgs["spec"].Files {
+	for _, f := range files {
 		ast.Inspect(f, func(n ast.Node) bool {
 			ts, ok := n.(*ast.TypeSpec)
 			if !ok {

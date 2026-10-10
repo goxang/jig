@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/goxang/jig/core"
 
@@ -30,7 +30,7 @@ func TestZonesDoNotOverlap(t *testing.T) {
 				m.tabs[i].open(m)
 			}
 			m.active = i
-			m.View()
+			m.render()
 			for x, a := range m.zones {
 				for _, b := range m.zones[x+1:] {
 					if a.h != 1 || b.h != 1 || a.y != b.y || a.x+a.w <= b.x || b.x+b.w <= a.x {

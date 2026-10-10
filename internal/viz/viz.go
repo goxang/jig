@@ -4,30 +4,31 @@ package viz
 
 import (
 	"fmt"
+	"image/color"
 	"math"
 	"regexp"
 	"sort"
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 
 	"github.com/goxang/jig/core"
 )
 
 // Palette follows Grafana's classic series colours.
-var Palette = []lipgloss.Color{"#73BF69", "#F2CC0C", "#5794F2", "#FF780A", "#F2495C", "#B877D9", "#8AB8FF", "#FADE2A", "#96D98D", "#FFB357"}
+var Palette = []color.Color{lipgloss.Color("#73BF69"), lipgloss.Color("#F2CC0C"), lipgloss.Color("#5794F2"), lipgloss.Color("#FF780A"), lipgloss.Color("#F2495C"), lipgloss.Color("#B877D9"), lipgloss.Color("#8AB8FF"), lipgloss.Color("#FADE2A"), lipgloss.Color("#96D98D"), lipgloss.Color("#FFB357")}
 
 var (
-	axis  = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#8E8E8E", Dark: "#5C5C5C"})
-	label = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#555555", Dark: "#9A9A9A"})
+	axis  = lipgloss.NewStyle().Foreground(Adaptive{Light: "#8E8E8E", Dark: "#5C5C5C"})
+	label = lipgloss.NewStyle().Foreground(Adaptive{Light: "#555555", Dark: "#9A9A9A"})
 	faint = lipgloss.NewStyle().Faint(true)
 )
 
 type Line struct {
 	Name   string
 	Points []core.Point
-	Color  lipgloss.Color
+	Color  color.Color
 }
 
 // FromSeries names each series by its labels and gives it a palette colour.
@@ -247,8 +248,8 @@ func Plot(lines []Line, w, h int, o Opts) string {
 	if o.Cursor >= 0 {
 		cursorCol = int(math.Round(math.Min(o.Cursor, 1) * float64(cw-1)))
 	}
-	faded := lipgloss.AdaptiveColor{Light: "#C4C4C4", Dark: "#3A3F44"}
-	bandBg := lipgloss.AdaptiveColor{Light: "#D6E4FF", Dark: "#24395C"}
+	faded := Adaptive{Light: "#C4C4C4", Dark: "#3A3F44"}
+	bandBg := Adaptive{Light: "#D6E4FF", Dark: "#24395C"}
 	inBand := func(c int) bool {
 		if o.Band[1] <= o.Band[0] || cw <= 1 {
 			return false
@@ -406,7 +407,7 @@ func At(l Line, t time.Time) float64 {
 type Bar struct {
 	Name  string
 	Value float64
-	Color lipgloss.Color
+	Color color.Color
 }
 
 // BarGauge draws one horizontal bar per item, scaled to top (the largest value when 0), name on
@@ -445,8 +446,8 @@ func BarGauge(items []Bar, w int, unit string, top float64) string {
 	return b.String()
 }
 
-func colorOf(lines []Line, i int) lipgloss.Color {
-	if lines[i].Color != "" {
+func colorOf(lines []Line, i int) color.Color {
+	if lines[i].Color != nil {
 		return lines[i].Color
 	}
 	return Palette[i%len(Palette)]
@@ -631,7 +632,7 @@ func bytes(v float64) string {
 var blocks = []rune("▁▂▃▄▅▆▇█")
 
 // Sparkline compresses vals into w block characters (the most recent at the right).
-func Sparkline(vals []float64, w int, color lipgloss.Color) string {
+func Sparkline(vals []float64, w int, c color.Color) string {
 	if len(vals) > w {
 		vals = vals[len(vals)-w:]
 	}
@@ -651,19 +652,19 @@ func Sparkline(vals []float64, w int, color lipgloss.Color) string {
 		}
 		b.WriteRune(blocks[i])
 	}
-	return lipgloss.NewStyle().Foreground(color).Render(b.String())
+	return lipgloss.NewStyle().Foreground(c).Render(b.String())
 }
 
 // Gauge is a bar filled to frac (0..1), green → amber → red as it fills.
 func Gauge(frac float64, w int) string {
 	frac = math.Max(0, math.Min(1, frac))
 	full := int(math.Round(frac * float64(w)))
-	c := lipgloss.Color("#73BF69")
+	var c color.Color = lipgloss.Color("#73BF69")
 	switch {
 	case frac >= 0.85:
-		c = "#F2495C"
+		c = lipgloss.Color("#F2495C")
 	case frac >= 0.65:
-		c = "#FF9830"
+		c = lipgloss.Color("#FF9830")
 	}
 	return lipgloss.NewStyle().Foreground(c).Render(strings.Repeat("█", full)) + axis.Render(strings.Repeat("░", w-full))
 }
@@ -673,12 +674,12 @@ func Meter(frac float64, w int, label string) string {
 	frac = math.Max(0, math.Min(1, frac))
 	inner := max(1, w-2)
 	full := int(math.Round(frac * float64(inner)))
-	c := lipgloss.Color("#73BF69")
+	var c color.Color = lipgloss.Color("#73BF69")
 	switch {
 	case frac >= 0.9:
-		c = "#F2495C"
+		c = lipgloss.Color("#F2495C")
 	case frac >= 0.7:
-		c = "#FF9830"
+		c = lipgloss.Color("#FF9830")
 	}
 	if len(label) > inner {
 		label = ""
@@ -735,7 +736,7 @@ func Waterfalls(spans []core.Span, w int) WaterfallView {
 	if total <= 0 {
 		total = time.Microsecond
 	}
-	colors := map[string]lipgloss.Color{}
+	colors := map[string]color.Color{}
 	nameW := min(46, w/2)
 	barW := max(1, w-nameW-12)
 	out.Header = label.Render(fmt.Sprintf("%-*s %s %s", nameW, "span", strings.Repeat(" ", barW), "duration"))
@@ -772,4 +773,17 @@ func Waterfalls(spans []core.Span, w int) WaterfallView {
 	}
 	out.Footer = faint.Render(fmt.Sprintf("%d spans, %s, %d services", len(spans), total.Round(time.Microsecond), len(colors)))
 	return out
+}
+
+// Dark is whether the terminal's background is dark; the TUI sets it from the terminal's answer.
+var Dark = true
+
+// Adaptive is a colour with a shade for dark and one for light backgrounds, as hex.
+type Adaptive struct{ Light, Dark string }
+
+func (c Adaptive) RGBA() (r, g, b, a uint32) {
+	if Dark {
+		return lipgloss.Color(c.Dark).RGBA()
+	}
+	return lipgloss.Color(c.Light).RGBA()
 }

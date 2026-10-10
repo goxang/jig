@@ -4,11 +4,11 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/textarea"
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/textarea"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 // Terminals send ctrl+backspace as ctrl+h, so it deletes a word, as in an editor; backspace stays one character.
@@ -46,7 +46,7 @@ func (s textSel) span(pos int) (int, int, bool) {
 // editKey gives a textinput the editor keys it lacks: ctrl+a, shift+arrows and drags select;
 // ctrl+c copies (the selection, else everything), ctrl+x cuts; typing, pasting or deleting
 // replaces the selection. It reports whether the key is used up.
-func editKey(in *textinput.Model, s *textSel, k tea.KeyMsg) bool {
+func editKey(in *textinput.Model, s *textSel, k tea.KeyPressMsg) bool {
 	pos := in.Position()
 	val := []rune(in.Value())
 	a, b, has := s.span(pos)
@@ -105,15 +105,15 @@ func editKey(in *textinput.Model, s *textSel, k tea.KeyMsg) bool {
 		in.SetCursor(a)
 	}
 	switch {
-	case k.Type == tea.KeyBackspace || k.Type == tea.KeyDelete || k.Type == tea.KeyCtrlH:
+	case k.Code == tea.KeyBackspace || k.Code == tea.KeyDelete || k.String() == "ctrl+h":
 		cut()
 		return true
-	case k.Type == tea.KeyRunes || k.Type == tea.KeySpace || k.String() == "ctrl+v":
+	case k.Text != "" || k.String() == "ctrl+v":
 		cut()
-	case k.Type == tea.KeyLeft:
+	case k.Code == tea.KeyLeft:
 		in.SetCursor(a)
 		return true
-	case k.Type == tea.KeyRight:
+	case k.Code == tea.KeyRight:
 		in.SetCursor(b)
 		return true
 	}

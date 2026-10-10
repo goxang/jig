@@ -13,10 +13,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/textarea"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/textarea"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/goxang/jig/ai"
@@ -231,8 +231,8 @@ const chatInputHeight = 3
 func (m *model) chatOpen() *chat {
 	if m.chat == nil {
 		in := textarea.New()
-		in.SetPromptFunc(2, func(line int) string {
-			if line == 0 {
+		in.SetPromptFunc(2, func(p textarea.PromptInfo) string {
+			if p.LineNumber == 0 {
 				return "› "
 			}
 			return "  "
@@ -241,10 +241,12 @@ func (m *model) chatOpen() *chat {
 		in.Placeholder = chatPlaceholder
 		in.KeyMap.InsertNewline = key.NewBinding(key.WithKeys("alt+enter"))
 		editorTextarea(&in)
-		for _, st := range []*textarea.Style{&in.FocusedStyle, &in.BlurredStyle} {
-			st.Placeholder = lipgloss.NewStyle().Foreground(cPlaceholder)
-			st.CursorLine = lipgloss.NewStyle()
+		st := in.Styles()
+		for _, s := range []*textarea.StyleState{&st.Focused, &st.Blurred} {
+			s.Placeholder = lipgloss.NewStyle().Foreground(cPlaceholder)
+			s.CursorLine = lipgloss.NewStyle()
 		}
+		in.SetStyles(st)
 		in.SetHeight(chatInputHeight)
 		m.chat = &chat{input: in, convo: &convo{}}
 		m.chat.live = []*convo{m.chat.convo}
@@ -357,7 +359,7 @@ func (c *chat) recall(older bool) {
 	}
 }
 
-func (m *model) chatKey(k tea.KeyMsg) tea.Cmd {
+func (m *model) chatKey(k tea.KeyPressMsg) tea.Cmd {
 	c := m.chat
 	all := c.all
 	c.all = false
@@ -384,11 +386,11 @@ func (m *model) chatKey(k tea.KeyMsg) tea.Cmd {
 		return nil
 	}
 	if all {
-		switch k.Type {
-		case tea.KeyBackspace, tea.KeyDelete, tea.KeyCtrlH:
+		switch {
+		case k.Code == tea.KeyBackspace, k.Code == tea.KeyDelete, k.String() == "ctrl+h":
 			c.input.SetValue("")
 			return nil
-		case tea.KeyRunes, tea.KeySpace, tea.KeyCtrlV:
+		case k.Text != "", k.String() == "ctrl+v":
 			c.input.SetValue("")
 		}
 	}
@@ -1047,7 +1049,7 @@ func (m *model) uiState() string {
 	if chatOpen {
 		m.chat.open = false
 	}
-	b.WriteString("screen:\n" + ansi.Strip(m.View()))
+	b.WriteString("screen:\n" + ansi.Strip(m.render()))
 	if chatOpen {
 		m.chat.open = true
 	}
@@ -1081,20 +1083,47 @@ func (m *model) uiKeys(keys []string) (bool, string, tea.Cmd) {
 
 // keyOf reads a key the way bubbletea names it (enter, esc, ctrl+r, shift+tab, up, f5, space);
 // anything else is typed as text.
-func keyOf(s string) tea.KeyMsg {
-	if s == "space" {
-		return tea.KeyMsg{Type: tea.KeySpace, Runes: []rune{' '}}
+func keyOf(s string) tea.KeyPressMsg {
+	var k tea.KeyPressMsg
+	if s == "+" || !strings.Contains(s, "+") {
+		return named(k, s)
 	}
-	for t := tea.KeyType(-100); t < 128; t++ {
-		if t != tea.KeyRunes && t.String() == s {
-			return tea.KeyMsg{Type: t}
+	for {
+		mod, rest, ok := strings.Cut(s, "+")
+		m, known := map[string]tea.KeyMod{"ctrl": tea.ModCtrl, "alt": tea.ModAlt, "shift": tea.ModShift}[mod]
+		if !ok || !known || rest == "" {
+			break
 		}
+		k.Mod |= m
+		s = rest
 	}
-	alt, rest := false, s
-	if r, ok := strings.CutPrefix(s, "alt+"); ok && r != "" {
-		alt, rest = true, r
+	return named(k, s)
+}
+
+var keyNames = map[string]rune{"enter": tea.KeyEnter, "esc": tea.KeyEscape, "tab": tea.KeyTab, "backspace": tea.KeyBackspace,
+	"space": tea.KeySpace, "up": tea.KeyUp, "down": tea.KeyDown, "left": tea.KeyLeft, "right": tea.KeyRight, "home": tea.KeyHome,
+	"end": tea.KeyEnd, "pgup": tea.KeyPgUp, "pgdown": tea.KeyPgDown, "delete": tea.KeyDelete, "insert": tea.KeyInsert,
+	"f1": tea.KeyF1, "f2": tea.KeyF2, "f3": tea.KeyF3, "f4": tea.KeyF4, "f5": tea.KeyF5, "f6": tea.KeyF6, "f7": tea.KeyF7,
+	"f8": tea.KeyF8, "f9": tea.KeyF9, "f10": tea.KeyF10, "f11": tea.KeyF11, "f12": tea.KeyF12}
+
+// named fills in k for a key name or text; plain text (no ctrl or alt) also carries Text, as typing it would.
+func named(k tea.KeyPressMsg, s string) tea.KeyPressMsg {
+	if c, ok := keyNames[s]; ok {
+		k.Code = c
+		if c == tea.KeySpace && k.Mod == 0 {
+			k.Text = " "
+		}
+		return k
 	}
-	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(rest), Alt: alt}
+	if r := []rune(s); len(r) == 1 {
+		k.Code = r[0]
+	} else {
+		k.Code = tea.KeyExtended
+	}
+	if k.Mod&^tea.ModShift == 0 {
+		k.Text = s
+	}
+	return k
 }
 
 // uiPanels shows only the named panels of a dashboard (every panel when titles is empty).
@@ -1320,7 +1349,7 @@ func (c *chat) view(m *model, x, w, h int) string {
 	if c.focus {
 		border = cAccent
 	}
-	input = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(border).Padding(0, 1).Width(iw).Render(input)
+	input = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(border).Padding(0, 1).Width(iw + 2).Render(input)
 	if len(menuLines) > 0 {
 		body += "\n" + strings.Join(menuLines, "\n")
 	}

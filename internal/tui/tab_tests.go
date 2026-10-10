@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"image/color"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -12,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/goxang/jig/engine"
 )
@@ -170,13 +171,13 @@ func (t *testsTab) update(m *model, msg tea.Msg) tea.Cmd {
 		} else {
 			m.setStatus("tests "+r.Suite+": "+r.Summary(), r.Counts()[engine.TestFail] > 0)
 		}
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		return t.key(m, msg)
 	}
 	return nil
 }
 
-func (t *testsTab) key(m *model, k tea.KeyMsg) tea.Cmd {
+func (t *testsTab) key(m *model, k tea.KeyPressMsg) tea.Cmd {
 	if t.outFocus {
 		switch k.String() {
 		case "esc", "o", "left":
@@ -187,7 +188,7 @@ func (t *testsTab) key(m *model, k tea.KeyMsg) tea.Cmd {
 			t.scrollOut(1)
 		case "pgup":
 			t.scrollOut(-t.outH)
-		case "pgdown", " ":
+		case "pgdown", "space":
 			t.scrollOut(t.outH)
 		case "home", "g":
 			t.outOff, t.outFollow = 0, false
@@ -385,9 +386,9 @@ func (t *testsTab) toggle(m *model, opt string) tea.Cmd {
 		})
 		return nil
 	case "run":
-		return t.key(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("e")})
+		return t.key(m, keyOf("e"))
 	case "pkgs":
-		return t.key(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("p")})
+		return t.key(m, keyOf("p"))
 	}
 	t.setOptions(m, o)
 	return nil
@@ -516,7 +517,7 @@ func (t *testsTab) click(m *model, h hit) tea.Cmd {
 		return t.toggle(m, strings.TrimPrefix(h.id, "topt:"))
 	case strings.HasPrefix(h.id, "tbtn:"):
 		key := map[string]string{"suite": "l", "run": "r", "failed": "f", "this": ".", "stop": "x", "options": "O", "runs": "h", "report": "w"}[strings.TrimPrefix(h.id, "tbtn:")]
-		return t.key(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)})
+		return t.key(m, keyOf(key))
 	case h.id == "tout":
 		t.outFocus = true
 	case strings.HasPrefix(h.id, "tlist:"):
@@ -730,7 +731,7 @@ func (t *testsTab) toolbar(m *model, w int) string {
 		x += lipgloss.Width(s) + 2
 		b.WriteString(s + "  ")
 	}
-	button := func(id, text string, bg lipgloss.TerminalColor) {
+	button := func(id, text string, bg color.Color) {
 		add("tbtn:"+id, badge(bg).Padding(0, 1).Render(text))
 	}
 	plain := func(id, text string) {

@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 func TestPickerGroups(t *testing.T) {
@@ -18,13 +18,13 @@ func TestPickerGroups(t *testing.T) {
 		}
 		return
 	}
-	p.key(m, tea.KeyMsg{Type: tea.KeyTab})
+	p.key(m, tea.KeyPressMsg{Code: tea.KeyTab})
 	if got := names(); !slices.Equal(got, []string{"api", "web"}) {
 		t.Fatalf("core = %v", got)
 	}
-	p.key(m, tea.KeyMsg{Type: tea.KeyCtrlA})
-	p.key(m, tea.KeyMsg{Type: tea.KeyShiftTab})
-	p.key(m, tea.KeyMsg{Type: tea.KeyShiftTab})
+	p.key(m, keyOf("ctrl+a"))
+	p.key(m, keyOf("shift+tab"))
+	p.key(m, keyOf("shift+tab"))
 	if got := names(); !slices.Equal(got, []string{"db"}) || !p.marked["api"] || p.marked["db"] {
 		t.Fatalf("infra = %v, marked %v", got, p.marked)
 	}
@@ -38,8 +38,8 @@ func TestPickerAllUnmarked(t *testing.T) {
 	var got []string
 	called := false
 	m.pickMany("logs", []string{"api", "db"}, nil, []string{"api"}, func(c []string) tea.Cmd { got, called = c, true; return nil })
-	m.picker.key(m, tea.KeyMsg{Type: tea.KeySpace, Runes: []rune{' '}})
-	m.picker.key(m, tea.KeyMsg{Type: tea.KeyEnter})
+	m.picker.key(m, keyOf("space"))
+	m.picker.key(m, tea.KeyPressMsg{Code: tea.KeyEnter})
 	if !called || len(got) != 0 {
 		t.Fatalf("unmarking every item then enter chose %v", got)
 	}

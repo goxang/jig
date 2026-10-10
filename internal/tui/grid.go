@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 // grid is a sortable, scrollable, clickable table, htop style: ctrl+alt+←→ pick the sort column, ctrl+alt+↑↓ (or alt+↑↓) order it,
@@ -181,7 +181,7 @@ func (g *grid) sortOn(c int) {
 }
 
 // key handles movement and sorting keys; false when the key is not one of them.
-func (g *grid) key(k tea.KeyMsg) bool {
+func (g *grid) key(k tea.KeyPressMsg) bool {
 	if listKeys(k, &g.sel, len(g.rows)) {
 		return true
 	}

@@ -3,14 +3,15 @@ package tui
 import (
 	"context"
 	"fmt"
+	"image/color"
 	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/goxang/jig/core"
 	"github.com/goxang/jig/engine"
@@ -165,7 +166,7 @@ func (t *loadTab) update(m *model, msg tea.Msg) tea.Cmd {
 		}
 		m.setStatus("rate is read every 5s; other fields need a restart of the generator (b)", false)
 		return editKV(m, msg.comp, msg.key, msg.value)
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		if t.full != nil {
 			if msg.String() == "n" {
 				t.openChart(m, t.fullIdx+1)
@@ -404,7 +405,7 @@ func (t *loadTab) allView(m *model, n string, st core.LoadStatus, rw, h int) str
 	if st.Sent > 0 {
 		failPct = float64(st.Failed) / float64(st.Sent) * 100
 	}
-	state, stateColor := "IDLE", lipgloss.TerminalColor(cDim)
+	state, stateColor := "IDLE", color.Color(cDim)
 	if st.Running {
 		state, stateColor = "RUNNING", cGreen
 	}
@@ -611,7 +612,7 @@ func (t *loadTab) click(m *model, h hit) tea.Cmd {
 	return nil
 }
 
-func failColor(pct float64) lipgloss.TerminalColor {
+func failColor(pct float64) color.Color {
 	switch {
 	case pct >= 5:
 		return cRed

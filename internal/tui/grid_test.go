@@ -4,9 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/termenv"
+	tea "charm.land/bubbletea/v2"
 )
 
 func TestPrintable(t *testing.T) {
@@ -31,11 +29,9 @@ func TestNameFilter(t *testing.T) {
 }
 
 func TestHighlightKeepsCellColours(t *testing.T) {
-	lipgloss.SetColorProfile(termenv.TrueColor)
-	defer lipgloss.SetColorProfile(termenv.Ascii)
 	open, _, _ := strings.Cut(sHover.Render("\x00"), "\x00")
 	got := highlight(sHover, sGreen.Render("ok")+" x", 6)
-	if !strings.HasPrefix(got, open) || !strings.Contains(got, "\x1b[0m"+open+" x  ") {
+	if !strings.HasPrefix(got, open) || !strings.Contains(got, "\x1b[m"+open+" x  ") {
 		t.Fatalf("%q", got)
 	}
 	if stripANSI(got) != "ok x" {
@@ -45,11 +41,11 @@ func TestHighlightKeepsCellColours(t *testing.T) {
 
 func TestGridAltArrowsOrder(t *testing.T) {
 	g := newGrid("t", gcol{title: "n"})
-	g.key(tea.KeyMsg{Type: tea.KeyDown, Alt: true})
+	g.key(tea.KeyPressMsg{Code: tea.KeyDown, Mod: tea.ModAlt})
 	if !g.desc {
 		t.Error("alt+down did not sort descending")
 	}
-	g.key(tea.KeyMsg{Type: tea.KeyUp, Alt: true})
+	g.key(tea.KeyPressMsg{Code: tea.KeyUp, Mod: tea.ModAlt})
 	if g.desc {
 		t.Error("alt+up did not sort ascending")
 	}

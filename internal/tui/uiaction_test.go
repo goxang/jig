@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/goxang/jig/engine"
 )
@@ -39,13 +39,13 @@ func TestUIWalk(t *testing.T) {
 		t.Fatalf("O kept %d panels", len(ps))
 	}
 
-	if k := keyOf("ctrl+r"); k.Type != tea.KeyCtrlR {
+	if k := keyOf("ctrl+r"); k.String() != "ctrl+r" {
 		t.Fatalf("ctrl+r is %v", k)
 	}
-	if k := keyOf("api"); k.Type != tea.KeyRunes || string(k.Runes) != "api" {
+	if k := keyOf("api"); k.Text != "api" {
 		t.Fatalf("text is %v", k)
 	}
-	if k := keyOf("enter"); k.Type != tea.KeyEnter {
+	if k := keyOf("enter"); k.Code != tea.KeyEnter {
 		t.Fatalf("enter is %v", k)
 	}
 }

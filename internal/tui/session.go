@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/goxang/jig/core"
 	"github.com/goxang/jig/engine"
@@ -376,7 +376,7 @@ type sessionPicker struct {
 func (p *sessionPicker) Init() tea.Cmd { return nil }
 
 func (p *sessionPicker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	k, ok := msg.(tea.KeyMsg)
+	k, ok := msg.(tea.KeyPressMsg)
 	if !ok {
 		return p, nil
 	}
@@ -406,7 +406,9 @@ func (p *sessionPicker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return p, nil
 }
 
-func (p *sessionPicker) View() string {
+func (p *sessionPicker) View() tea.View { return tea.NewView(p.render()) }
+
+func (p *sessionPicker) render() string {
 	var b strings.Builder
 	b.WriteString(sTitle.Render("continue a session") + sDim.Render("  ↑↓ move · enter continue · d close · q quit") + "\n\n")
 	if len(p.idx) == 0 {

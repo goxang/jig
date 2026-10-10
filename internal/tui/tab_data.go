@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/goxang/jig/ai"
 	"github.com/goxang/jig/core"
@@ -546,7 +546,7 @@ func (t *dataTab) update(m *model, msg tea.Msg) tea.Cmd {
 		}
 		t.loading, t.table, t.leaf, t.err = false, msg.t, msg.leaf, msg.err
 		t.fill()
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		return t.key(m, msg)
 	}
 	return nil
@@ -657,7 +657,7 @@ func (t *dataTab) remember(c dataComp) {
 	t.picked[t.place(c)] = child
 }
 
-func (t *dataTab) key(m *model, k tea.KeyMsg) tea.Cmd {
+func (t *dataTab) key(m *model, k tea.KeyPressMsg) tea.Cmd {
 	c := t.current()
 	if t.focus == 0 {
 		if t.left.key(k) {
@@ -794,7 +794,7 @@ func (t *dataTab) key(m *model, k tea.KeyMsg) tea.Cmd {
 		}
 		copyText(tsv(tbl.Columns, rows))
 		m.setStatus(fmt.Sprintf("copied %d rows (tab-separated, with the header)", len(rows)), false)
-	case " ":
+	case "space":
 		if r, ok := t.right.current(); ok && t.editable(c) {
 			if t.marked == nil {
 				t.marked = map[string]bool{}
@@ -819,7 +819,7 @@ func (t *dataTab) key(m *model, k tea.KeyMsg) tea.Cmd {
 
 // queueKey handles the messaging keys: the strip of lists, and on the queue list details, peek,
 // marks, purge, delete and publish.
-func (t *dataTab) queueKey(m *model, k tea.KeyMsg) (tea.Cmd, bool) {
+func (t *dataTab) queueKey(m *model, k tea.KeyPressMsg) (tea.Cmd, bool) {
 	switch k.String() {
 	case "[", "]", "shift+left", "shift+right":
 		if t.current().adapter != "rabbitmq" {
@@ -846,7 +846,7 @@ func (t *dataTab) queueKey(m *model, k tea.KeyMsg) (tea.Cmd, bool) {
 		if ok {
 			return t.loadDetail(m, r.id, "messages"), true
 		}
-	case " ":
+	case "space":
 		if ok {
 			if t.qmarked == nil {
 				t.qmarked = map[string]bool{}
@@ -913,7 +913,7 @@ func (t *dataTab) switchView(m *model) tea.Cmd {
 	return t.loadView(m)
 }
 
-func (t *dataTab) detailKey(m *model, k tea.KeyMsg) tea.Cmd {
+func (t *dataTab) detailKey(m *model, k tea.KeyPressMsg) tea.Cmd {
 	if t.payload != nil {
 		switch k.String() {
 		case "esc", "q":
@@ -1039,7 +1039,7 @@ func (t *dataTab) click(m *model, h hit) tea.Cmd {
 	if t.detail != nil && strings.HasPrefix(h.id, "dqd:") {
 		t.focus = 2
 		if t.detail.click(h) && h.double {
-			return t.detailKey(m, tea.KeyMsg{Type: tea.KeyEnter})
+			return t.detailKey(m, tea.KeyPressMsg{Code: tea.KeyEnter})
 		}
 		return nil
 	}
@@ -1055,10 +1055,10 @@ func (t *dataTab) click(m *model, h hit) tea.Cmd {
 	}
 	t.focus = 1
 	if h.id == "data:back" {
-		return t.key(m, tea.KeyMsg{Type: tea.KeyEsc})
+		return t.key(m, tea.KeyPressMsg{Code: tea.KeyEsc})
 	}
 	if t.right.click(h) && h.double {
-		return t.key(m, tea.KeyMsg{Type: tea.KeyEnter})
+		return t.key(m, tea.KeyPressMsg{Code: tea.KeyEnter})
 	}
 	return nil
 }

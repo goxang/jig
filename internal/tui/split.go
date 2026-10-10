@@ -7,8 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 // splitGeo is a draggable border between two panes, in screen cells: the panes span total cells
@@ -57,7 +56,7 @@ func (m *model) borderAt(x, y int) string {
 }
 
 // splitDrag moves the border being dragged; the release saves every split for the next session.
-func (m *model) splitDrag(e tea.MouseMsg) {
+func (m *model) splitDrag(e mouseEvent) {
 	g := m.splitGeo[m.splitting]
 	pos := e.X
 	if g.down {
@@ -75,7 +74,7 @@ func (m *model) splitDrag(e tea.MouseMsg) {
 		m.splitFrac = map[string]float64{}
 	}
 	m.splitFrac[m.splitting] = float64(size) / float64(max(1, g.total))
-	if e.Action == tea.MouseActionRelease {
+	if e.Action == mouseRelease {
 		m.splitting = ""
 		saveSplits(m.splitFrac)
 	}

@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -266,7 +266,7 @@ func (t *jsonTree) anyClosed() bool {
 }
 
 // key moves and folds; it reports whether k was one of its keys.
-func (t *jsonTree) key(k tea.KeyMsg) bool {
+func (t *jsonTree) key(k tea.KeyPressMsg) bool {
 	if listKeys(k, &t.sel, len(t.rows)) {
 		return true
 	}
@@ -288,7 +288,7 @@ func (t *jsonTree) key(k tea.KeyMsg) bool {
 				}
 			}
 		}
-	case " ", "tab":
+	case "space", "tab":
 		if n.container() {
 			n.closed = !n.closed
 		}
