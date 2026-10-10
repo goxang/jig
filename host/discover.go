@@ -6,8 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-
-	"golang.org/x/mod/semver"
+	"strings"
 
 	"github.com/goxang/jig/kernel/config"
 	"github.com/goxang/jig/spec"
@@ -37,8 +36,8 @@ func StoreDir() string  { return filepath.Join(xdg("XDG_DATA_HOME", ".local/shar
 func StateDir() string  { return filepath.Join(xdg("XDG_STATE_HOME", ".local/state"), "jig") }
 func CacheDir() string  { return filepath.Join(xdg("XDG_CACHE_HOME", ".cache"), "jig") }
 
-// Discover finds the project's plugins. A later scope replaces an earlier one of the same name:
-// installed store, then user plugins, then project plugins (under workspace trust), then plugins.<name>.path.
+// Discover finds the project's plugins. A later scope replaces an earlier one of the same name: what
+// jig.lock pins, then user plugins, then project plugins (under workspace trust), then plugins.<name>.path.
 func Discover(dir string, cfg map[string]*spec.Plugin) (ms []*Manifest, warnings []string) {
 	found := map[string]*Manifest{}
 	add := func(d string) {
@@ -50,12 +49,42 @@ func Discover(dir string, cfg map[string]*spec.Plugin) (ms []*Manifest, warnings
 			return
 		}
 		warnings = append(warnings, m.Warnings...)
+		if !HostSupports(m.Jig) {
+			warnings = append(warnings, fmt.Sprintf("plugin %s needs jig %s; this is %s", m.Name, m.Jig, Version))
+			return
+		}
 		found[m.Name] = m
 	}
-	stored, _ := os.ReadDir(StoreDir())
-	for _, e := range stored {
-		if v := installed(e.Name(), cfg); v != "" {
-			add(filepath.Join(StoreDir(), e.Name(), v))
+	resolve := func(p string) string {
+		if rest, ok := strings.CutPrefix(p, "~/"); ok {
+			home, _ := os.UserHomeDir()
+			return filepath.Join(home, rest)
+		}
+		if !filepath.IsAbs(p) {
+			return filepath.Join(dir, p)
+		}
+		return p
+	}
+	lock, err := ReadLock(dir)
+	if err != nil {
+		warnings = append(warnings, fmt.Sprintf("%s: %v", LockFile, err))
+		lock = &Lock{}
+	}
+	trusted := Trusted(dir)
+	if !trusted && (len(lock.Plugins) > 0 || exists(filepath.Join(dir, ".jig", "plugins"))) {
+		warnings = append(warnings, "project plugins stay off until the workspace is trusted (jig trust)")
+	}
+	for _, n := range lock.Names() {
+		if !trusted {
+			break
+		}
+		l := lock.Plugins[n]
+		if isPathSource(l.Source) {
+			add(resolve(l.Source))
+		} else if d := storePath(n, l.Version); exists(d) {
+			add(d)
+		} else {
+			warnings = append(warnings, fmt.Sprintf("plugin %s %s is locked but not installed (any jig command installs it)", n, l.Version))
 		}
 	}
 	scan := func(root string) {
@@ -67,19 +96,12 @@ func Discover(dir string, cfg map[string]*spec.Plugin) (ms []*Manifest, warnings
 		}
 	}
 	scan(filepath.Join(ConfigDir(), "plugins"))
-	if local := filepath.Join(dir, ".jig", "plugins"); exists(local) {
-		if Trusted(dir) {
-			scan(local)
-		} else {
-			warnings = append(warnings, fmt.Sprintf("%s: project plugins skipped until the workspace is trusted (jig trust, or JIG_TRUST=project)", local))
-		}
+	if trusted {
+		scan(filepath.Join(dir, ".jig", "plugins"))
 	}
 	for name, c := range cfg {
-		if c != nil && c.Path != "" {
-			p := c.Path
-			if !filepath.IsAbs(p) {
-				p = filepath.Join(dir, p)
-			}
+		if trusted && c != nil && c.Path != "" {
+			p := resolve(c.Path)
 			add(p)
 			if m := found[name]; m == nil || m.Dir != filepath.Clean(p) {
 				warnings = append(warnings, fmt.Sprintf("plugins.%s.path: no plugin named %s in %s", name, name, p))
@@ -94,25 +116,6 @@ func Discover(dir string, cfg map[string]*spec.Plugin) (ms []*Manifest, warnings
 	}
 	sort.Slice(ms, func(i, j int) bool { return ms[i].Name < ms[j].Name })
 	return ms, warnings
-}
-
-// installed picks the version of an installed plugin: the pinned one, else the highest.
-func installed(name string, cfg map[string]*spec.Plugin) string {
-	vs, _ := os.ReadDir(filepath.Join(StoreDir(), name))
-	if c := cfg[name]; c != nil && c.Version != "" {
-		for _, v := range vs {
-			if v.Name() == c.Version || v.Name() == "v"+c.Version {
-				return v.Name()
-			}
-		}
-	}
-	best := ""
-	for _, v := range vs {
-		if semver.IsValid(canon(v.Name())) && (best == "" || semver.Compare(canon(v.Name()), canon(best)) > 0) {
-			best = v.Name()
-		}
-	}
-	return best
 }
 
 func canon(v string) string {

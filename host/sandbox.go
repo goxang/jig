@@ -69,3 +69,6 @@ func Sandbox(args []string) error {
 	}
 	return syscall.Exec(bin, cmd, os.Environ())
 }
+
+// Sandboxed says whether plugins run confined on this OS.
+func Sandboxed() bool { return sandboxed }

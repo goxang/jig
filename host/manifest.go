@@ -124,6 +124,8 @@ type Manifest struct {
 	Complete  []string                  `yaml:"complete,omitempty"`
 	Doctor    bool                      `yaml:"doctor,omitempty"`
 	Docs      string                    `yaml:"docs,omitempty"`
+	// Build runs in the plugin's directory after a git or path install, such as go build -o bin/x .
+	Build Command `yaml:"build,omitempty"`
 
 	// Dir is where the manifest lives; Fragment the jig.yaml keys it contributes.
 	Dir      string      `yaml:"-"`
@@ -203,7 +205,7 @@ func structKeys() []string {
 	// omitempty hides these from the probe above
 	out = append(out, "jig", "description", "publisher", "requires", "implements", "permissions", "config", "types",
 		"schemes", "sources", "actions", "importers", "views", "widgets", "on", "events", "skills", "search",
-		"complete", "doctor", "docs")
+		"complete", "doctor", "docs", "build")
 	sort.Strings(out)
 	return out
 }
