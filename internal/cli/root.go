@@ -139,7 +139,7 @@ Run jig with no arguments for the terminal UI.`,
 	ac := aiCommand()
 	ac.GroupID = "obs"
 	root.AddCommand(ac)
-	for _, c := range append(projectCommands(), doctorCommand(), kubeconfigCommand(), whyCommand(), docsCommand(), schemaCommand(), skillCommand(), themeCommand()) {
+	for _, c := range append(projectCommands(), pluginCommand(), trustCommand(), doctorCommand(), kubeconfigCommand(), whyCommand(), docsCommand(), schemaCommand(), skillCommand(), themeCommand()) {
 		c.GroupID = "infra"
 		root.AddCommand(c)
 	}
@@ -204,10 +204,16 @@ func printProjectHelp() {
 func open() (*engine.App, error) {
 	a, err := engine.Open(g.file, g.env)
 	if err != nil {
-		if errors.Is(err, spec.ErrNotFound) {
+		return nil, err
+	}
+	if changed, err := ensurePlugins(a.Spec.Dir); err != nil || changed {
+		a.Close()
+		if err != nil {
 			return nil, err
 		}
-		return nil, err
+		if a, err = engine.Open(g.file, g.env); err != nil {
+			return nil, err
+		}
 	}
 	a.Confirmed = g.yes
 	if a.Inferred {
