@@ -1,0 +1,8 @@
+contract: cache/1
+kind: cache
+description: a key-value cache that takes commands (redis and the like)
+sources:
+  cache.info:
+    fields: {key: string, value: string}
+actions:
+  cache.do: {effect: write, args: {args: json!}, outputs: {reply: string}}

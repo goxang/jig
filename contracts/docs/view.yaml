@@ -1,0 +1,4 @@
+title: Docs
+widget: table
+source: docs.search
+args: {query: ""}

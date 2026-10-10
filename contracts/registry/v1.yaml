@@ -1,0 +1,8 @@
+contract: registry/1
+description: an image registry's repositories and tags
+sources:
+  registry.tags:
+    args: {repository: string!}
+    fields: {tag: string, digest: string, created: time, size: int}
+actions:
+  registry.prune: {effect: danger, args: {repository: string!, keep: int}}

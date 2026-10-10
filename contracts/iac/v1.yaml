@@ -1,0 +1,12 @@
+contract: iac/1
+description: infrastructure as code (terraform, pulumi)
+sources:
+  iac.stacks:
+    fields: {stack: string, resources: int, drift: bool, updated: time}
+  iac.outputs:
+    args: {stack: string!}
+    fields: {name: string, value: string}
+actions:
+  iac.apply: {effect: danger, args: {stack: string!}}
+capabilities:
+  drift: {sources: [iac.drift]}

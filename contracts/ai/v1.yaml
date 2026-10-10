@@ -1,0 +1,7 @@
+contract: ai/1
+description: a model provider beyond the built-in ones
+sources:
+  ai.models:
+    fields: {model: string, context: int}
+actions:
+  ai.complete: {effect: read, args: {model: string, messages: json!, max_tokens: int}, outputs: {text: string}}

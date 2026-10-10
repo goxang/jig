@@ -1,0 +1,4 @@
+contract: notify/1
+description: sends messages (slack, email, a webhook)
+actions:
+  notify.send: {effect: write, args: {to: string, title: string, body: string!}}

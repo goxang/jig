@@ -1,0 +1,13 @@
+contract: kv/1
+kind: kv
+description: a key-value store (consul, etcd)
+sources:
+  kv.list:
+    args: {prefix: string}
+    fields: {key: string}
+  kv.get:
+    args: {key: string!}
+    fields: {key: string, value: bytes, found: bool}
+actions:
+  kv.put: {effect: write, args: {key: string!, value: string!}}
+  kv.delete: {effect: danger, args: {key: string!}}

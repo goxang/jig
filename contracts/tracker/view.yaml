@@ -1,0 +1,7 @@
+title: Issues
+widget: table
+source: tracker.issues
+refresh: 60s
+actions:
+  - {key: S, name: transition, action: tracker.transition, args: {key: "${row.key}"}}
+  - {key: c, name: comment, action: tracker.comment, args: {key: "${row.key}"}}

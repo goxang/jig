@@ -1,0 +1,8 @@
+contract: profiles/1
+kind: profiler
+description: captures profiles of a running service
+sources:
+  profiles.kinds:
+    fields: {kind: string}
+actions:
+  profiles.capture: {effect: read, args: {service: string!, instance: string, kind: string!, duration: duration, dir: string!}, outputs: {kind: string, format: string, file: string, summary: string}}

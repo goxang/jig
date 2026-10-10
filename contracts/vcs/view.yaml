@@ -1,0 +1,4 @@
+title: Git
+split:
+  - {widget: table, title: Changes, source: vcs.status, refresh: 5s}
+  - {widget: table, title: Log, source: vcs.log, args: {limit: 50}, refresh: 30s}

@@ -1,0 +1,6 @@
+contract: debugger/1
+kind: debugger
+description: attaches a debugger server to a service
+actions:
+  debugger.attach: {effect: write, args: {service: string!, instance: string}, outputs: {addr: string, hint: string}}
+  debugger.detach: {effect: write, args: {service: string!}}

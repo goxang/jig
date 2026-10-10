@@ -1,0 +1,11 @@
+contract: queue/1
+kind: messaging
+description: a message broker's queues
+sources:
+  queue.list:
+    fields: {name: string, messages: int, ready: int, unacked: int, consumers: int, in_rate: number, out_rate: number}
+actions:
+  queue.purge: {effect: danger, args: {queue: string!}}
+  queue.publish: {effect: write, args: {target: string!, body: string!}}
+capabilities:
+  inspect: {sources: [queue.info, queue.peek], actions: [queue.delete]}

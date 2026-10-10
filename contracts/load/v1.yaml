@@ -1,0 +1,10 @@
+contract: load/1
+kind: loadgen
+description: a load generator
+sources:
+  load.status:
+    fields: {running: bool, rate: number, sent: int, failed: int, p50: duration, p95: duration, p99: duration, extra: json}
+actions:
+  load.start: {effect: write}
+  load.stop: {effect: write}
+  load.rate: {effect: write, args: {rps: number!}}

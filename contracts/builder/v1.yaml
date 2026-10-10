@@ -1,0 +1,7 @@
+contract: builder/1
+kind: builder
+description: builds a service's image
+actions:
+  builder.build: {effect: write, args: {service: string!, tag: string, registry: string, push: bool, dir: string}, outputs: {image: string}}
+capabilities:
+  push: {actions: [builder.push]}

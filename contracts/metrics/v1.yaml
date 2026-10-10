@@ -1,0 +1,10 @@
+contract: metrics/1
+kind: metrics
+description: time series, queried in the store's language
+sources:
+  metrics.instant:
+    args: {query: string!}
+    fields: {series: string, labels: json, value: number}
+  metrics.range:
+    args: {query: string!, start: time!, end: time!, step: duration}
+    fields: {time: time, series: string, labels: json, value: number}

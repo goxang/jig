@@ -1,0 +1,27 @@
+contract: runtime/1
+kind: runtime
+description: runs the project's services and reports their state
+sources:
+  runtime.status:
+    args: {services: json}
+    fields: {service: string, state: string, ready: int, desired: int, image: string, message: string, instances: json}
+  runtime.discover:
+    fields: {name: string, kind: string, service: string, state: string}
+  runtime.logs:
+    stream: true
+    args: {service: string!, instance: string, since: duration, tail: int, follow: bool}
+    fields: {time: time, service: string, instance: string, stream: string, text: string}
+actions:
+  runtime.start: {effect: write, args: {service: string!}}
+  runtime.stop: {effect: danger, args: {service: string!}}
+  runtime.restart: {effect: write, args: {service: string!}}
+  runtime.scale: {effect: write, args: {service: string!, replicas: int!}}
+  runtime.deploy: {effect: danger, args: {service: string!, image: string, env: json, replicas: int}}
+  # exec answers outputs.argv: the command jig runs on the user's terminal (kubectl exec -it ..., ssh -t ...)
+  runtime.exec: {effect: write, args: {service: string!, instance: string, command: json, tty: bool}, outputs: {argv: json}}
+capabilities:
+  autoscale: {actions: [runtime.autoscale]}
+  resources: {sources: [runtime.resources], actions: [runtime.set-resources]}
+  env: {sources: [runtime.env]}
+  forward: {actions: [runtime.forward]}
+  namespaces: {sources: [runtime.namespaces]}

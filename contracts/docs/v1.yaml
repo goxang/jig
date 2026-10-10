@@ -1,0 +1,13 @@
+contract: docs/1
+description: a documentation space (confluence, notion, a wiki)
+sources:
+  docs.search:
+    args: {query: string!}
+    fields: {id: string, title: string, path: string, updated: time, url: string}
+  docs.read:
+    args: {id: string!}
+    fields: {id: string, title: string, markdown: string}
+actions:
+  docs.write: {effect: write, args: {id: string, title: string!, markdown: string!, parent: string}}
+capabilities:
+  tree: {sources: [docs.tree]}

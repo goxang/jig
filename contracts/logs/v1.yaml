@@ -1,0 +1,8 @@
+contract: logs/1
+kind: logs
+description: log lines from a log store, queried and followed
+sources:
+  logs.query:
+    stream: true
+    args: {services: json, instance: string, since: duration, tail: int, follow: bool, match: string, regex: bool}
+    fields: {time: time, service: string, instance: string, stream: string, text: string}

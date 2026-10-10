@@ -1,0 +1,7 @@
+title: Stacks
+widget: table
+source: iac.stacks
+refresh: 60s
+columns: [{name: drift, color: {"true": warn}}]
+actions:
+  - {key: P, name: apply, action: iac.apply, args: {stack: "${row.stack}"}}

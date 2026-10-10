@@ -1,0 +1,9 @@
+contract: hosts/1
+kind: hosts
+description: machines the project runs on
+sources:
+  hosts.list:
+    fields: {name: string, addr: string, roles: json, ready: bool, reason: string, os: string, cpus: int, cpu_used: number, mem_total: int, mem_used: int, load1: number}
+actions:
+  # shell answers outputs.argv: the command jig runs on the user's terminal
+  hosts.shell: {effect: write, args: {host: string!, command: json}, outputs: {argv: json}}

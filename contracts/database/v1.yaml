@@ -1,0 +1,18 @@
+contract: database/1
+kind: database
+description: a SQL database server
+sources:
+  database.list:
+    fields: {database: string}
+  database.query:
+    args: {database: string, query: string!}
+    fields: {}
+actions:
+  database.exec: {effect: write, args: {database: string, query: string!}, outputs: {rows: int}}
+  database.create: {effect: write, args: {name: string!}}
+  database.drop: {effect: danger, args: {name: string!}}
+capabilities:
+  browse: {sources: [database.browse]}
+  edit: {actions: [database.delete-rows, database.set-cell]}
+  complete: {sources: [database.complete]}
+  running: {sources: [database.running], actions: [database.cancel]}

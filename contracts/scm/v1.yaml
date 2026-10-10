@@ -1,0 +1,17 @@
+contract: scm/1
+description: "a hosted forge: merge requests, pipelines, releases"
+sources:
+  scm.mrs:
+    args: {state: string, author: string}
+    fields: {id: string, title: string, author: string, state: string, source: string, target: string, updated: time, url: string}
+  scm.pipelines:
+    args: {ref: string, limit: int}
+    fields: {id: string, ref: string, status: string, started: time, duration: duration, url: string}
+  scm.jobs:
+    args: {pipeline: string!}
+    fields: {id: string, name: string, stage: string, status: string, duration: duration}
+actions:
+  scm.retry: {effect: write, args: {job: string!}}
+  scm.comment: {effect: write, args: {mr: string!, body: string!}}
+capabilities:
+  releases: {sources: [scm.releases]}

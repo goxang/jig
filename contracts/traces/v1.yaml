@@ -1,0 +1,12 @@
+contract: traces/1
+kind: tracing
+description: distributed traces
+sources:
+  traces.services:
+    fields: {service: string}
+  traces.search:
+    args: {service: string, operation: string, min_duration: duration, lookback: duration, limit: int}
+    fields: {id: string, root: string, start: time, duration: duration, spans: int, services: json, error: bool}
+  traces.get:
+    args: {id: string!}
+    fields: {trace: string, id: string, parent: string, service: string, name: string, start: time, duration: duration, error: bool, tags: json}

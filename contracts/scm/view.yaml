@@ -1,0 +1,14 @@
+title: Merge requests
+tabs:
+  Merge requests:
+    widget: table
+    source: scm.mrs
+    refresh: 60s
+    columns: [{name: state, color: {opened: ok, merged: info, closed: muted}}]
+    actions:
+      - {key: c, name: comment, action: scm.comment, args: {mr: "${row.id}"}}
+  Pipelines:
+    widget: table
+    source: scm.pipelines
+    refresh: 30s
+    columns: [{name: status, color: {success: ok, failed: err, running: info}}]

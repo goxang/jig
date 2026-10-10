@@ -1,0 +1,12 @@
+contract: vcs/1
+description: the local repository
+sources:
+  vcs.status:
+    fields: {path: string, state: string}
+  vcs.log:
+    args: {limit: int, path: string}
+    fields: {commit: string, author: string, time: time, subject: string}
+  vcs.branches:
+    fields: {name: string, current: bool, upstream: string}
+actions:
+  vcs.checkout: {effect: write, args: {branch: string!}}

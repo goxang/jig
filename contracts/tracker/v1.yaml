@@ -1,0 +1,14 @@
+contract: tracker/1
+description: issues and boards (jira, linear, github issues)
+sources:
+  tracker.issues:
+    args: {query: string, assignee: string}
+    fields: {key: string, title: string, status: string, assignee: string, priority: string, updated: time, url: string}
+  tracker.issue:
+    args: {key: string!}
+    fields: {key: string, title: string, status: string, description: string, comments: json}
+actions:
+  tracker.transition: {effect: write, args: {key: string!, status: string!}}
+  tracker.comment: {effect: write, args: {key: string!, body: string!}}
+capabilities:
+  boards: {sources: [tracker.boards, tracker.sprints]}
