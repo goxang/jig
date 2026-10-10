@@ -1,0 +1,966 @@
+package tui
+
+import (
+	"cmp"
+	"context"
+	"encoding/json"
+	"fmt"
+	"image/color"
+	"math"
+	"os"
+	"path/filepath"
+	"slices"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
+
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+
+	"github.com/goxang/jig/core"
+	"github.com/goxang/jig/internal/viz"
+	"github.com/goxang/jig/kernel/frames"
+	"github.com/goxang/jig/kernel/view"
+	"github.com/goxang/jig/protocol"
+)
+
+// tokenColor is a theme token: the only colours views and plugins name.
+func tokenColor(tok string) color.Color {
+	switch tok {
+	case "ok", "green":
+		return cGreen
+	case "warn", "amber":
+		return cAmber
+	case "err", "error", "red":
+		return cRed
+	case "info", "purple":
+		return cPurple
+	case "accent", "focus":
+		return cAccent
+	case "muted", "dim":
+		return cDim
+	case "border":
+		return cPanel
+	case "fg", "":
+		return cText
+	}
+	if n, ok := strings.CutPrefix(tok, "series"); ok {
+		if i, err := strconv.Atoi(n); err == nil && i > 0 {
+			return viz.Palette[(i-1)%len(viz.Palette)]
+		}
+	}
+	return cText
+}
+
+func tokenStyle(tok string) lipgloss.Style { return lipgloss.NewStyle().Foreground(tokenColor(tok)) }
+
+// leaf draws a widget's body into w×h.
+func (t *viewTab) leaf(m *model, wn *wnode, x, y, w, h int, focused bool) string {
+	n, f := wn.n, wn.frame
+	if wn.err != nil && f == nil {
+		return sRed.Render(truncate(wn.err.Error(), w*h))
+	}
+	if n.Bind != nil && n.Bind.Source != "" && f == nil && !needsNoData[view.Kind(n)] {
+		return sDim.Render("loading…")
+	}
+	switch view.Kind(n) {
+	case "table":
+		return t.tableBody(m, wn, x, y, w, h, focused)
+	case "list":
+		return listBody(wn, w, h, focused)
+	case "kv":
+		return kvBody(f, n, w, h)
+	case "tree":
+		return t.treeBody(m, wn, x, y, w, h)
+	case "form":
+		return t.formBody(m, wn, w, h, focused)
+	case "stat":
+		return statWidget(f, n, w, h)
+	case "gauge":
+		v, lo, hi := lastNumber(f, n), numOr(n.Props["min"], 0), numOr(n.Props["max"], 100)
+		frac := (v - lo) / math.Max(hi-lo, 1e-9)
+		return lipgloss.PlaceHorizontal(w, lipgloss.Center, levelStyle(n, v).Bold(true).Render(viz.Human(v, view.Prop(n, "unit")))) + "\n" + viz.Gauge(frac, w)
+	case "progress":
+		v, hi := lastNumber(f, n), numOr(n.Props["max"], 100)
+		return viz.Meter(v/math.Max(hi, 1e-9), w, view.Prop(n, "label"))
+	case "bar", "bars":
+		return barsWidget(f, n, w, h)
+	case "sparkline":
+		ls := frameLines(f, n)
+		var vals []float64
+		if len(ls) > 0 {
+			for _, p := range ls[0].Points {
+				vals = append(vals, p.V)
+			}
+		}
+		return viz.Sparkline(vals, w, tokenColor(cmp.Or(view.Prop(n, "color"), "accent")))
+	case "chart":
+		return t.chartBody(m, wn, x, y, w, h)
+	case "heatmap":
+		return heatmapWidget(f, n, w, h)
+	case "text":
+		return wrapText(textOf(t, n, f), w, tokenStyle(view.Prop(n, "color")))
+	case "markdown":
+		return renderMarkdown(textOf(t, n, f), w)
+	case "code":
+		return codeBody(textOf(t, n, f), w, h, scrollOf(wn))
+	case "diff":
+		return diffBody(textOf(t, n, f), w, h, scrollOf(wn))
+	case "logs":
+		return t.logsBody(m, wn, x, y, w, h)
+	case "waterfall":
+		return waterfallWidget(f, w, h)
+	case "graph":
+		return graphWidget(f, n, w, h)
+	case "timeline":
+		return timelineWidget(f, n, w, h, scrollOf(wn))
+	case "board":
+		return boardWidget(wn, w, h, focused)
+	case "terminal":
+		return t.terminalBody(m, wn, w, h, focused)
+	case "canvas":
+		return t.canvasBody(m, wn, w, h)
+	}
+	if n.Fallback != nil {
+		fb := &wnode{n: *n.Fallback, frame: f, err: wn.err, id: wn.id}
+		return t.leaf(m, fb, x, y, w, h, focused)
+	}
+	return sDim.Render("no widget " + n.Widget + " in this jig")
+}
+
+// needsNoData are widgets that draw without a frame.
+var needsNoData = map[string]bool{"terminal": true, "text": true, "markdown": true, "code": true, "diff": true, "form": true, "canvas": true, "logs": true}
+
+func (t *viewTab) widgetKey(m *model, wn *wnode, k tea.KeyPressMsg) tea.Cmd {
+	switch st := wn.st.(type) {
+	case *grid:
+		switch k.String() {
+		case "enter":
+			return t.openRow(m, wn)
+		case "y":
+			if r := t.currentRow(wn); r != nil {
+				b, _ := json.Marshal(r)
+				copyText(string(b))
+				m.setStatus("copied the row", false)
+			}
+			return nil
+		case "Y":
+			copyText(frameTSV(wn.frame))
+			m.setStatus(fmt.Sprintf("copied %d rows", frames.Len(wn.frame)), false)
+			return nil
+		}
+		st.key(k)
+	case *jsonTree:
+		st.key(k)
+	case *chartView:
+		st.key(m, k)
+	case *logView:
+		st.key(m, k, true)
+	case *terminal:
+		switch k.String() {
+		case "enter":
+			st.input = true
+		case "R":
+			st.close()
+			wn.st = nil
+		default:
+			st.scrollKey(k.String())
+		}
+	case *formState:
+		return t.formKey(m, wn, st, k)
+	case int:
+		switch k.String() {
+		case "up", "k":
+			wn.st = max(0, st-1)
+		case "down", "j":
+			wn.st = st + 1
+		case "pgup":
+			wn.st = max(0, st-wn.h)
+		case "pgdown":
+			wn.st = st + wn.h
+		}
+	case *cursorState:
+		switch k.String() {
+		case "up", "k":
+			st.sel = max(0, st.sel-1)
+		case "down", "j":
+			st.sel++
+		case "enter":
+			if st.ref != "" {
+				return t.openRef(m, st.ref)
+			}
+		}
+	case nil:
+		if scrolls[view.Kind(wn.n)] {
+			wn.st = 0
+			return t.widgetKey(m, wn, k)
+		}
+	}
+	return nil
+}
+
+// scrolls are the widgets ↑↓ scroll.
+var scrolls = map[string]bool{"code": true, "diff": true, "timeline": true}
+
+func scrollOf(wn *wnode) int {
+	s, _ := wn.st.(int)
+	return s
+}
+
+func (t *viewTab) widgetClick(m *model, wn *wnode, h hit) tea.Cmd {
+	if term, ok := wn.st.(*terminal); ok && h.double {
+		term.input = true
+	}
+	return nil
+}
+
+// openRow opens the selected row's ref: the column ref: rule, else the frame's own.
+func (t *viewTab) openRow(m *model, wn *wnode) tea.Cmd {
+	row := t.currentRow(wn)
+	if row == nil {
+		return nil
+	}
+	cols, _ := wn.n.Props["columns"].(map[string]any)
+	for _, c := range cols {
+		if cm, ok := c.(map[string]any); ok && cm["ref"] != nil {
+			return t.openRef(m, fmt.Sprint(expandRow(strings.NewReplacer("{", "${row.", "}", "}").Replace(fmt.Sprint(cm["ref"])), row)))
+		}
+	}
+	if g, ok := wn.st.(*grid); ok {
+		if r, ok := g.current(); ok {
+			if i, err := strconv.Atoi(r.id); err == nil {
+				if ref := frames.RowRef(wn.frame, i); ref != "" {
+					return t.openRef(m, ref)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// openRef follows a ref: svc:// opens the service, anything else resolves through the Engine.
+func (t *viewTab) openRef(m *model, ref string) tea.Cmd {
+	if name, ok := strings.CutPrefix(ref, "svc://"); ok {
+		for i, tb := range m.tabs {
+			if s, ok := tb.(*servicesTab); ok {
+				m.jump(i)
+				s.focusService(m, name)
+				return nil
+			}
+		}
+	}
+	e := m.eng()
+	return func() tea.Msg {
+		r, err := e.Resolve(context.Background(), ref)
+		if err != nil {
+			return statusMsg{text: ref + ": " + err.Error(), err: true}
+		}
+		text := cmp.Or(r.Title, string(r.Ref))
+		if r.URL != "" {
+			text += "  " + r.URL
+		}
+		return statusMsg{text: text}
+	}
+}
+
+func frameTSV(f *protocol.Frame) string {
+	if f == nil {
+		return ""
+	}
+	var b strings.Builder
+	for i, fl := range f.Fields {
+		if i > 0 {
+			b.WriteByte('\t')
+		}
+		b.WriteString(fl.Name)
+	}
+	for r := range frames.Len(f) {
+		b.WriteByte('\n')
+		for i, fl := range f.Fields {
+			if i > 0 {
+				b.WriteByte('\t')
+			}
+			b.WriteString(frames.Format(fl, f.Columns[i][r]))
+		}
+	}
+	return b.String()
+}
+
+// tableBody is the grid over the frame, with column rules: columns: { status: { color: { FAILED: err } } }.
+func (t *viewTab) tableBody(m *model, wn *wnode, x, y, w, h int, focused bool) string {
+	f := wn.frame
+	if f == nil {
+		return sDim.Render("no rows")
+	}
+	g, _ := wn.st.(*grid)
+	rules, _ := wn.n.Props["columns"].(map[string]any)
+	if g == nil || len(g.cols) != len(f.Fields) {
+		var cols []gcol
+		for _, fl := range f.Fields {
+			c := col(strings.ToUpper(fl.Name), 0)
+			if fl.Type == protocol.TypeNumber || fl.Type == protocol.TypeInt {
+				c = rcol(strings.ToUpper(fl.Name), 0)
+			}
+			if r, ok := rules[fl.Name].(map[string]any); ok {
+				if wd, err := strconv.Atoi(fmt.Sprint(r["width"])); err == nil {
+					c.width = wd
+				}
+			}
+			cols = append(cols, c)
+		}
+		g = newGrid(fmt.Sprintf("vg%d:", wn.id), cols...)
+		g.sortBy = -1
+		wn.st = g
+	}
+	rows := make([]grow, frames.Len(f))
+	for i := range rows {
+		cells := make([]string, len(f.Fields))
+		for j, fl := range f.Fields {
+			v := f.Columns[j][i]
+			s := frames.Format(fl, v)
+			if r, ok := rules[fl.Name].(map[string]any); ok {
+				if cm, ok := r["color"].(map[string]any); ok {
+					if tok, ok := cm[s]; ok {
+						s = tokenStyle(fmt.Sprint(tok)).Render(s)
+					}
+				}
+			}
+			cells[j] = s
+		}
+		keys := make([]any, len(f.Fields))
+		for j := range f.Fields {
+			if x, ok := toFloat(f.Columns[j][i]); ok {
+				keys[j] = x
+			}
+		}
+		rows[i] = grow{id: strconv.Itoa(i), cells: cells, keys: keys}
+	}
+	g.set(rows)
+	return g.view(m, x, y, w, h, focused)
+}
+
+// cursorState is a list or board's selected item.
+type cursorState struct {
+	sel int
+	ref string
+}
+
+func listBody(wn *wnode, w, h int, focused bool) string {
+	f := wn.frame
+	st, _ := wn.st.(*cursorState)
+	if st == nil {
+		st = &cursorState{}
+		wn.st = st
+	}
+	n := frames.Len(f)
+	if n == 0 {
+		return sDim.Render("empty")
+	}
+	st.sel = min(st.sel, n-1)
+	off := scroll(st.sel, 0, h, n)
+	var out []string
+	for i := off; i < min(n, off+h); i++ {
+		line := padRight(frames.Format(f.Fields[0], f.Columns[0][i]), w)
+		if i == st.sel && focused {
+			line = sCursor.Render(line)
+		}
+		out = append(out, line)
+	}
+	st.ref = frames.RowRef(f, st.sel)
+	return strings.Join(out, "\n")
+}
+
+// kvBody shows a key/value frame (fields key, value), else the first row's fields.
+func kvBody(f *protocol.Frame, n protocol.Node, w, h int) string {
+	var keys, vals []string
+	if ks, vs := frames.Column(f, "key"), frames.Column(f, "value"); ks != nil && vs != nil {
+		for i := range ks {
+			keys, vals = append(keys, fmt.Sprint(ks[i])), append(vals, fmt.Sprint(vs[i]))
+		}
+	} else if frames.Len(f) > 0 {
+		for j, fl := range f.Fields {
+			keys, vals = append(keys, fl.Name), append(vals, frames.Format(fl, f.Columns[j][0]))
+		}
+	}
+	kw := 0
+	for _, k := range keys {
+		kw = max(kw, lipgloss.Width(k))
+	}
+	kw = min(kw, w/2)
+	var out []string
+	for i := range keys {
+		out = append(out, sDim.Render(padRight(keys[i], kw))+"  "+truncate(vals[i], w-kw-2))
+	}
+	return strings.Join(out[:min(len(out), h)], "\n")
+}
+
+func (t *viewTab) treeBody(m *model, wn *wnode, x, y, w, h int) string {
+	tr, _ := wn.st.(*jsonTree)
+	var data any = frames.Rows(wn.frame)
+	if wn.frame == nil {
+		data = wn.n.Props["data"]
+	} else if frames.Len(wn.frame) == 1 {
+		data = frames.Row(wn.frame, 0)
+	}
+	raw, _ := json.Marshal(data)
+	if tr == nil || string(tr.root.bytes()) != string(raw) {
+		nt, err := newJSONTree(fmt.Sprintf("vt%d:", wn.id), raw)
+		if err != nil {
+			return sRed.Render(err.Error())
+		}
+		if tr != nil {
+			nt.selectPath(tr.current().path())
+		}
+		tr = nt
+		wn.st = tr
+	}
+	return tr.view(m, x, y, w, h)
+}
+
+func (t *viewTab) chartBody(m *model, wn *wnode, x, y, w, h int) string {
+	c, _ := wn.st.(*chartView)
+	if c == nil {
+		c = newChartView(fmt.Sprintf("vc%d:", wn.id))
+		c.unit = view.Prop(wn.n, "unit")
+		wn.st = c
+	}
+	c.lines = frameLines(wn.frame, wn.n)
+	return c.view(m, x, y, w, h)
+}
+
+// frameLines reads series from a frame: long form (time, series, value), or a time column and one
+// series per number column.
+func frameLines(f *protocol.Frame, n protocol.Node) []viz.Line {
+	if f == nil {
+		return nil
+	}
+	tcol := -1
+	for i, fl := range f.Fields {
+		if fl.Type == protocol.TypeTime || fl.Name == "time" || fl.Name == "ts" {
+			tcol = i
+			break
+		}
+	}
+	at := func(r int) time.Time {
+		if tcol < 0 {
+			return time.Unix(int64(r), 0)
+		}
+		return toTime(f.Columns[tcol][r])
+	}
+	var out []viz.Line
+	if names, vals := frames.Column(f, cmp.Or(view.Prop(n, "series"), "series")), frames.Column(f, cmp.Or(view.Prop(n, "value"), "value")); names != nil && vals != nil {
+		idx := map[string]int{}
+		for r := range names {
+			name := fmt.Sprint(names[r])
+			i, ok := idx[name]
+			if !ok {
+				i = len(out)
+				idx[name] = i
+				out = append(out, viz.Line{Name: name, Color: viz.Palette[i%len(viz.Palette)]})
+			}
+			if v, ok := toFloat(vals[r]); ok {
+				out[i].Points = append(out[i].Points, core.Point{T: at(r), V: v})
+			}
+		}
+		return out
+	}
+	for i, fl := range f.Fields {
+		if i == tcol || (fl.Type != protocol.TypeNumber && fl.Type != protocol.TypeInt) {
+			continue
+		}
+		l := viz.Line{Name: fl.Name, Color: viz.Palette[len(out)%len(viz.Palette)]}
+		for r, v := range f.Columns[i] {
+			if x, ok := toFloat(v); ok {
+				l.Points = append(l.Points, core.Point{T: at(r), V: x})
+			}
+		}
+		out = append(out, l)
+	}
+	return out
+}
+
+func toFloat(v any) (float64, bool) {
+	switch t := v.(type) {
+	case float64:
+		return t, true
+	case float32:
+		return float64(t), true
+	case int:
+		return float64(t), true
+	case int64:
+		return float64(t), true
+	case json.Number:
+		f, err := t.Float64()
+		return f, err == nil
+	case string:
+		f, err := strconv.ParseFloat(t, 64)
+		return f, err == nil
+	}
+	return 0, false
+}
+
+func toTime(v any) time.Time {
+	switch t := v.(type) {
+	case time.Time:
+		return t
+	case string:
+		if tm, err := time.Parse(time.RFC3339Nano, t); err == nil {
+			return tm
+		}
+	}
+	if f, ok := toFloat(v); ok {
+		if f > 1e12 {
+			return time.UnixMilli(int64(f))
+		}
+		return time.Unix(int64(f), int64((f-math.Floor(f))*1e9))
+	}
+	return time.Time{}
+}
+
+func numOr(v any, def float64) float64 {
+	if f, ok := toFloat(v); ok {
+		return f
+	}
+	return def
+}
+
+// lastNumber is the frame's newest value: the value: column, else the last number column.
+func lastNumber(f *protocol.Frame, n protocol.Node) float64 {
+	// value: 42 with no source is a static number; value: latency names a column
+	if v, ok := toFloat(n.Props["value"]); ok && f == nil {
+		return v
+	}
+	if ls := frameLines(f, n); len(ls) > 0 && len(ls[0].Points) > 0 {
+		return ls[0].Points[len(ls[0].Points)-1].V
+	}
+	if frames.Len(f) > 0 {
+		for j := len(f.Fields) - 1; j >= 0; j-- {
+			if v, ok := toFloat(f.Columns[j][frames.Len(f)-1]); ok {
+				return v
+			}
+		}
+	}
+	return math.NaN()
+}
+
+// levelStyle colours v by thresholds: { warn: 10, err: 100 } (below: true flips them).
+func levelStyle(n protocol.Node, v float64) lipgloss.Style {
+	th, _ := n.Props["thresholds"].(map[string]any)
+	below, _ := th["below"].(bool)
+	past := func(k string) bool {
+		x, ok := toFloat(th[k])
+		return ok && (!below && v >= x || below && v <= x)
+	}
+	switch {
+	case past("err"):
+		return lipgloss.NewStyle().Foreground(cRed)
+	case past("warn"):
+		return lipgloss.NewStyle().Foreground(cAmber)
+	}
+	return lipgloss.NewStyle().Foreground(tokenColor(cmp.Or(view.Prop(n, "color"), "ok")))
+}
+
+func statWidget(f *protocol.Frame, n protocol.Node, w, h int) string {
+	v := lastNumber(f, n)
+	if math.IsNaN(v) {
+		return sDim.Render("no data")
+	}
+	text := viz.Human(v, view.Prop(n, "unit"))
+	st := levelStyle(n, v)
+	b := big(text, st.GetForeground())
+	if lipgloss.Width(b) > w || h < 5 {
+		b = st.Bold(true).Render(text)
+	}
+	out := lipgloss.PlaceHorizontal(w, lipgloss.Center, b)
+	if rest := h - lipgloss.Height(out); rest > 0 {
+		if ls := frameLines(f, n); len(ls) > 0 && len(ls[0].Points) > 1 {
+			var vals []float64
+			for _, p := range ls[0].Points {
+				vals = append(vals, p.V)
+			}
+			out += strings.Repeat("\n", rest) + viz.Sparkline(vals, w, st.GetForeground())
+		}
+	}
+	return out
+}
+
+// barsWidget is one bar per row: label: (first text column) and value: (last number column).
+func barsWidget(f *protocol.Frame, n protocol.Node, w, h int) string {
+	label, value := view.Prop(n, "label"), view.Prop(n, "value")
+	var items []viz.Bar
+	for _, r := range frames.Rows(f) {
+		var name string
+		var v float64
+		var ok bool
+		for _, fl := range f.Fields {
+			if label == "" && name == "" && fl.Type != protocol.TypeNumber && fl.Type != protocol.TypeInt {
+				name = fmt.Sprint(r[fl.Name])
+			}
+			if x, isNum := toFloat(r[fl.Name]); isNum && (value == "" || value == fl.Name) {
+				v, ok = x, true
+			}
+		}
+		if label != "" {
+			name = fmt.Sprint(r[label])
+		}
+		if ok {
+			items = append(items, viz.Bar{Name: name, Value: v, Color: levelStyle(n, v).GetForeground()})
+		}
+	}
+	if view.Kind(n) == "bars" {
+		hi := numOr(n.Props["max"], 100)
+		var out []string
+		for _, it := range items[:min(len(items), h)] {
+			out = append(out, viz.Meter(it.Value/math.Max(hi, 1e-9), w, it.Name))
+		}
+		return strings.Join(out, "\n")
+	}
+	if len(items) > h {
+		items = items[:h]
+	}
+	return viz.BarGauge(items, w, view.Prop(n, "unit"), numOr(n.Props["max"], 0))
+}
+
+// heatmapWidget: a row per series, time bucketed across the width, shaded by value.
+func heatmapWidget(f *protocol.Frame, n protocol.Node, w, h int) string {
+	ls := frameLines(f, n)
+	if len(ls) == 0 {
+		return sDim.Render("no data")
+	}
+	nameW := 0
+	for _, l := range ls {
+		nameW = max(nameW, lipgloss.Width(l.Name))
+	}
+	nameW = min(nameW, w/3)
+	cells := max(1, w-nameW-1)
+	from, to := viz.Span(ls)
+	lo, hi := math.Inf(1), math.Inf(-1)
+	for _, l := range ls {
+		for _, p := range l.Points {
+			lo, hi = math.Min(lo, p.V), math.Max(hi, p.V)
+		}
+	}
+	shades := []rune(" ░▒▓█")
+	scale := []color.Color{cGreen, cGreen, cAmber, cRed, cRed}
+	var out []string
+	for _, l := range ls[:min(len(ls), h)] {
+		buckets := make([]float64, cells)
+		seen := make([]bool, cells)
+		for _, p := range l.Points {
+			i := 0
+			if span := to.Sub(from); span > 0 {
+				i = min(cells-1, int(float64(cells)*float64(p.T.Sub(from))/float64(span)))
+			}
+			buckets[i], seen[i] = math.Max(buckets[i], p.V), true
+		}
+		var b strings.Builder
+		for i, v := range buckets {
+			if !seen[i] {
+				b.WriteRune(' ')
+				continue
+			}
+			k := 4
+			if hi > lo {
+				k = int(4 * (v - lo) / (hi - lo))
+			}
+			b.WriteString(lipgloss.NewStyle().Foreground(scale[k]).Render(string(shades[max(1, k)])))
+		}
+		out = append(out, sDim.Render(padRight(l.Name, nameW))+" "+b.String())
+	}
+	return strings.Join(out, "\n")
+}
+
+// textOf is text: or file: (relative to the view), else the frame's first cell.
+func textOf(t *viewTab, n protocol.Node, f *protocol.Frame) string {
+	if s := view.Prop(n, "text"); s != "" {
+		return s
+	}
+	if p := view.Prop(n, "file"); p != "" {
+		raw, err := os.ReadFile(filepath.Join(t.dir, p))
+		if err != nil {
+			return err.Error()
+		}
+		return string(raw)
+	}
+	if frames.Len(f) == 0 {
+		return ""
+	}
+	var lines []string
+	for r := range frames.Len(f) {
+		lines = append(lines, fmt.Sprint(f.Columns[0][r]))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func wrapText(s string, w int, st lipgloss.Style) string {
+	return st.Width(w).Render(s)
+}
+
+// codeBody numbers lines and dims comments.
+// ponytail: comment and string colouring only, a real highlighter (chroma) when someone needs it.
+func codeBody(s string, w, h, off int) string {
+	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
+	nw := len(strconv.Itoa(len(lines)))
+	off = max(0, min(off, len(lines)-h))
+	var out []string
+	for i := off; i < min(len(lines), off+h); i++ {
+		l := strings.ReplaceAll(lines[i], "\t", "    ")
+		trim := strings.TrimSpace(l)
+		switch {
+		case strings.HasPrefix(trim, "//"), strings.HasPrefix(trim, "#"), strings.HasPrefix(trim, "--"):
+			l = sDim.Render(l)
+		default:
+			l = quoted(l)
+		}
+		out = append(out, sDim.Render(fmt.Sprintf("%*d ", nw, i+1))+truncate(l, w-nw-1))
+	}
+	return strings.Join(out, "\n")
+}
+
+// quoted colours "strings" in a line.
+func quoted(l string) string {
+	parts := strings.Split(l, `"`)
+	if len(parts) < 3 {
+		return l
+	}
+	for i := 1; i < len(parts)-1; i += 2 {
+		parts[i] = sGreen.Render(`"` + parts[i] + `"`)
+	}
+	var b strings.Builder
+	for i, p := range parts {
+		b.WriteString(p)
+		if i%2 == 0 && i > 0 && i == len(parts)-1 && len(parts)%2 == 0 {
+			b.WriteString(`"`)
+		}
+	}
+	return b.String()
+}
+
+func diffBody(s string, w, h, off int) string {
+	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
+	off = max(0, min(off, len(lines)-h))
+	var out []string
+	for _, l := range lines[off:min(len(lines), off+h)] {
+		l = truncate(strings.ReplaceAll(l, "\t", "    "), w)
+		switch {
+		case strings.HasPrefix(l, "+++"), strings.HasPrefix(l, "---"):
+			l = sTitle.Render(l)
+		case strings.HasPrefix(l, "+"):
+			l = sGreen.Render(l)
+		case strings.HasPrefix(l, "-"):
+			l = lipgloss.NewStyle().Foreground(cRed).Render(l)
+		case strings.HasPrefix(l, "@@"):
+			l = sAccent.Render(l)
+		}
+		out = append(out, l)
+	}
+	return strings.Join(out, "\n")
+}
+
+// logsBody shows rows as log lines: time, service and message (or line), parsed as JSON or logfmt.
+func (t *viewTab) logsBody(m *model, wn *wnode, x, y, w, h int) string {
+	lv, _ := wn.st.(*logView)
+	if lv == nil {
+		lv = newLogView(fmt.Sprintf("vl%d:", wn.id), keepRows(wn.n), nil)
+		wn.st = lv
+	}
+	f := wn.frame
+	if f != nil && frames.Len(f) != len(lv.lines) {
+		lv.reset()
+		var lines []core.LogLine
+		for _, r := range frames.Rows(f) {
+			l := core.LogLine{Text: fmt.Sprint(firstNonNil(r["line"], r["message"], r["msg"], r["text"])), Service: fmt.Sprint(cmp.Or(r["service"], any("")))}
+			if l.Service == "<nil>" {
+				l.Service = ""
+			}
+			if ts := firstNonNil(r["time"], r["ts"]); ts != nil {
+				l.Time = toTime(ts)
+			}
+			lines = append(lines, l)
+		}
+		lv.add(lines)
+	}
+	if len(lv.lines) == 0 {
+		if wn.streaming {
+			return sDim.Render("waiting for lines…")
+		}
+		return sDim.Render("no lines")
+	}
+	return lv.render(m, x, y, w, h, func(l core.LogLine) string {
+		head := ""
+		if !l.Time.IsZero() {
+			head = sDim.Render(l.Time.Local().Format("15:04:05.000")) + " "
+		}
+		if l.Service != "" {
+			head += lipgloss.NewStyle().Foreground(colorFor(l.Service)).Render(l.Service) + " "
+		}
+		return head + lv.fmt.render(l.Text)
+	})
+}
+
+// waterfallWidget draws spans: trace_id, id, parent, service, name, start, duration (ms).
+func waterfallWidget(f *protocol.Frame, w, h int) string {
+	var spans []core.Span
+	for _, r := range frames.Rows(f) {
+		d, _ := toFloat(r["duration"])
+		spans = append(spans, core.Span{TraceID: str(r["trace_id"]), ID: str(r["id"]), Parent: str(r["parent"]), Service: str(r["service"]),
+			Name: str(r["name"]), Start: toTime(r["start"]), Duration: time.Duration(d * float64(time.Millisecond))})
+	}
+	if len(spans) == 0 {
+		return sDim.Render("no spans")
+	}
+	return clip(viz.Waterfall(spans, w), w, h)
+}
+
+func str(v any) string {
+	if v == nil {
+		return ""
+	}
+	return fmt.Sprint(v)
+}
+
+// graphWidget draws edges (from, to) around center: (else the first from).
+func graphWidget(f *protocol.Frame, n protocol.Node, w, h int) string {
+	center := view.Prop(n, "center")
+	var in, out []viz.Rel
+	rows := frames.Rows(f)
+	if center == "" && len(rows) > 0 {
+		center = str(rows[0]["from"])
+	}
+	for _, r := range rows {
+		switch {
+		case str(r["from"]) == center:
+			out = append(out, viz.Rel{Node: str(r["to"]), Label: str(r["label"])})
+		case str(r["to"]) == center:
+			in = append(in, viz.Rel{Node: str(r["from"]), Label: str(r["label"])})
+		}
+	}
+	return clip(viz.RelationGraph(center, in, out), w, h)
+}
+
+// timelineWidget lists events newest first: time, title, and kind (or state) coloured.
+func timelineWidget(f *protocol.Frame, n protocol.Node, w, h, off int) string {
+	rows := frames.Rows(f)
+	tf, title, kind := cmp.Or(view.Prop(n, "time"), "time"), cmp.Or(view.Prop(n, "title"), "title"), cmp.Or(view.Prop(n, "kind"), "kind")
+	sort.SliceStable(rows, func(i, j int) bool { return toTime(rows[i][tf]).After(toTime(rows[j][tf])) })
+	colors, _ := n.Props["colors"].(map[string]any)
+	off = max(0, min(off, len(rows)-h))
+	var out []string
+	for _, r := range rows[off:min(len(rows), off+h)] {
+		dot := sDim.Render("●")
+		if c, ok := colors[str(r[kind])]; ok {
+			dot = tokenStyle(fmt.Sprint(c)).Render("●")
+		}
+		when := toTime(r[tf]).Local().Format("01-02 15:04")
+		out = append(out, sDim.Render(when)+" "+dot+" "+truncate(str(firstNonNil(r[title], r["name"], r["message"])), w-14))
+	}
+	if len(out) == 0 {
+		return sDim.Render("nothing yet")
+	}
+	return strings.Join(out, "\n")
+}
+
+// boardWidget is Kanban: a column per value of by: (in columns: order), a card per row showing
+// card: (else the title field, else the first).
+func boardWidget(wn *wnode, w, h int, focused bool) string {
+	n, f := wn.n, wn.frame
+	by, card := cmp.Or(view.Prop(n, "by"), "status"), view.Prop(n, "card")
+	if card == "" && f != nil {
+		card = f.Fields[0].Name
+		if _, ok := field(f, "title"); ok {
+			card = "title"
+		}
+	}
+	st, _ := wn.st.(*cursorState)
+	if st == nil {
+		st = &cursorState{}
+		wn.st = st
+	}
+	var order []string
+	if cs, ok := n.Props["columns"].([]any); ok {
+		for _, c := range cs {
+			order = append(order, fmt.Sprint(c))
+		}
+	}
+	cards := map[string][]int{}
+	rows := frames.Rows(f)
+	for i, r := range rows {
+		k := str(r[by])
+		if !slices.Contains(order, k) {
+			order = append(order, k)
+		}
+		cards[k] = append(cards[k], i)
+	}
+	if len(order) == 0 {
+		return sDim.Render("no cards")
+	}
+	cw := max(8, w/len(order))
+	st.sel = min(st.sel, max(0, len(rows)-1))
+	var cols []string
+	idx := 0
+	for _, c := range order {
+		lines := []string{sTitle.Render(padRight(fmt.Sprintf("%s (%d)", c, len(cards[c])), cw-1))}
+		for _, i := range cards[c] {
+			line := padRight("▏"+str(rows[i][card]), cw-1)
+			if idx == st.sel && focused {
+				line = sCursor.Render(line)
+				st.ref = frames.RowRef(f, i)
+			}
+			if len(lines) < h {
+				lines = append(lines, line)
+			}
+			idx++
+		}
+		cols = append(cols, lipgloss.NewStyle().Width(cw).Render(strings.Join(lines, "\n")))
+	}
+	return lipgloss.JoinHorizontal(lipgloss.Top, cols...)
+}
+
+// canvasBody asks the plugin that owns the widget to draw it: widget: <plugin>.<name> via canvas.
+func (t *viewTab) canvasBody(m *model, wn *wnode, w, h int) string {
+	cv, _ := wn.st.(*canvasState)
+	if cv == nil {
+		cv = &canvasState{}
+		wn.st = cv
+	}
+	name := view.Prop(wn.n, "plugin")
+	if name == "" {
+		return sDim.Render("canvas needs plugin: <plugin>.<widget>")
+	}
+	if !cv.busy && (cv.w != w || cv.h != h || cv.frame != wn.frame) {
+		cv.busy, cv.w, cv.h, cv.frame = true, w, h, wn.frame
+		e, props := m.eng(), wn.n.Props
+		go func() {
+			lines, err := e.Host.Widget(context.Background(), name, protocol.WidgetRenderParams{Widget: name, Props: props, Frame: wn.frame, Size: protocol.Size{W: w, H: h}})
+			program.Send(canvasMsg{cv: cv, lines: lines, err: err})
+		}()
+	}
+	if cv.err != nil {
+		return sRed.Render(cv.err.Error())
+	}
+	return clip(strings.Join(cv.lines, "\n"), w, h)
+}
+
+type canvasState struct {
+	w, h  int
+	frame *protocol.Frame
+	busy  bool
+	lines []string
+	err   error
+}
+
+type canvasMsg struct {
+	cv    *canvasState
+	lines []string
+	err   error
+}
+
+func field(f *protocol.Frame, name string) (protocol.Field, bool) {
+	for _, fl := range f.Fields {
+		if fl.Name == name {
+			return fl, true
+		}
+	}
+	return protocol.Field{}, false
+}

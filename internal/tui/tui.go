@@ -47,6 +47,9 @@ type tab interface {
 	typing() bool
 }
 
+// hider stops what a tab fetches or runs while it shows, when another tab opens.
+type hider interface{ hide(m *model) }
+
 // interval is how often a showing tab refreshes; tabs without one refresh every 3s.
 type intervaler interface{ interval() time.Duration }
 
@@ -155,6 +158,8 @@ type model struct {
 	showAlerts bool
 	// envInfo is the ctrl+e box: what this environment resolves to, nil when closed
 	envInfo *envBox
+	// prefix is a pressed key prefix (g) waiting for its second key
+	prefix string
 	// watch is ctrl+w's live rebuild, nil when off
 	watch *watching
 
@@ -263,10 +268,13 @@ var advanced = map[string]bool{"queries": true, "load": true, "manifests": true,
 // newTabs picks from all the screens ui.tabs lists, else every screen the project gives something
 // to show, minus the advanced ones in the simple view.
 func newTabs(a *engine.App, all map[string]tab, simple bool) []tab {
+	views := addViews(a, all)
 	if ui := a.Spec.UI; ui != nil && len(ui.Tabs) > 0 {
 		var out []tab
 		for _, n := range ui.Tabs {
-			out = append(out, all[n])
+			if t := cmp.Or(all[n], all["view:"+n]); t != nil {
+				out = append(out, t)
+			}
 		}
 		return out
 	}
@@ -276,7 +284,7 @@ func newTabs(a *engine.App, all map[string]tab, simple bool) []tab {
 			out = append(out, all[n])
 		}
 	}
-	return out
+	return append(out, views...)
 }
 
 func modeFile(a *engine.App) string { return filepath.Join(a.Spec.Dir, ".jig", "ui-mode") }
@@ -517,6 +525,11 @@ func (m *model) home() tea.Cmd {
 func (m *model) openTab(i int) tea.Cmd {
 	if i != m.active {
 		m.autosave()
+		if m.active < len(m.tabs) {
+			if h, ok := m.tabs[m.active].(hider); ok {
+				h.hide(m)
+			}
+		}
 	}
 	m.trail = nil
 	m.active = i
@@ -576,11 +589,13 @@ func failed(ctx context.Context, label string, err error) statusMsg {
 func (m *model) runJob(ctx context.Context, label string, f func(ctx context.Context) error) tea.Msg {
 	ctx, j := m.startJob(ctx, label)
 	err := f(ctx)
-	j.Finish(err)
+	var msg statusMsg
 	if err != nil {
-		return failed(ctx, label, err)
+		// before Finish, which cancels ctx
+		msg = failed(ctx, label, err)
 	}
-	return statusMsg{}
+	j.Finish(err)
+	return msg
 }
 
 // eng is the Engine over the current app; actions it runs show as the model's jobs.
@@ -825,6 +840,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, m.tabs[m.active].refresh(m))
 		}
 		return m, batch(cmds...)
+	case commandMsg:
+		return m, m.command(string(msg))
 	case envInfoMsg:
 		if msg.gen == m.gen {
 			m.envInfo = msg.box
@@ -961,6 +978,12 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *model) mouse(e mouseEvent) tea.Cmd {
 	m.hx, m.hy = e.X, e.Y
 	m.pointerAt(e.X, e.Y)
+	if e.Action == mousePress && e.Button == tea.MouseRight && m.picker == nil && m.prompt == nil && m.confirm == nil {
+		e.Button = tea.MouseLeft
+		cmd := m.mouse(e)
+		m.menu()
+		return cmd
+	}
 	if m.dragZone != "" && (e.Action == mouseMotion || e.Action == mouseRelease) {
 		return m.dragTo(e)
 	}
@@ -1453,6 +1476,9 @@ func (m *model) key(k tea.KeyPressMsg) tea.Cmd {
 	}
 	t := m.tabs[m.active]
 	if !t.typing() {
+		if cmd, ok := m.globalKey(k.String()); ok {
+			return cmd
+		}
 		switch s := k.String(); s {
 		case "@":
 			if m.chat != nil && m.chat.open {
@@ -1465,14 +1491,6 @@ func (m *model) key(k tea.KeyPressMsg) tea.Cmd {
 			return m.quitTwice("q", again)
 		case "ctrl+r":
 			return m.reload()
-		case "S":
-			id, err := m.saveSession()
-			if err != nil {
-				m.setStatus("save session: "+err.Error(), true)
-			} else {
-				m.setStatus("session "+id+" saved: jig opens on it from now on, as you leave it (jig --fresh starts clean)", false)
-			}
-			return nil
 		case "?", "f1":
 			m.help, m.helpScroll, m.helpQuery = true, 0, ""
 			return nil
@@ -1482,23 +1500,11 @@ func (m *model) key(k tea.KeyPressMsg) tea.Cmd {
 		case "!":
 			m.showErrors, m.jobSel, m.jobScroll, m.actErrors = true, 0, 0, false
 			return nil
-		case "ctrl+e":
-			return m.fetchEnvInfo()
-		case "ctrl+k":
-			return m.fetchKubeconfig(cmp.Or(m.kubeEnv, m.app.Env.Name))
 		case "ctrl+w":
 			return m.toggleWatch()
 		case "ctrl+p":
 			m.pickTheme()
 			return nil
-		case "E":
-			m.pickEnv()
-			return nil
-		case "T":
-			m.pickTask("")
-			return nil
-		case "N":
-			return m.pickNamespace()
 		case "V":
 			return m.toggleMode()
 		case "M":
@@ -1873,11 +1879,12 @@ func (m *model) runTask(name string, args []string) {
 		m.showErrors, m.actErrors, m.jobSel, m.jobScroll = true, false, 0, 0
 		return func() tea.Msg {
 			err := follow(j)
+			stopped := ctx.Err() != nil
 			j.Finish(err)
 			switch {
 			case err == nil:
 				return statusMsg{}
-			case ctx.Err() != nil:
+			case stopped:
 				return statusMsg{text: label + ": stopped"}
 			}
 			text := strings.ReplaceAll(err.Error(), "\n ", " ·")
@@ -2294,6 +2301,8 @@ func (m *model) interaction() (box, keys string) {
 		return m.promptBox(), m.promptKeys()
 	case m.picker != nil:
 		return "", " " + m.picker.hints()
+	case m.prefix != "":
+		return "", m.whichKey()
 	case m.chat != nil && m.chat.open && m.chat.focus:
 		return "", keyHints([][2]string{{"enter", "send"}, {"/", "commands"}, {"tab", "suggestion, completes a command"}, {"↑", "last sent"}, {"pgup pgdn wheel", "scroll"}, {"ctrl+x", "stop"}, {"esc", "hide"}, {"click left", "back to the screen"}})
 	}
@@ -2307,9 +2316,9 @@ func (m *model) interaction() (box, keys string) {
 	if m.simple {
 		hs = append(hs, [2]string{"V", "detailed view"})
 	} else {
-		hs = append(hs, [2]string{"E", "env"})
-		if m.app.Namespace() != "" && !m.app.Env.Protected {
-			hs = append(hs, [2]string{"N", "namespace"})
+		hs = append(hs, [2]string{m.keyFor("env"), "env"})
+		if ns := m.keyFor("namespace"); ns != "" && m.app.Namespace() != "" && !m.app.Env.Protected {
+			hs = append(hs, [2]string{ns, "namespace"})
 		}
 		hs = append(hs, [2]string{"T", "tasks"})
 	}
@@ -2440,10 +2449,13 @@ var screenHelp = map[string]string{
 // helpLines are the help text's rows, split for scrolling and search; the content itself is
 // unchanged from before, just no longer rendered as one fixed block.
 func (m *model) helpLines() []string {
+	k := func(command string) string { return cmp.Or(m.keyFor(command), ":"+command) }
 	rows := [][2]string{
-		{"1-9 0 `  tab ⇧tab  ⇧←→ alt+←→", "switch screen (or click its name)"}, {"ctrl+←→", "switch the sub-tab inside a screen"}, {"E", "switch environment"}, {"N", "switch or create a Kubernetes namespace"}, {"T", "run a task (ctrl+o there shows its steps)"},
+		{":", "command palette, the CLI's grammar: :restart parser, :kv get key, :open Logs"}, {k("search"), "search screens, services, tasks, actions, plugins"},
+		{k("go") + " then l m t d s g", "go to logs, metrics, traces, data, services, top"}, {". right-click", "this screen's keys as a menu"},
+		{"1-9 0 `  tab ⇧tab  ⇧←→ alt+←→", "switch screen (or click its name)"}, {"ctrl+←→", "switch the sub-tab inside a screen"}, {k("env"), "switch environment"}, {k("namespace"), "switch or create a Kubernetes namespace"}, {k("task"), "run a task (ctrl+o there shows its steps)"},
 		{"↑↓ / wheel", "move"}, {"enter / dbl-click", "open, run"}, {"ctrl+alt+←→↑↓", "sort column, order (or click a header; also < >, alt+↑↓, ctrl+⇧ arrows)"}, {"+ - z", "expand all, fold all, toggle (trees, dashboard rows)"},
-		{"esc ⌫", "back: closes what is open, then returns to the screen you jumped from"}, {"drag a border", "resize panes (kept for next time; it lights up under the mouse)"}, {"@", "AI chat about this screen (jig ai config sets it up)"}, {"A", "alerts (header badge)"}, {"!", "activity: builds, deploys and tasks you started with their output; x stops one, enter types its input, tab errors, y copies"}, {"ctrl+k", "fetch the environment's kubeconfig (Rancher API key, URL or file) into yours"}, {"ctrl+e", "this environment: variables, databases, addresses (↑↓, / searches, e edits a variable)"}, {"ctrl+w", "watch: rebuild and restart services as their sources change (errors in A)"}, {"ctrl+p", "colour theme, previewed as you move (jig theme --save to make your own)"}, {"ctrl+r", "reload jig.yaml after you or the assistant edited it (filters stay)"}, {"S", "save this session: jig opens on it from now on, as you leave it, filters included (jig --fresh starts clean)"}, {"M", "mouse on/off (off: select text)"}, {"V", "simple / detailed view"}, {"?", "this help"}, {"q  ctrl+c", "quit"},
+		{"esc ⌫", "back: closes what is open, then returns to the screen you jumped from"}, {"drag a border", "resize panes (kept for next time; it lights up under the mouse)"}, {"@", "AI chat about this screen (jig ai config sets it up)"}, {"A", "alerts (header badge)"}, {"!", "activity: builds, deploys and tasks you started with their output; x stops one, enter types its input, tab errors, y copies"}, {k("kubeconfig"), "fetch the environment's kubeconfig (Rancher API key, URL or file) into yours"}, {k("envinfo"), "this environment: variables, databases, addresses (↑↓, / searches, e edits a variable)"}, {"ctrl+w", "watch: rebuild and restart services as their sources change (errors in A)"}, {"ctrl+p", "colour theme, previewed as you move (jig theme --save to make your own)"}, {"ctrl+r", "reload jig.yaml after you or the assistant edited it (filters stay)"}, {k("save"), "save this session: jig opens on it from now on, as you leave it, filters included (jig --fresh starts clean)"}, {"M", "mouse on/off (off: select text)"}, {"V", "simple / detailed view"}, {"?", "this help"}, {"q  ctrl+c", "quit"},
 	}
 	var b strings.Builder
 	for _, r := range rows {

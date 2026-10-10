@@ -440,8 +440,8 @@ func (t *metricsTab) gridKey(m *model, k tea.KeyPressMsg) tea.Cmd {
 		if t.win.zoomOut() {
 			return t.reload(m)
 		}
-	case ",", ".":
-		t.win.shift(map[string]int{",": -1, ".": 1}[k.String()])
+	case ",", ".", "<", ">":
+		t.win.shift(map[string]int{",": -1, ".": 1, "<": -1, ">": 1}[k.String()])
 		return t.reload(m)
 	case "R":
 		t.every = (t.every + 1) % len(refreshes)
@@ -1068,8 +1068,8 @@ func (t *metricsTab) viewKey(m *model, k tea.KeyPressMsg) tea.Cmd {
 		if t.win.zoomOut() {
 			return t.reload(m)
 		}
-	case ",", ".":
-		t.win.shift(map[string]int{",": -1, ".": 1}[k.String()])
+	case ",", ".", "<", ">":
+		t.win.shift(map[string]int{",": -1, ".": 1, "<": -1, ">": 1}[k.String()])
 		return t.reload(m)
 	case "r":
 		return t.fetchAll(m)
