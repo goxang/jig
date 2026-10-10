@@ -3,12 +3,14 @@ package spec
 
 import (
 	"fmt"
-	"github.com/goxang/jig/kernel/config"
 	"sort"
 	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/goxang/jig/kernel/config"
+	"github.com/goxang/jig/kernel/view"
 )
 
 const (
@@ -48,6 +50,8 @@ type Project struct {
 	Environments map[string]*Environment `yaml:"environments"`
 	Components   map[string]*Component   `yaml:"components"`
 	Dashboards   map[string]*Dashboard   `yaml:"dashboards"`
+	// Views are screens built from widgets bound to sources: a tab, a service section, a panel.
+	Views map[string]*view.View `yaml:"views"`
 	// Tests are named test suites: `jig test <name>` and the Tests screen.
 	Tests     map[string]*TestSuite `yaml:"tests"`
 	Manifests []string              `yaml:"manifests"`
@@ -69,6 +73,9 @@ type Project struct {
 	OTel *OTel `yaml:"otel"`
 	// UI picks the screens of `jig` and their order.
 	UI *UI `yaml:"ui"`
+	// Keys is the key preset: jig (the default) or rig. Usually set in .jig/local.yaml or
+	// ~/.config/jig/config.yaml, since it is a personal choice.
+	Keys string `yaml:"keys"`
 	// AI tells the assistant (`jig ai`, @ in the UI) about the project: paths it must not read, notes.
 	AI *AI `yaml:"ai"`
 	// Help is shown by `jig -h` under the project name: this project's own quick-start for its main
@@ -80,6 +87,7 @@ type Project struct {
 	DashboardOrder []string `yaml:"-"`
 	TestOrder      []string `yaml:"-"`
 	SectionOrder   []string `yaml:"-"`
+	ViewOrder      []string `yaml:"-"`
 
 	// Unset are the ${NAME}s the file uses (outside other environments) that nothing sets and that
 	// have no :-default: they stay as written.

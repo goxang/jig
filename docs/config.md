@@ -32,6 +32,7 @@ is out of date.
 | `environments` | below |
 | `components` | below; shared by every environment |
 | `dashboards` | `name: [panel, ...]` or `name: {help, vars, panels}` (see below) |
+| `views` | `name: {slot, title, key, file, <layout or widget>}`: a screen built from widgets. `slot` is `tab` (default), `service.section`, `panel` or `home`; the body is `{widget: table, source: db, query: ..., refresh: 10s, transform: [...]}` or a layout (`grid: [[a, b], [c]]`, `tabs: {Name: widget}`, `split`, `stack`, `box`, `scroll`); `file` keeps the body in its own YAML file. See docs/views.md |
 | `tests` | test suites for `jig test` and the Tests screen (see below) |
 | `sections` | `name: {help, services: [names, groups or roles]}`: the Services screen's parts, in this order; services in none show under `other` |
 | `manifests` | folders `jig manifests` and the Manifests screen read (default: the runtime's `manifests`, else the `kubernetes` imports). The screen lists only the objects a service deploys; `u` shows the rest |
@@ -42,6 +43,7 @@ is out of date.
 | `reports` | metrics, traces and queries a run is measured by, saved as md, json or xml: `jig report start` and `stop`, `jig report`, a suite's `report:`, the Load screen's `W` (see below) |
 | `otel` | OpenTelemetry for every app and load service (see below) |
 | `ui` | `{tabs, mode, logs}`: the screens and their order (left out, every screen the project configures something for); `mode: simple` starts newcomers on fewer screens, columns and keys (`V` switches); `logs` (see below) |
+| `keys` | the key preset: `jig` (the default) or `rig` (rig's keys). A personal choice, so usually in `.jig/local.yaml` or `~/.config/jig/config.yaml` |
 | `ai` | `{deny: [globs], instructions: text, ideas: {screen: [questions]}}`: project paths the assistant never reads (on top of `.env`, keys and `secrets/`), notes it gets with every turn, and the questions tab offers in an empty chat per screen (`all` for every screen) |
 
 ## services.<name>

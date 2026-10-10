@@ -195,6 +195,7 @@ func LoadData(raw []byte, file, env string, overrides map[string]string) (*Proje
 		t.Name = n
 	}
 	p.DashboardOrder, p.TestOrder, p.SectionOrder = mappingKeys(root, "dashboards"), mappingKeys(root, "tests"), mappingKeys(root, "sections")
+	p.ViewOrder = mappingKeys(root, "views")
 	for n, sec := range p.Sections {
 		sec.Name = n
 	}

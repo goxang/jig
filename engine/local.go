@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/goxang/jig/api"
 	"github.com/goxang/jig/core"
@@ -173,6 +175,27 @@ func (l *Local) builtins() {
 			{Name: "image", Type: protocol.TypeString}, {Name: "message", Type: protocol.TypeString},
 		}, rows), nil
 	}
+	l.sources["plugins"] = func(ctx context.Context, _ protocol.Args) (*protocol.Frame, error) {
+		ms, warns := host.Discover(l.App.Spec.Dir, l.App.Spec.Plugins)
+		var rows []map[string]any
+		for _, m := range ms {
+			rows = append(rows, map[string]any{"name": m.Name, "version": m.Version, "state": "on", "kind": m.Kind(),
+				"permissions": m.Permissions.String(), "description": m.Description})
+		}
+		for _, n := range SortedKeys(l.App.Spec.Plugins) {
+			if p := l.App.Spec.Plugins[n]; p.Off {
+				rows = append(rows, map[string]any{"name": n, "version": p.Version, "state": "off"})
+			}
+		}
+		for _, w := range warns {
+			rows = append(rows, map[string]any{"state": "warn", "description": w})
+		}
+		var fields []protocol.Field
+		for _, c := range []string{"name", "version", "state", "kind", "permissions", "description"} {
+			fields = append(fields, protocol.Field{Name: c, Type: protocol.TypeString})
+		}
+		return frames.FromRows(fields, rows), nil
+	}
 	l.sources["queries.run"] = func(ctx context.Context, args protocol.Args) (*protocol.Frame, error) {
 		name, _ := args["name"].(string)
 		var t core.Table
@@ -237,10 +260,82 @@ func (l *Local) Query(ctx context.Context, source string, args protocol.Args) (*
 	l.mu.Lock()
 	f, ok := l.sources[source]
 	l.mu.Unlock()
-	if !ok {
-		return nil, &protocol.Error{Code: protocol.CodeNotFound, Message: "no source " + source}
+	if ok {
+		return f(ctx, args)
 	}
-	return f(ctx, args)
+	if _, comp := l.App.Spec.Components[source]; comp || source == "runtime" {
+		return l.componentQuery(ctx, source, args)
+	}
+	return nil, &protocol.Error{Code: protocol.CodeNotFound, Message: "no source " + source}
+}
+
+// componentQuery lets a view bind to a component by name: a metrics component answers query: as
+// a range (range: 15m, step: 30s; instant: true for one sample per series) in long form, time,
+// series, value; anything else that answers queries returns its table.
+func (l *Local) componentQuery(ctx context.Context, name string, args protocol.Args) (*protocol.Frame, error) {
+	text, _ := args["query"].(string)
+	c, err := l.App.Component(name)
+	if name == "runtime" {
+		c, err = l.App.runtime, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	m, ok := c.(core.Metrics)
+	if !ok {
+		t, err := l.App.RunQuery(ctx, name, text)
+		if err != nil {
+			return nil, err
+		}
+		return tableFrame(t), nil
+	}
+	fields := []protocol.Field{{Name: "time", Type: protocol.TypeTime}, {Name: "series", Type: protocol.TypeString}, {Name: "value", Type: protocol.TypeNumber}}
+	var rows []map[string]any
+	if inst, _ := args["instant"].(bool); inst {
+		ss, err := m.Instant(ctx, text)
+		if err != nil {
+			return nil, err
+		}
+		for _, s := range ss {
+			rows = append(rows, map[string]any{"time": time.Now(), "series": seriesName(s.Labels), "value": s.Value})
+		}
+		return frames.FromRows(fields, rows), nil
+	}
+	rng, step := dur(args["range"], 15*time.Minute), dur(args["step"], 0)
+	if step == 0 {
+		step = max(rng/240, time.Second)
+	}
+	end := time.Now()
+	ss, err := m.Range(ctx, text, end.Add(-rng), end, step)
+	if err != nil {
+		return nil, err
+	}
+	for _, s := range ss {
+		name := seriesName(s.Labels)
+		for _, p := range s.Points {
+			rows = append(rows, map[string]any{"time": p.T, "series": name, "value": p.V})
+		}
+	}
+	return frames.FromRows(fields, rows), nil
+}
+
+func dur(v any, def time.Duration) time.Duration {
+	if d, err := time.ParseDuration(fmt.Sprint(v)); err == nil && v != nil {
+		return d
+	}
+	return def
+}
+
+// seriesName is a series' labels as k=v, sorted, without __name__.
+func seriesName(labels map[string]string) string {
+	var parts []string
+	for k, v := range labels {
+		if k != "__name__" {
+			parts = append(parts, k+"="+v)
+		}
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, ",")
 }
 
 // Stream answers a source that only queries with one batch.
@@ -342,3 +437,7 @@ func (l *Local) Complete(context.Context, string, string, int) ([]protocol.Compl
 }
 
 func (l *Local) Session(context.Context) identity.Subject { return l.me }
+
+// Action is a registered action by name: its effect, help and argument schema.
+func (l *Local) Action(name string) (actions.Action, bool) { return l.runner.Actions.Get(name) }
+func (l *Local) Actions() []string                         { return l.runner.Actions.Names() }

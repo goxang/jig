@@ -128,7 +128,7 @@ func pluginCommand() *cobra.Command {
 			v := e.Latest()
 			fmt.Printf("%s %s %s\n%s\n", bold(args[0]), v, dim("(not installed: jig plugin add "+args[0]+")"), e.Description)
 			if vv := e.Versions[v]; vv != nil {
-				fmt.Printf("permissions: %s\n", permsText(vv.Permissions))
+				fmt.Printf("permissions: %s\n", vv.Permissions.String())
 			}
 			return nil
 		},
@@ -245,25 +245,6 @@ func pluginConfig(dir string) map[string]*spec.Plugin {
 	return p.Plugins
 }
 
-func permsText(p host.Permissions) string {
-	var out []string
-	for _, kv := range []struct {
-		k string
-		v []string
-	}{{"net", p.Net}, {"secrets", p.Secrets}, {"exec", p.Exec}, {"uses", p.Uses}, {"fs", p.FS}, {"env", p.Env}} {
-		if len(kv.v) > 0 {
-			out = append(out, kv.k+": "+strings.Join(kv.v, ", "))
-		}
-	}
-	if p.AI {
-		out = append(out, "ai")
-	}
-	if len(out) == 0 {
-		return "none beyond the project"
-	}
-	return strings.Join(out, "; ")
-}
-
 func pluginInfo(ctx context.Context, w io.Writer, dir string, m *host.Manifest) error {
 	fmt.Fprintf(w, "%s %s  %s\n", bold(m.Name), m.Version, dim(m.Kind()+" · "+m.Dir))
 	if m.Description != "" {
@@ -272,7 +253,7 @@ func pluginInfo(ctx context.Context, w io.Writer, dir string, m *host.Manifest) 
 	if m.Publisher != "" {
 		fmt.Fprintln(w, "publisher:   "+m.Publisher)
 	}
-	fmt.Fprintln(w, "permissions: "+permsText(m.Permissions))
+	fmt.Fprintln(w, "permissions: "+m.Permissions.String())
 	if !host.Sandboxed() {
 		fmt.Fprintln(w, dim("             advisory on this OS: no sandbox, calls are audited"))
 	}

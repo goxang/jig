@@ -125,6 +125,33 @@ func (h *Host) Query(ctx context.Context, name string, args protocol.Args) (*pro
 	return &f, nil
 }
 
+// Widget asks a plugin to draw one of its canvas widgets, named <plugin>.<widget>, into p.Size.
+func (h *Host) Widget(ctx context.Context, name string, params protocol.WidgetRenderParams) ([]string, error) {
+	p, local, err := h.owner(name)
+	if err != nil {
+		return nil, err
+	}
+	params.Widget = local
+	var r protocol.WidgetRenderResult
+	if err := p.call(ctx, protocol.MethodWidgetRender, params, &r); err != nil {
+		return nil, err
+	}
+	return r.Lines, nil
+}
+
+// View asks a plugin for a view it renders itself (render), named <plugin>.<view>.
+func (h *Host) View(ctx context.Context, name string, args protocol.Args) (*protocol.Node, error) {
+	p, local, err := h.owner(name)
+	if err != nil {
+		return nil, err
+	}
+	var n protocol.Node
+	if err := p.call(ctx, protocol.MethodRender, protocol.RenderParams{View: local, Args: args, Context: h.context()}, &n); err != nil {
+		return nil, err
+	}
+	return &n, nil
+}
+
 // Run runs or plans an action; progress goes to the job in ctx.
 func (h *Host) Run(ctx context.Context, name string, args protocol.Args, dryRun bool) (*protocol.RunResult, error) {
 	p, local, err := h.owner(name)

@@ -243,3 +243,22 @@ func (m *Manifest) Path(p string) string {
 	}
 	return filepath.Join(m.Dir, p)
 }
+
+func (p Permissions) String() string {
+	var out []string
+	for _, kv := range []struct {
+		k string
+		v []string
+	}{{"net", p.Net}, {"secrets", p.Secrets}, {"exec", p.Exec}, {"uses", p.Uses}, {"fs", p.FS}, {"env", p.Env}} {
+		if len(kv.v) > 0 {
+			out = append(out, kv.k+": "+strings.Join(kv.v, ", "))
+		}
+	}
+	if p.AI {
+		out = append(out, "ai")
+	}
+	if len(out) == 0 {
+		return "none beyond the project"
+	}
+	return strings.Join(out, "; ")
+}

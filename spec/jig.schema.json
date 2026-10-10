@@ -1462,6 +1462,28 @@
       },
       "type": "object"
     },
+    "View": {
+      "additionalProperties": true,
+      "properties": {
+        "file": {
+          "type": "string"
+        },
+        "key": {
+          "type": "string"
+        },
+        "slot": {
+          "description": "tab, subtab:\u003cview\u003e, service.section, detail:\u003cscheme\u003e, panel or home; or { tab: { key: K } }"
+        },
+        "title": {
+          "type": "string"
+        },
+        "widget": {
+          "description": "a widget kind, when the view is one widget",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
     "Watch": {
       "additionalProperties": false,
       "properties": {
@@ -1576,6 +1598,14 @@
       },
       "type": "array"
     },
+    "keys": {
+      "description": "the key preset: jig (the default) or rig (rig's keys). A personal choice, so usually in .jig/local.yaml or ~/.config/jig/config.yaml",
+      "type": [
+        "string",
+        "number",
+        "boolean"
+      ]
+    },
     "manifests": {
       "description": "folders jig manifests and the Manifests screen read (default: the runtime's manifests, else the kubernetes imports). The screen lists only the objects a service deploys; u shows the rest",
       "items": {
@@ -1687,6 +1717,13 @@
         "integer",
         "string"
       ]
+    },
+    "views": {
+      "additionalProperties": {
+        "$ref": "#/definitions/View"
+      },
+      "description": "name: {slot, title, key, file, \u003clayout or widget\u003e}: a screen built from widgets. slot is tab (default), service.section, panel or home; the body is {widget: table, source: db, query: ..., refresh: 10s, transform: [...]} or a layout (grid: [[a, b], [c]], tabs: {Name: widget}, split, stack, box, scroll); file keeps the body in its own YAML file. See docs/views.md",
+      "type": "object"
     }
   },
   "title": "jig.yaml",

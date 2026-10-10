@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/goxang/jig/kernel/view"
 )
 
 //go:generate go test -run TestSchemaUpToDate -update .
@@ -49,6 +51,7 @@ var (
 	componentType = reflect.TypeOf(Component{})
 	taskType      = reflect.TypeOf(Task{})
 	dashboardType = reflect.TypeOf(Dashboard{})
+	viewType      = reflect.TypeOf(view.View{})
 )
 
 // ${VAR} expands before a value is decoded, so numbers and booleans may be written as strings; and
@@ -81,6 +84,21 @@ func (g *schemaGen) of(t reflect.Type) map[string]any {
 	case taskType:
 		g.define(t, func() any {
 			return map[string]any{"oneOf": []any{map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, g.object(t)}}
+		})
+		return ref(t)
+	case viewType:
+		g.define(t, func() any {
+			str := map[string]any{"type": "string"}
+			return map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"title": str, "key": str, "file": str,
+					"slot":   map[string]any{"description": "tab, subtab:<view>, service.section, detail:<scheme>, panel or home; or { tab: { key: K } }"},
+					"widget": map[string]any{"type": "string", "description": "a widget kind, when the view is one widget"},
+				},
+				// the layout (grid, tabs, ...) or the widget's own props
+				"additionalProperties": true,
+			}
 		})
 		return ref(t)
 	case dashboardType:
