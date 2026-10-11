@@ -172,6 +172,10 @@ func TestDatabaseRoundTrip(t *testing.T) {
 	if err != nil || !slices.Equal(tb.Rows[0], []string{"x", "select 1"}) || tb.Note != "1 row" {
 		t.Fatalf("query: %+v %v", tb, err)
 	}
+	tb, _ = db.(core.Querier).RunQuery(ctx, "@Switch select 2")
+	if !slices.Equal(tb.Rows[0], []string{"Switch", "select 2"}) {
+		t.Fatalf("@db query: %+v", tb)
+	}
 	if n, _ := db.Exec(ctx, "", ""); n != 7 {
 		t.Fatalf("exec: %d", n)
 	}

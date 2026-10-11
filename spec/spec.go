@@ -108,6 +108,7 @@ type Project struct {
 	Unset []string `yaml:"-"`
 	// FromEnv are the ${NAME}s the file took from the process environment, with their values.
 	FromEnv map[string]string `yaml:"-"`
+	lookup  func(string) (string, bool)
 	// Config is the composed file, with where each value came from.
 	Config *config.Doc `yaml:"-"`
 

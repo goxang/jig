@@ -824,7 +824,7 @@ func addViews(a *engine.App, all map[string]tab) []tab {
 		for _, n := range names {
 			node := m.Views[n]
 			var v view.View
-			if err := node.Decode(&v); err != nil {
+			if err := a.Spec.Expanded(&node).Decode(&v); err != nil {
 				v = view.View{Slot: "tab", Root: protocol.Node{Widget: "text", Props: protocol.Args{"text": err.Error()}}}
 			}
 			remote := ""

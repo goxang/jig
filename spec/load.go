@@ -143,7 +143,7 @@ func LoadData(raw []byte, file, env string, overrides map[string]string) (*Proje
 	unset := map[string]bool{}
 	expandTop(root, env, lookup, func(name string) { unset[name] = true })
 
-	p := &Project{File: file, Dir: dir, Unset: keys(unset), FromEnv: fromEnv, Config: doc}
+	p := &Project{File: file, Dir: dir, Unset: keys(unset), FromEnv: fromEnv, Config: doc, lookup: lookup}
 	if err := root.Decode(p); err != nil {
 		return nil, nil, fmt.Errorf("%s: %w", file, err)
 	}
@@ -377,6 +377,18 @@ func expandNode(n *yaml.Node, lookup func(string) (string, bool), unset func(str
 	for _, c := range n.Content {
 		expandNode(c, lookup, unset)
 	}
+}
+
+// Expanded is a copy of n with ${...} expanded as in jig.yaml, for YAML from plugins.
+func (p *Project) Expanded(n *yaml.Node) *yaml.Node {
+	var c yaml.Node
+	if b, err := yaml.Marshal(n); err != nil || yaml.Unmarshal(b, &c) != nil {
+		return n
+	}
+	if p.lookup != nil {
+		expandNode(&c, p.lookup, nil)
+	}
+	return &c
 }
 
 // mergeNodes deep-merges mapping patch onto base; anything else in patch replaces.

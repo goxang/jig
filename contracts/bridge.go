@@ -768,8 +768,13 @@ func (d *databaseBridge) QueryLanguage() string {
 	return "sql"
 }
 
+// RunQuery runs q on the default database; "@name <sql>" picks another.
 func (d *databaseBridge) RunQuery(ctx context.Context, q string) (core.Table, error) {
-	return d.Query(ctx, "", q)
+	db := ""
+	if rest, ok := strings.CutPrefix(strings.TrimSpace(q), "@"); ok {
+		db, q, _ = strings.Cut(rest, " ")
+	}
+	return d.Query(ctx, db, q)
 }
 
 type cacheBridge struct{ *base }
