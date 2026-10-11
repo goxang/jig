@@ -96,7 +96,7 @@ func loadRunCommand() *cobra.Command {
 		}),
 	}
 	f := c.Flags()
-	f.Float64VarP(&rate, "rate", "r", 0, "target rate instead of the run's")
+	f.Float64Var(&rate, "rate", 0, "target rate instead of the run's")
 	f.DurationVarP(&dur, "for", "d", 0, "how long (open-ended runs stop on Ctrl-C)")
 	f.StringVar(&profile, "profile", "", "steady, ramp, spike or soak")
 	f.StringArrayVar(&asserts, "assert", nil, `a check on the result, repeatable: "p95 < 200ms", "errors < 0.5%", "throughput >= 1500/s"`)

@@ -39,3 +39,22 @@ func TestCLIDoc(t *testing.T) {
 		t.Fatal("docs/cli.md is stale: go test ./internal/cli -run CLIDoc -update")
 	}
 }
+
+// A flag shorthand a command shares with a persistent one panics only when that command runs.
+func TestFlagsMerge(t *testing.T) {
+	var walk func(c *cobra.Command)
+	walk = func(c *cobra.Command) {
+		for _, s := range c.Commands() {
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						t.Errorf("%s: %v", s.CommandPath(), r)
+					}
+				}()
+				s.InheritedFlags()
+			}()
+			walk(s)
+		}
+	}
+	walk(newRoot())
+}

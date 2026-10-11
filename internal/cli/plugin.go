@@ -147,7 +147,7 @@ func pluginCommand() *cobra.Command {
 				return tailFile(cmd.Context(), file(args[0]), follow)
 			},
 		}
-		c.Flags().BoolVarP(&follow, "follow", "f", false, "keep printing as it grows")
+		c.Flags().BoolVarP(&follow, "follow", "F", false, "keep printing as it grows")
 		return c
 	}
 	pc.AddCommand(logs("logs", "the plugin's stderr and host/log lines", host.LogFile))

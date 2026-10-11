@@ -12,7 +12,7 @@ jig plugin ls                       # what the project has, where from, on or of
 jig plugin off jira                 # for you (.jig/local.yaml); --project writes jig.yaml
 jig plugin up                       # upgrade within each major version
 jig plugin info gitlab              # what it provides and its permissions
-jig plugin logs gitlab -f           # its stderr; trace shows the JSON-RPC exchange (JIG_TRACE=gitlab)
+jig plugin logs gitlab -F           # its stderr; trace shows the JSON-RPC exchange (JIG_TRACE=gitlab)
 ```
 
 jig finds plugins in what `jig.lock` pins, then `~/.config/jig/plugins`, then `.jig/plugins`, then
