@@ -2,8 +2,10 @@ package spec
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/goxang/jig/kernel/config"
@@ -55,12 +57,43 @@ func importFragment(kind, path, dir string, root *yaml.Node) (*config.Doc, error
 		out[n] = s
 	}
 	frag["services"] = out
-	var node yaml.Node
-	if err := node.Encode(frag); err != nil {
+	node, err := toNode(frag)
+	if err != nil {
 		return nil, err
 	}
-	prune(&node)
-	return config.FromNode(&node, path, "import "+kind), nil
+	prune(node)
+	return config.FromNode(node, path, "import "+kind), nil
+}
+
+// toNode builds the node of a JSON-like fragment itself: yaml.v3's Node.Encode re-parses what it
+// emits and fails on a string starting with a newline inside a list (a multi-line Grafana query).
+func toNode(v any) (*yaml.Node, error) {
+	switch v := v.(type) {
+	case map[string]any:
+		n := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+		for _, k := range slices.Sorted(maps.Keys(v)) {
+			c, err := toNode(v[k])
+			if err != nil {
+				return nil, err
+			}
+			n.Content = append(n.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: k}, c)
+		}
+		return n, nil
+	case []any:
+		n := &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
+		for _, e := range v {
+			c, err := toNode(e)
+			if err != nil {
+				return nil, err
+			}
+			n.Content = append(n.Content, c)
+		}
+		return n, nil
+	case string:
+		return &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: v}, nil
+	}
+	var n yaml.Node
+	return &n, n.Encode(v)
 }
 
 // runImporter splits what an importer returns into its services and the rest of its fragment.

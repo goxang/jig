@@ -311,7 +311,7 @@ func pickEnv(env, def string, have []string) string {
 	return ""
 }
 
-var varRe = regexp.MustCompile(`\$\$|\$\{([A-Za-z_][A-Za-z0-9_.]*)(:-([^}]*))?\}`)
+var varRe = regexp.MustCompile(`\$\$|\$\{([A-Za-z_][A-Za-z0-9_.]*)(:-((?:\$\{[^}]*\}|[^}])*))?\}`)
 
 // Expand replaces ${NAME} and ${NAME:-default}; $$ is a literal $. Unknown names stay as written.
 func Expand(s string, lookup func(string) (string, bool)) string { return expand(s, lookup, nil) }
@@ -330,7 +330,7 @@ func expand(s string, lookup func(string) (string, bool), unset func(string)) st
 			return v
 		}
 		if g[2] != "" {
-			return g[3]
+			return expand(g[3], lookup, unset)
 		}
 		if v, ok := lookup(g[1]); ok {
 			return v

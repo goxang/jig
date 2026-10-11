@@ -156,12 +156,13 @@ func TestExpand(t *testing.T) {
 		return v, ok
 	}
 	for in, want := range map[string]string{
-		"${A}":        "1",
-		"${B:-two}":   "two",
-		"${E:-three}": "three",
-		"${B}":        "${B}",
-		"$${A}":       "${A}",
-		"x-${A}-y":    "x-1-y",
+		"${A}":         "1",
+		"${B:-two}":    "two",
+		"${E:-three}":  "three",
+		"${B}":         "${B}",
+		"$${A}":        "${A}",
+		"x-${A}-y":     "x-1-y",
+		"${B:-n-${A}}": "n-1",
 	} {
 		if got := Expand(in, look); got != want {
 			t.Errorf("Expand(%q) = %q, want %q", in, got, want)
