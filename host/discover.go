@@ -205,6 +205,31 @@ func writeAtomic(path string, b []byte, mode os.FileMode) error {
 // DevStamp, under .jig, names the plugin jig plugin dev just built; a running TUI reloads when it changes.
 const DevStamp = "plugin-dev"
 
+// ShowsTab reports whether m's tab views belong on dir's screens. A plugin only the user installed
+// shows its tabs when jig.yaml configures it, or when its detect matches and the credentials it
+// asks for are set: a tab that cannot load anything is noise in a fresh project.
+func (m *Manifest) ShowsTab(dir string, cfg map[string]*spec.Plugin) bool {
+	if c, ok := cfg[m.Name]; ok {
+		return c == nil || !c.Off
+	}
+	if strings.HasPrefix(m.Dir, filepath.Join(dir, ".jig")+string(filepath.Separator)) {
+		return true
+	}
+	if lock, err := ReadLock(dir); err == nil && lock.Plugins[m.Name] != nil {
+		return true
+	}
+	if m.Detect == nil || !m.Relevant(dir, cfg) {
+		return false
+	}
+	s := m.Permissions.Secrets
+	for _, n := range s {
+		if os.Getenv(n) != "" {
+			return true
+		}
+	}
+	return len(s) == 0
+}
+
 // Relevant reports whether m belongs on dir's screens. Project plugins always do; a user-wide one
 // does when jig.yaml configures it, its detect matches, or it has neither detect nor config.
 func (m *Manifest) Relevant(dir string, cfg map[string]*spec.Plugin) bool {

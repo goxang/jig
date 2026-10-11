@@ -196,6 +196,9 @@ func appendToBlock(text, key, body string) string {
 	for i, l := range lines {
 		if strings.HasPrefix(l, key+":") {
 			at = i
+			if v := strings.TrimSpace(strings.TrimPrefix(l, key+":")); v == "{}" || v == "~" || v == "null" || v == "[]" {
+				lines[i] = key + ":\n" // an empty block takes the body below it
+			}
 			continue
 		}
 		if at >= 0 && l != "" && l[0] != ' ' && l[0] != '#' && l[0] != '\n' {
@@ -208,6 +211,7 @@ func appendToBlock(text, key, body string) string {
 		}
 	}
 	if at >= 0 {
+		text = strings.Join(lines, "")
 		return strings.TrimRight(text, "\n") + "\n  # found by jig init --deep\n" + body
 	}
 	return strings.TrimRight(text, "\n") + "\n" + key + ":\n" + body

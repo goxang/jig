@@ -1262,6 +1262,7 @@ func addViews(a *engine.App, all map[string]tab) []tab {
 		if !m.Relevant(a.Spec.Dir, a.Spec.Plugins) {
 			continue
 		}
+		showTabs := m.ShowsTab(a.Spec.Dir, a.Spec.Plugins)
 		rank = viewRank(m, a.Spec.Dir)
 		names := make([]string, 0, len(m.Views))
 		for n := range m.Views {
@@ -1278,11 +1279,14 @@ func addViews(a *engine.App, all map[string]tab) []tab {
 			if v.Root.Widget == "" && v.File == "" {
 				remote = m.Name + "." + n
 			}
+			if !showTabs && v.Slot == "tab" {
+				continue
+			}
 			add("view:"+m.Name+"."+n, n, &v, m.Dir, remote)
 		}
 		// a plugin with its own views has laid out what the contract views would show
 		for _, id := range m.Implements {
-			if len(names) > 0 {
+			if len(names) > 0 || !showTabs {
 				break
 			}
 			if c := contracts.Get(id); c != nil && c.View != nil {

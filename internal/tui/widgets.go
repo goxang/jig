@@ -122,7 +122,7 @@ func (t *viewTab) leaf(m *model, wn *wnode, x, y, w, h int, focused bool) string
 	case "waterfall":
 		return waterfallWidget(f, w, h)
 	case "graph":
-		return graphWidget(f, n, w, h)
+		return graphWidget(wn, w, h)
 	case "timeline":
 		return timelineWidget(f, n, w, h, scrollOf(wn))
 	case "calendar":
@@ -226,7 +226,7 @@ func (t *viewTab) widgetKey(m *model, wn *wnode, k tea.KeyPressMsg) tea.Cmd {
 }
 
 // scrolls are the widgets ↑↓ scroll.
-var scrolls = map[string]bool{"code": true, "diff": true, "timeline": true, "markdown": true}
+var scrolls = map[string]bool{"code": true, "diff": true, "timeline": true, "markdown": true, "graph": true}
 
 func scrollOf(wn *wnode) int {
 	s, _ := wn.st.(int)
@@ -926,7 +926,8 @@ func str(v any) string {
 }
 
 // graphWidget draws edges (from, to) around center: (else the first from).
-func graphWidget(f *protocol.Frame, n protocol.Node, w, h int) string {
+func graphWidget(wn *wnode, w, h int) string {
+	f, n := wn.frame, wn.n
 	center := view.Prop(n, "center")
 	var in, out []viz.Rel
 	rows := frames.Rows(f)
@@ -941,7 +942,9 @@ func graphWidget(f *protocol.Frame, n protocol.Node, w, h int) string {
 			in = append(in, viz.Rel{Node: str(r["from"]), Label: str(r["label"])})
 		}
 	}
-	return clip(viz.RelationGraph(center, in, out), w, h)
+	lines := strings.Split(viz.RelationGraph(center, in, out), "\n")
+	wn.st = min(scrollOf(wn), max(0, len(lines)-h))
+	return clip(strings.Join(lines[scrollOf(wn):], "\n"), w, h)
 }
 
 // timelineWidget lists events newest first: time, title, and kind (or state) coloured.
