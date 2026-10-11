@@ -128,6 +128,10 @@ func Open(file, env string) (*App, error) {
 		if c, ok := a.runtime.(io.Closer); ok {
 			_ = c.Close()
 		}
+		// a plugin runtime was configured when it started; restart it on the new values
+		if a.plugins.h != nil {
+			a.plugins.h.Close()
+		}
 		if err := a.newRuntime(); err != nil {
 			return nil, err
 		}
