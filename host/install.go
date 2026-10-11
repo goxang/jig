@@ -324,6 +324,9 @@ func (in *Installer) installRegistry(ctx context.Context, ix *Index, name, versi
 var sha256Hex = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 // ponytail: GC leaves blobs; drop those with one link left if the store grows.
+// ponytail: one lock for every blob; per-sha locks if downloads of different files should overlap
+var blobMu sync.Mutex
+
 func blobPath(sha string) string { return filepath.Join(StoreDir(), ".blobs", sha) }
 
 func vendorBlob(dir, sha string) string {
@@ -341,6 +344,9 @@ func (in *Installer) sharedFile(ctx context.Context, key, f string, a Artifact, 
 		return fmt.Errorf("path %q escapes the plugin", f)
 	}
 	blob := blobPath(a.SHA256)
+	// plugins install in parallel; two writing one blob would leave each linked to its own copy
+	blobMu.Lock()
+	defer blobMu.Unlock()
 	if !exists(blob) {
 		data, err := os.ReadFile(vendorBlob(in.Dir, a.SHA256))
 		if err != nil {
