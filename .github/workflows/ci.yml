@@ -53,6 +53,28 @@ jobs:
       - run: JIG_BENCH=1 go test -count=1 -v -run 'Budget' ./internal/bench ./host
 
 
+  plugins:
+    # the official plugins' golden transcripts and the AI product flow, against this commit of core
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: jig
+      - uses: actions/checkout@v5
+        with:
+          repository: goxang/jig-plugins
+          path: jig-plugins
+          # needed while jig-plugins is private
+          token: ${{ secrets.GOXANG_READ_TOKEN || github.token }}
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: jig/go.mod
+      - working-directory: jig-plugins
+        run: |
+          go mod edit -replace github.com/goxang/jig=../jig -replace github.com/goxang/jig/sdk=../jig/sdk
+          go mod tidy
+          go test -count=1 -run 'Transcripts|ProductFlow' ./cmd/jig-std ./internal/acceptance
+
   version:
     runs-on: ubuntu-latest
     outputs:
@@ -122,7 +144,7 @@ jobs:
           retention-days: 1
 
   release:
-    needs: [version, lint, test, bench, build]
+    needs: [version, lint, test, bench, plugins, build]
     if: github.event_name == 'push' && needs.version.outputs.skip != '1'
     runs-on: ubuntu-latest
     permissions:
