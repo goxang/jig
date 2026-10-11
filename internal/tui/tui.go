@@ -930,7 +930,17 @@ func (m *model) zone(id string, x, y, w, h int) {
 	m.zones = append(m.zones, zone{id: id, x: x, y: y + m.originY, w: w, h: h})
 }
 
-func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *model) Update(msg tea.Msg) (_ tea.Model, cmd tea.Cmd) {
+	defer func() {
+		if r := recover(); r != nil {
+			m.setStatus(fmt.Sprintf("internal error: %v", r), true)
+			cmd = nil
+		}
+	}()
+	return m.update(msg)
+}
+
+func (m *model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.w, m.h = msg.Width, msg.Height
@@ -2297,8 +2307,18 @@ func (m *model) fetchKubeconfig(env string) tea.Cmd {
 	return nil
 }
 
+func (m *model) safeRender() (out string) {
+	defer func() {
+		if r := recover(); r != nil {
+			m.setStatus(fmt.Sprintf("internal error: %v", r), true)
+			out = fmt.Sprintf("internal error: %v\n\nswitch tab (shift+tab) or press q to quit", r)
+		}
+	}()
+	return m.render()
+}
+
 func (m *model) View() tea.View {
-	v := tea.NewView(m.render())
+	v := tea.NewView(m.safeRender())
 	v.AltScreen = true
 	if !m.mouseOff {
 		v.MouseMode = tea.MouseModeAllMotion

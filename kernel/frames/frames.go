@@ -19,6 +19,9 @@ func Len(f *protocol.Frame) int {
 
 // Column is the values of the named field, or nil.
 func Column(f *protocol.Frame, name string) []any {
+	if f == nil {
+		return nil
+	}
 	for i, fl := range f.Fields {
 		if fl.Name == name && i < len(f.Columns) {
 			return f.Columns[i]
@@ -28,6 +31,9 @@ func Column(f *protocol.Frame, name string) []any {
 }
 
 func Row(f *protocol.Frame, i int) map[string]any {
+	if f == nil {
+		return map[string]any{}
+	}
 	m := make(map[string]any, len(f.Fields))
 	for j, fl := range f.Fields {
 		if j < len(f.Columns) && i < len(f.Columns[j]) {
