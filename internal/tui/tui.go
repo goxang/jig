@@ -100,7 +100,9 @@ type model struct {
 	// errLog keeps the last errors, newest last; ! shows them in full
 	errLog []loggedErr
 	// drafts are inputs left with esc, by label, given back when the same input opens again
-	drafts     map[string]draft
+	drafts map[string]draft
+	// cmdHist are the palette lines run, oldest first
+	cmdHist    []string
 	showErrors bool
 	saving     sync.Mutex
 	// views are the filters of each screen, carried over a reload and kept by a saved session
@@ -232,6 +234,10 @@ type prompt struct {
 	// template is offered while the input is empty: tab fills it in, enter runs it as is
 	template string
 	took     time.Duration
+	// recall walks the palette history with ↑↓: histAt is the line shown (len: the draft)
+	recall  []string
+	histAt  int
+	histTop string
 	// described is what the AI wrote for the "@?description" in describedFor, the input it saw
 	described, describedFor string
 	// asked is the input last sent to the AI, so a pause on the same text asks nothing new
@@ -772,6 +778,27 @@ func (m *model) actIf(ask bool, label string, f func(ctx context.Context) error)
 	}
 	m.confirm = &confirm{text: text, run: run}
 	return nil
+}
+
+// walk shows the previous (up) or next palette line; past the newest it gives the draft back.
+func (p *prompt) walk(older bool) {
+	if p.histAt == len(p.recall) {
+		p.histTop = p.input.Value()
+	}
+	switch {
+	case older && p.histAt > 0:
+		p.histAt--
+	case !older && p.histAt < len(p.recall):
+		p.histAt++
+	default:
+		return
+	}
+	v := p.histTop
+	if p.histAt < len(p.recall) {
+		v = p.recall[p.histAt]
+	}
+	p.input.SetValue(v)
+	p.input.CursorEnd()
 }
 
 func (m *model) ask(label, value string, submit func(string) tea.Cmd) {
@@ -1628,6 +1655,11 @@ func (m *model) key(k tea.KeyPressMsg) tea.Cmd {
 		case "ctrl+t":
 			m.toggleAutocomplete()
 			return nil
+		case "up", "down":
+			if p := m.prompt; len(p.recall) > 0 && (p.input.Value() == "" || p.histAt < len(p.recall)) {
+				p.walk(k.String() == "up")
+				return nil
+			}
 		}
 		before := m.prompt.input.Value()
 		var cmd tea.Cmd

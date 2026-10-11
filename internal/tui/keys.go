@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"text/tabwriter"
 
@@ -60,7 +61,16 @@ func (m *model) command(line string) tea.Cmd {
 	verb, args := f[0], f[1:]
 	switch verb {
 	case "palette":
-		m.ask(":", "", m.command)
+		m.ask(":", "", func(line string) tea.Cmd {
+			if line = strings.TrimSpace(line); line != "" {
+				m.cmdHist = append(slices.DeleteFunc(m.cmdHist, func(h string) bool { return h == line }), line)
+				m.cmdHist = m.cmdHist[max(0, len(m.cmdHist)-100):]
+			}
+			return m.command(line)
+		})
+		m.prompt.recall = slices.Clone(m.cmdHist)
+		m.prompt.histAt = len(m.prompt.recall)
+		m.prompt.input.SetSuggestions(slices.Clone(m.cmdHist))
 		return nil
 	case "search":
 		m.search()

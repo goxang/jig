@@ -113,5 +113,5 @@ The user typed the start of the input, then described in words what the rest sho
 It must run as it is: valid syntax, no comments, no remarks. When the description asks for something the input cannot do itself (an analysis, an explanation, a summary), write the input that fetches the data it needs.
 Use exactly the syntax the context gives, and the real names it lists (columns, fields, keys): a description that already reads like that syntax ("dest = pos") becomes its valid form with the full name ("Destination=Pos"), never loose words.
 Typed: ` + before + `
-Description of the rest: ` + want
+Description of the rest (it may end with words of the input itself, such as a trailing clause, that must stay in the result): ` + want
 }

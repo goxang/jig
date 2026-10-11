@@ -161,6 +161,9 @@ func (in *Installer) Add(ctx context.Context, srcs []string) error {
 			}
 			lock.Plugins[m.Name] = l
 			in.say("+ %s %s (%s)", m.Name, m.Version, s)
+			if text := m.MissingText(false); text != "" {
+				in.say("! %s %s", m.Name, text)
+			}
 			continue
 		}
 		roots[src.name] = src.version

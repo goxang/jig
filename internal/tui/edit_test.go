@@ -49,3 +49,19 @@ func TestChatInputWalksWords(t *testing.T) {
 		t.Errorf("ctrl+left then typing = %q", got)
 	}
 }
+
+func TestChatInputSelectionAndWordDelete(t *testing.T) {
+	in := textarea.New()
+	editorTextarea(&in)
+	in.Focus()
+	in.SetValue("one two three")
+	in, _ = in.Update(keyOf("ctrl+backspace"))
+	if got := in.Value(); got != "one two " {
+		t.Errorf("ctrl+backspace = %q", got)
+	}
+	in.SelectAll()
+	in, _ = in.Update(tea.PasteMsg{Content: "new"})
+	if got := in.Value(); got != "new" {
+		t.Errorf("paste over a selection = %q", got)
+	}
+}

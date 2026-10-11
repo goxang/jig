@@ -63,6 +63,7 @@ func (a *App) Doctor(ctx context.Context) []Check {
 		add(Check{Name: "variables", Status: CheckOK, Detail: "every ${NAME} is set"})
 	}
 	out = append(out, a.PluginChecks()...)
+	out = append(out, a.diskCheck())
 	if a.Env == nil {
 		return append(out, Check{Name: "environment", Status: CheckFail, Detail: "none defined", Fix: "add one under environments: and set default:"})
 	}
@@ -108,6 +109,21 @@ func (a *App) PluginChecks() []Check {
 	ms, _ := host.Discover(a.Spec.Dir, a.Spec.Plugins)
 	known := a.KnownSecrets()
 	for _, m := range ms {
+		if !m.Relevant(a.Spec.Dir, a.Spec.Plugins) {
+			continue
+		}
+		if miss := m.Missing(false); len(miss) > 0 {
+			var fixes []string
+			var bins []string
+			for _, l := range miss {
+				bins = append(bins, l.Bin)
+				if l.Fix != "" {
+					fixes = append(fixes, l.Bin+": "+l.Fix)
+				}
+			}
+			out = append(out, Check{Name: "plugin " + m.Name, Status: CheckWarn, Detail: "not installed on this machine: " + strings.Join(bins, ", "),
+				Fix: strings.Join(fixes, "; ")})
+		}
 		secrets := m.Permissions.Secrets
 		if len(secrets) == 0 || !m.Relevant(a.Spec.Dir, a.Spec.Plugins) {
 			continue
@@ -295,4 +311,21 @@ func (a *App) Reach(ctx context.Context, name string) error {
 func firstLine(err error) string {
 	s, _, _ := strings.Cut(strings.TrimSpace(err.Error()), "\n")
 	return s
+}
+
+// diskCheck warns before the disk fills: builds and logs of local services need room.
+func (a *App) diskCheck() Check {
+	free, err := sh.FreeBytes(a.Spec.Dir)
+	if err != nil {
+		return Check{Name: "disk", Status: CheckOK, Detail: "not measured"}
+	}
+	detail := fmt.Sprintf("%d MB free where the project lives", free>>20)
+	fix := "jig purge --days 0 empties logs and drops built binaries; jig purge --dry-run lists what goes"
+	switch {
+	case free < 512<<20:
+		return Check{Name: "disk", Status: CheckFail, Detail: detail, Fix: fix}
+	case free < 2<<30:
+		return Check{Name: "disk", Status: CheckWarn, Detail: detail, Fix: fix}
+	}
+	return Check{Name: "disk", Status: CheckOK, Detail: detail}
 }

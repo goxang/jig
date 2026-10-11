@@ -17,6 +17,7 @@ import (
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/goxang/jig/ai"
@@ -37,8 +38,6 @@ type chat struct {
 	input   textarea.Model
 	starter int
 	err     string
-	// all is ctrl+a's select-all of the draft: the next key copies, replaces or drops it
-	all bool
 	// cmdSel is the highlighted row of the command menu that opens while a / command is typed
 	cmdSel int
 	// hist are the messages sent, oldest first; histAt walks them with ↑↓ (len(hist): the draft)
@@ -361,38 +360,39 @@ func (c *chat) recall(older bool) {
 
 func (m *model) chatKey(k tea.KeyPressMsg) tea.Cmd {
 	c := m.chat
-	all := c.all
-	c.all = false
 	switch k.String() {
 	case "ctrl+a":
-		c.all = c.input.Value() != ""
+		c.input.SelectAll()
+		return nil
+	case "ctrl+v":
+		if v, err := clipboard.ReadAll(); err == nil {
+			c.input, _ = c.input.Update(tea.PasteMsg{Content: v})
+		}
 		return nil
 	case "ctrl+x":
-		if c.busy {
+		if c.busy && !c.input.HasSelection() {
 			m.chatStop(c.convo)
 			return nil
 		}
 		fallthrough
 	case "ctrl+c", "ctrl+y":
+		sel := c.input.HasSelection()
 		text := c.input.Value()
-		if text == "" {
+		if sel {
+			text = c.input.SelectedText()
+		} else if text == "" {
 			text = c.lastAnswer()
 		}
 		copyText(text)
 		if k.String() == "ctrl+x" {
-			c.input.SetValue("")
+			if sel {
+				c.input.DeleteSelection()
+			} else {
+				c.input.SetValue("")
+			}
 		}
 		m.setStatus("copied", false)
 		return nil
-	}
-	if all {
-		switch {
-		case k.Code == tea.KeyBackspace, k.Code == tea.KeyDelete, k.String() == "ctrl+h":
-			c.input.SetValue("")
-			return nil
-		case k.Text != "", k.String() == "ctrl+v":
-			c.input.SetValue("")
-		}
 	}
 	if menu := cmdMenu(c.input.Value()); len(menu) > 0 {
 		c.cmdSel = min(c.cmdSel, len(menu)-1)
@@ -443,13 +443,19 @@ func (m *model) chatKey(k tea.KeyPressMsg) tea.Cmd {
 	case "shift+down", "ctrl+down":
 		c.scroll = max(0, c.scroll-1)
 		return nil
-	case "shift+left":
+	case "alt+shift+left":
 		c.hoff = max(0, c.hoff-8)
 		return nil
-	case "shift+right":
+	case "alt+shift+right":
 		c.hoff += 8
 		return nil
 	case "up":
+		if q := c.convo.queue; len(q) > 0 && c.input.Value() == "" {
+			c.input.SetValue(q[len(q)-1])
+			c.convo.queue = q[:len(q)-1]
+			c.input.CursorEnd()
+			return nil
+		}
 		// in a multi-line draft up moves between its lines until the first one
 		if c.input.Line() == 0 {
 			c.recall(true)
@@ -809,6 +815,13 @@ func (m *model) chatStop(cv *convo) {
 func (m *model) chatUpdate(msg tea.Msg) (tea.Cmd, bool) {
 	c := m.chat
 	switch msg := msg.(type) {
+	case tea.PasteMsg:
+		if c == nil || !c.open || !c.focus {
+			return nil, false
+		}
+		var cmd tea.Cmd
+		c.input, cmd = c.input.Update(msg)
+		return cmd, true
 	case chatEventMsg:
 		if cv := c.find(msg.s); cv != nil {
 			switch msg.e.Kind {
@@ -1266,7 +1279,7 @@ func (c *chat) view(m *model, x, w, h int) string {
 	case m.confirm != nil:
 		keys = sAmber.Render("↓ answer the question below")
 	case c.busy:
-		keys = "enter queues · ctrl+x stops · /new starts another · pgup scrolls"
+		keys = "enter queues · ↑ edits the last queued · ctrl+x stops · /new starts another · pgup scrolls"
 	}
 	status := sDim.Render(keys)
 	if n := c.running(); n > 0 && (!c.busy || n > 1) {
@@ -1328,7 +1341,7 @@ func (c *chat) view(m *model, x, w, h int) string {
 		rows[len(rows)-1] = sAmber.Render(fmt.Sprintf("↓ %d more lines · pgdown", c.scroll))
 	}
 	if c.hoff > 0 || widest > bw {
-		title += fmt.Sprintf(" · ⇢%d shift+←→", c.hoff)
+		title += fmt.Sprintf(" · ⇢%d alt+shift+←→", c.hoff)
 	}
 	body := strings.Join(rows, "\n")
 	c.bx, c.by, c.bw, c.bh = x+1, m.originY+1, bw, room
@@ -1339,10 +1352,6 @@ func (c *chat) view(m *model, x, w, h int) string {
 	}
 	c.input.SetWidth(iw - 2)
 	input := c.input.View()
-	if c.all {
-		input = sSel.Render(ansi.Wrap(c.input.Value(), iw-2, " "))
-		input += strings.Repeat("\n", max(0, chatInputHeight-1-strings.Count(input, "\n")))
-	}
 	border := cPanel
 	if c.focus {
 		border = cAccent

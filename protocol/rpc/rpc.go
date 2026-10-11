@@ -206,11 +206,22 @@ func (c *Conn) Call(ctx context.Context, method string, params, result any) erro
 	id := json.RawMessage(strconv.Itoa(c.next))
 	c.pending[string(id)] = ch
 	c.mu.Unlock()
-	if err := c.write(&Message{ID: id, Method: method, Params: b}); err != nil {
+	// a plugin that stopped reading fills the pipe and blocks the write: the caller still honours ctx
+	sent := make(chan error, 1)
+	go func() { sent <- c.write(&Message{ID: id, Method: method, Params: b}) }()
+	select {
+	case err := <-sent:
+		if err != nil {
+			c.mu.Lock()
+			delete(c.pending, string(id))
+			c.mu.Unlock()
+			return err
+		}
+	case <-ctx.Done():
 		c.mu.Lock()
 		delete(c.pending, string(id))
 		c.mu.Unlock()
-		return err
+		return ctx.Err()
 	}
 	select {
 	case m := <-ch:
@@ -225,7 +236,7 @@ func (c *Conn) Call(ctx context.Context, method string, params, result any) erro
 		c.mu.Lock()
 		delete(c.pending, string(id))
 		c.mu.Unlock()
-		_ = c.Notify(protocol.MethodNotifyCancel, protocol.CancelParams{ID: id})
+		go func() { _ = c.Notify(protocol.MethodNotifyCancel, protocol.CancelParams{ID: id}) }()
 		return ctx.Err()
 	}
 }

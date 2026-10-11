@@ -40,7 +40,17 @@ type tracesTab struct {
 	spanOff int
 	wf      viz.WaterfallView
 	wfWidth int
+	// busy is a search in flight; loadSeq and cancel drop a trace fetch the cursor has moved past
+	busy    bool
+	want    string
+	loadSeq int
+	cancel  context.CancelFunc
 }
+
+// traceDueMsg fires once the cursor rests on a trace: only then is it fetched.
+type traceDueMsg struct{ seq int }
+
+const tracesTimeout = 20 * time.Second
 
 type tracesMsg struct {
 	gen      int
@@ -82,11 +92,15 @@ func (t *tracesTab) open(m *model) tea.Cmd {
 }
 
 func (t *tracesTab) refresh(m *model) tea.Cmd {
+	if t.busy {
+		return nil
+	}
+	t.busy = true
 	a, gen, ctx := m.app, m.gen, m.ctx
 	q := core.TraceQuery{Service: t.service, Operation: t.op, MinDuration: t.min, Lookback: lookbacks[t.back], Limit: t.limit}
 	need := t.services == nil
 	return func() tea.Msg {
-		c, cancel := context.WithTimeout(ctx, 15*time.Second)
+		c, cancel := context.WithTimeout(ctx, tracesTimeout)
 		defer cancel()
 		tr, _, err := engine.Get[core.Tracing](a, core.KindTracing, "")
 		if err != nil {
@@ -101,9 +115,25 @@ func (t *tracesTab) refresh(m *model) tea.Cmd {
 	}
 }
 
+// load fetches trace id once the cursor has rested on it for a moment; a fetch for a trace the cursor
+// left is cancelled, so holding a key never queues a call per row on the tracing backend.
 func (t *tracesTab) load(m *model, id string) tea.Cmd {
-	a, gen, ctx := m.app, m.gen, m.ctx
+	if t.cancel != nil {
+		t.cancel()
+		t.cancel = nil
+	}
+	t.loadSeq++
+	seq := t.loadSeq
+	t.want = id
+	return tea.Tick(250*time.Millisecond, func(time.Time) tea.Msg { return traceDueMsg{seq} })
+}
+
+func (t *tracesTab) fetch(m *model, id string) tea.Cmd {
+	a, gen := m.app, m.gen
+	ctx, cancel := context.WithTimeout(m.ctx, tracesTimeout)
+	t.cancel = cancel
 	return func() tea.Msg {
+		defer cancel()
 		tr, _, err := engine.Get[core.Tracing](a, core.KindTracing, "")
 		if err != nil {
 			return spansMsg{gen: gen, id: id, err: err}
@@ -146,7 +176,12 @@ func (t *tracesTab) requery(m *model) tea.Cmd {
 
 func (t *tracesTab) update(m *model, msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
+	case traceDueMsg:
+		if msg.seq == t.loadSeq {
+			return t.fetch(m, t.want)
+		}
 	case tracesMsg:
+		t.busy = false
 		if msg.gen != m.gen {
 			return nil
 		}
@@ -166,7 +201,7 @@ func (t *tracesTab) update(m *model, msg tea.Msg) tea.Cmd {
 			}
 		}
 	case spansMsg:
-		if msg.gen == m.gen {
+		if msg.gen == m.gen && msg.id == t.want {
 			if msg.id != t.spansFor {
 				t.spanSel, t.spanOff = 0, 0
 			}

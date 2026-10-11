@@ -688,6 +688,9 @@ func (p *Plugin) script(ctx context.Context, method string, params, result any) 
 
 // ponytail: a cancelled script loses only its direct process; a process group kill when scripts fork daemons.
 func (p *Plugin) runScript(ctx context.Context, c Command, args any, live io.Writer, env ...string) ([]byte, error) {
+	if text := p.MissingText(true); text != "" {
+		return nil, unavailable("plugin %s %s", p.Name, text)
+	}
 	b, _ := json.Marshal(args)
 	conf, _ := json.Marshal(p.Config)
 	cmd := p.command(ctx, c, nil)

@@ -47,6 +47,7 @@ type Session struct {
 	Sorts    map[string]gridSort `json:"sorts,omitempty"`
 	Widths   map[string]int      `json:"widths,omitempty"`
 	Drafts   map[string]draft    `json:"drafts,omitempty"`
+	Commands []string            `json:"commands,omitempty"`
 	Activity []savedJob          `json:"activity,omitempty"`
 	Errors   []loggedErr         `json:"errors,omitempty"`
 
@@ -138,6 +139,7 @@ func (m *model) snapshot() *Session {
 	}
 	s.Runs = sc.runs
 	s.Sorts, s.Drafts, s.Errors, s.Widths = gridSorts, m.drafts, m.errLog, gridWidths
+	s.Commands = m.cmdHist
 	s.Activity = nil
 	for _, j := range m.jobList() {
 		end, _, err := j.State()
@@ -230,7 +232,7 @@ func (m *model) restore(s *Session) {
 	for id, w := range s.Widths {
 		gridWidths[id] = w
 	}
-	m.drafts, m.errLog, m.views = s.Drafts, s.Errors, s.Views
+	m.drafts, m.errLog, m.views, m.cmdHist = s.Drafts, s.Errors, s.Views, s.Commands
 	for _, sj := range s.Activity {
 		var err error
 		if sj.Err != "" {

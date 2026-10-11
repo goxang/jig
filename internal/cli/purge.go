@@ -16,7 +16,7 @@ import (
 )
 
 func purgeCommand() *cobra.Command {
-	var days int
+	var days, maxLog int
 	var dry bool
 	c := &cobra.Command{
 		Use:   "purge",
@@ -25,7 +25,9 @@ func purgeCommand() *cobra.Command {
 saved sessions (not the pinned one), reports, AI and test runs of every project jig has opened;
 this project's .jig/<env> logs, profiles and built binaries (rebuilt on the next run);
 backups, keeping the newest of each kind; the plugin description cache; and installed plugin
-versions no project's or your own jig.lock pins. Secrets, config and locks are never touched.`,
+versions no project's or your own jig.lock pins. Secrets, config and locks are never touched.
+A service log above --max-log MB is emptied whatever its age, since a running service keeps filling it.
+Disk full? jig purge --days 0 drops every log and built binary of this project at once.`,
 		Example: "  jig purge --dry-run      # list it first\n  jig purge --days 7",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -40,6 +42,7 @@ versions no project's or your own jig.lock pins. Secrets, config and locks are n
 					continue
 				}
 				d := filepath.Join(dir, ".jig", e.Name())
+				p.truncateBig(filepath.Join(d, "logs"), int64(maxLog)<<20)
 				for _, sub := range []string{"logs", "profiles", "bin"} {
 					p.old(filepath.Join(d, sub))
 				}
@@ -66,6 +69,7 @@ versions no project's or your own jig.lock pins. Secrets, config and locks are n
 		},
 	}
 	c.Flags().IntVar(&days, "days", 30, "only what has not changed in this many days")
+	c.Flags().IntVar(&maxLog, "max-log", 64, "empty any service log above this many MB, even a running service's (it keeps writing to the same file)")
 	c.Flags().BoolVar(&dry, "dry-run", false, "list what would go, delete nothing")
 	return c
 }
@@ -92,6 +96,24 @@ func (p *purger) projects(root string) {
 			for _, sub := range []string{"sessions", "reports", "ai", "tests", ""} {
 				_ = os.Remove(filepath.Join(dir, sub))
 			}
+		}
+	}
+}
+
+// truncateBig empties the files in dir above limit bytes: removing one a running service has open would free nothing.
+func (p *purger) truncateBig(dir string, limit int64) {
+	es, _ := os.ReadDir(dir)
+	for _, e := range es {
+		path := filepath.Join(dir, e.Name())
+		st, err := os.Stat(path)
+		if err != nil || !st.Mode().IsRegular() || st.Size() <= limit {
+			continue
+		}
+		p.freed += st.Size()
+		p.n++
+		fmt.Printf("  - %s emptied %s\n", tildePath(path), dim(bytesText(st.Size())))
+		if !p.dry {
+			_ = os.Truncate(path, 0)
 		}
 	}
 }

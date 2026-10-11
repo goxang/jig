@@ -17,13 +17,14 @@ func newInput() textinput.Model {
 	in.Prompt = ""
 	in.KeyMap.DeleteWordBackward = key.NewBinding(key.WithKeys("ctrl+h", "alt+backspace", "ctrl+w"))
 	in.KeyMap.DeleteCharacterBackward = key.NewBinding(key.WithKeys("backspace"))
-	in.KeyMap.DeleteWordForward = key.NewBinding(key.WithKeys("alt+delete", "alt+d"))
+	in.KeyMap.DeleteWordForward = key.NewBinding(key.WithKeys("alt+delete", "alt+d", "ctrl+delete"))
 	in.KeyMap.LineStart = key.NewBinding(key.WithKeys("home"))
 	return in
 }
 
 func editorTextarea(in *textarea.Model) {
-	in.KeyMap.DeleteWordBackward = key.NewBinding(key.WithKeys("ctrl+h", "alt+backspace", "ctrl+w"))
+	in.KeyMap.DeleteWordBackward = key.NewBinding(key.WithKeys("ctrl+h", "alt+backspace", "ctrl+w", "ctrl+backspace"))
+	in.KeyMap.DeleteWordForward = key.NewBinding(key.WithKeys("alt+delete", "alt+d", "ctrl+delete"))
 	in.KeyMap.DeleteCharacterBackward = key.NewBinding(key.WithKeys("backspace"))
 	in.KeyMap.LineStart = key.NewBinding(key.WithKeys("home"))
 	in.KeyMap.WordForward = key.NewBinding(key.WithKeys("ctrl+right", "alt+f"))

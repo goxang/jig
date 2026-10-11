@@ -7,8 +7,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -16,6 +18,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/goxang/jig/internal/sh"
 	"github.com/goxang/jig/kernel/config"
 )
 
@@ -105,6 +108,9 @@ type Manifest struct {
 	Description string            `yaml:"description,omitempty"`
 	Publisher   string            `yaml:"publisher,omitempty"`
 	Requires    map[string]string `yaml:"requires,omitempty"`
+	// Needs are programs on the machine the plugin's scripts run, each with how to install it
+	// (needs: {jq: "apt install jq"}); permissions.exec ones are checked too.
+	Needs       map[string]string `yaml:"needs,omitempty"`
 	Implements  []string          `yaml:"implements,omitempty"`
 	Detect      *Detect           `yaml:"detect,omitempty"`
 	Server      *Server           `yaml:"server,omitempty"`
@@ -291,4 +297,49 @@ func (p Permissions) String() string {
 		return "none beyond the project"
 	}
 	return strings.Join(out, "; ")
+}
+
+// Lacking is a program a plugin needs that is not on PATH, and what to do about it.
+type Lacking struct{ Bin, Fix string }
+
+// Missing lists the programs the plugin needs (needs:, and unless needsOnly permissions.exec) that are not on PATH.
+func (m *Manifest) Missing(needsOnly bool) []Lacking {
+	bins := map[string]bool{}
+	for b := range m.Needs {
+		bins[b] = true
+	}
+	if !needsOnly {
+		for _, b := range m.Permissions.Exec {
+			bins[b] = true
+		}
+	}
+	var out []Lacking
+	for b := range bins {
+		if _, err := exec.LookPath(b); err == nil {
+			continue
+		}
+		fix := m.Needs[b]
+		if fix == "" {
+			fix = sh.Hint(`exec: "` + b + `": executable file not found`)
+		}
+		out = append(out, Lacking{b, fix})
+	}
+	slices.SortFunc(out, func(a, b Lacking) int { return strings.Compare(a.Bin, b.Bin) })
+	return out
+}
+
+// MissingText is Missing as one sentence, "" when nothing is missing.
+func (m *Manifest) MissingText(needsOnly bool) string {
+	var parts []string
+	for _, l := range m.Missing(needsOnly) {
+		t := l.Bin
+		if l.Fix != "" {
+			t += " (" + l.Fix + ")"
+		}
+		parts = append(parts, t)
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "needs " + strings.Join(parts, ", ") + " installed first"
 }

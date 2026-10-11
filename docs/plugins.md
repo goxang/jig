@@ -63,6 +63,7 @@ jig: ">=1.0"                       # host versions it supports
 description: Sentry issues as a tab
 publisher: you
 requires: {git: ^1}
+needs: {jq: "apt install jq / brew install jq"}   # programs on the machine its scripts run: missing ones are named at install, in doctor and when a script is run
 implements: [tracker/1]            # contracts: standard views and checks (see contracts)
 detect: {files: [.sentryclirc], git_remote: sentry}
 build: [go, build, -o, bin/sentry, .]   # runs after a git or path install, and in dev and test

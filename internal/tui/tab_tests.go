@@ -799,6 +799,7 @@ func (t *testsTab) pickSuite(m *model) {
 		t.suite, t.outOff, t.outFollow = slices.Index(names, c[0]), 0, true
 		return t.load(m)
 	})
+	m.picker.at = &[2]int{1, 1}
 }
 
 // pickOptions lists go test's flags with their values; enter flips one (or asks its value) and the

@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"github.com/charmbracelet/x/ansi"
 	"os"
 	"path/filepath"
 	"sort"
@@ -38,7 +39,10 @@ type manifestsTab struct {
 	fieldsObj *manifest.Object
 	fieldsID  string
 	inFields  bool
-	jumpPath  string // a search hit's field, selected once its object shows
+	// gy and gx scroll the relations graph when it is bigger than its box
+	gy, gx   int
+	gid      string
+	jumpPath string // a search hit's field, selected once its object shows
 	// viaSearch marks the object/field currently shown as reached from a search jump, so esc
 	// from the fields view reopens the last search results instead of just backing out to the list
 	viaSearch bool
@@ -471,6 +475,14 @@ func (t *manifestsTab) update(m *model, msg tea.Msg) tea.Cmd {
 			return nil
 		}
 		switch msg.String() {
+		case "[":
+			t.gy = max(0, t.gy-3)
+		case "]":
+			t.gy += 3
+		case "{":
+			t.gx = max(0, t.gx-8)
+		case "}":
+			t.gx += 8
 		case "/":
 			return t.search(m)
 		case "f":
@@ -873,8 +885,13 @@ func (t *manifestsTab) body(m *model, w, h int) string {
 		return lipgloss.JoinHorizontal(lipgloss.Top, list, panel(summary, sDim.Render(help), rw, h, false))
 	}
 	o := e.obj
+	if t.gid != o.ID() {
+		t.gid, t.gx, t.gy = o.ID(), 0, 0
+	}
 	graph := viz.RelationGraph(o.ID(), rels(t.set.In(o.ID()), true), rels(t.set.Out(o.ID()), false))
 	graphH := min(lipgloss.Height(graph)+3, h/2)
+	graph = t.scrolled(graph, rw-4, graphH-3)
+	m.zone("mf:graph", lw+1, 2, rw-2, graphH-3)
 	var mine []manifest.Issue
 	for _, i := range t.set.Issues {
 		if i.Object == o.ID() {
@@ -918,6 +935,36 @@ func (t *manifestsTab) body(m *model, w, h int) string {
 	}
 	parts = append(parts, fieldsBox)
 	return lipgloss.JoinHorizontal(lipgloss.Top, list, lipgloss.JoinVertical(lipgloss.Left, parts...))
+}
+
+// scrolled is the part of the graph the box shows from the offsets gx, gy, kept inside the graph.
+func (t *manifestsTab) scrolled(graph string, w, h int) string {
+	lines := strings.Split(graph, "\n")
+	widest := 0
+	for _, l := range lines {
+		widest = max(widest, ansi.StringWidth(l))
+	}
+	t.gy = min(t.gy, max(0, len(lines)-h))
+	t.gx = min(t.gx, max(0, widest-w))
+	lines = lines[t.gy:]
+	if t.gx > 0 {
+		for i, l := range lines {
+			lines[i] = ansi.TruncateLeft(l, t.gx, "")
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+func (t *manifestsTab) wheel(m *model, z hit, up bool) (tea.Cmd, bool) {
+	if z.id != "mf:graph" {
+		return nil, false
+	}
+	if up {
+		t.gy = max(0, t.gy-1)
+	} else {
+		t.gy++
+	}
+	return nil, true
 }
 
 func relTo(base, p string) string {

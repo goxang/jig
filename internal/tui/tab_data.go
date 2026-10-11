@@ -132,7 +132,7 @@ func (t *dataTab) hints() [][2]string {
 	if t.query != "" {
 		return [][2]string{{"esc Q", "edit the query (esc again: back)"}, {"y Y", "copy row, all"}, {"/", "filter: words, col=value"}, {"ctrl+alt+←→↑↓", "sort"}}
 	}
-	h := [][2]string{{"enter →", "open"}, {"Q", "query here (on a row: that row)"}, {"y Y", "copy row, all"}, {"esc ←", "up"}, {"/", "filter: words, col=value"}, {"r", "reload"}, {"ctrl+alt+←→↑↓", "sort"}}
+	h := [][2]string{{"enter →", "open"}, {"Q", "query here (on a row: that row)"}, {"C", "queries on a column of this row"}, {"y Y", "copy row, all"}, {"esc ←", "up"}, {"/", "filter: words, col=value"}, {"r", "reload"}, {"ctrl+alt+←→↑↓", "sort"}}
 	if t.editable(c) {
 		h = append([][2]string{{"e", "edit cell"}, {"space", "mark"}, {"D", "delete"}}, h...)
 	}
@@ -739,6 +739,11 @@ func (t *dataTab) key(m *model, k tea.KeyPressMsg) tea.Cmd {
 		default:
 			t.focus = 0
 		}
+	case "C":
+		if t.query != "" || t.loading {
+			return nil
+		}
+		return t.columnMenu(m, c)
 	case "Q":
 		if !c.browse || t.loading {
 			return nil

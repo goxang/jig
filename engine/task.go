@@ -245,7 +245,14 @@ func (a *App) RunTask(ctx context.Context, name string, args []string, out io.Wr
 			if ctx.Err() != nil {
 				return fmt.Errorf("task %s stopped at step %d of %d (%s) after %s: interrupted", name, i+1, len(steps), title, took(began))
 			}
-			return fmt.Errorf("task %s failed at step %d of %d after %s: %s\n  %s; the step's output is above", name, i+1, len(steps), took(began), title, exitText(err))
+			left := ""
+			if i+1 < len(steps) {
+				left = fmt.Sprintf(" (steps %d-%d did not run)", i+2, len(steps))
+				if i+2 == len(steps) {
+					left = fmt.Sprintf(" (step %d did not run)", len(steps))
+				}
+			}
+			return fmt.Errorf("task %s failed at step %d of %d after %s%s: %s\n  %s; the step's output is above", name, i+1, len(steps), took(began), left, title, exitText(err))
 		}
 		fmt.Fprintf(out, "  ✓ %s\n", took(began))
 	}
