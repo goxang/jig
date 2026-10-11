@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -358,5 +359,47 @@ func TestSecretsNeverReachPluginEnv(t *testing.T) {
 	got := fmt.Sprint(f.Columns)
 	if strings.Contains(got, "canary-") || !strings.Contains(got, "VISIBLE=shown") {
 		t.Errorf("plugin environment: %s", got)
+	}
+}
+
+// Budgets of docs/plan.md section 17, run by CI's bench job.
+func TestBudgetRoundTrip(t *testing.T) {
+	if os.Getenv("JIG_BENCH") == "" {
+		t.Skip("JIG_BENCH unset")
+	}
+	bin := buildHello(t)
+	proj := t.TempDir()
+	dir := plugin(t, filepath.Join(proj, "plugins"), "name: hello\nversion: 0.1.0\nserver: { command: ["+bin+"] }\n")
+	m, _ := LoadManifest(dir)
+	h := &Host{Options: Options{Dir: proj}, plugins: map[string]*Plugin{}}
+	p := h.add(m, nil)
+	defer h.Close()
+	ctx := context.Background()
+	const n = 500
+	took := make([]time.Duration, n)
+	for i := range n {
+		start := time.Now()
+		if _, err := h.Query(ctx, "hello.greetings", protocol.Args{"name": fmt.Sprint(i)}); err != nil {
+			t.Fatal(err)
+		}
+		took[i] = time.Since(start)
+	}
+	slices.Sort(took[1:])
+	med := took[1+n/2]
+	t.Logf("plugin round trip: median %v", med)
+	if med > time.Millisecond {
+		t.Errorf("plugin round trip: median %v, budget 1ms", med)
+	}
+	pid, _ := p.Running()
+	status, _ := os.ReadFile(fmt.Sprintf("/proc/%d/status", pid))
+	for l := range strings.Lines(string(status)) {
+		var kb int
+		if _, err := fmt.Sscanf(l, "VmRSS: %d kB", &kb); err != nil {
+			continue
+		}
+		t.Logf("plugin RSS %d kB", kb)
+		if kb > 15<<10 {
+			t.Errorf("plugin RSS %d kB, budget 15 MB", kb)
+		}
 	}
 }

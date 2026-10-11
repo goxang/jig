@@ -245,8 +245,8 @@ func (p *Plugin) command(ctx context.Context, c Command, env map[string]string) 
 	} else {
 		args[0] = p.local(args[0])
 	}
-	if SandboxExe != "" && sandboxed {
-		args = slices.Concat([]string{SandboxExe, "__sandbox"}, p.sandbox().args(), []string{"--"}, args)
+	if s := p.sandbox(); SandboxExe != "" && sandboxed && !s.unconfined() {
+		args = slices.Concat([]string{SandboxExe, "__sandbox"}, s.args(), []string{"--"}, args)
 	}
 	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
 	cmd.Dir = p.h.Dir

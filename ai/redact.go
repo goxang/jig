@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/goxang/scrub"
 	"github.com/goxang/scrub/packs"
@@ -48,7 +49,7 @@ func NewRedactor(known map[string]string) *Redactor {
 
 // patterns find what looks like a credential: goxang/scrub's payment, secret and cloud packs, plus
 // key=value pairs whose key only ends in a secret's name (DB_PASSWORD=x) and basic auth.
-var patterns = func() *scrub.Scrubber {
+var patterns = sync.OnceValue(func() *scrub.Scrubber {
 	rules := append(packs.All(),
 		scrub.Rule{
 			ID:      "secret.suffixed",
@@ -76,7 +77,7 @@ var patterns = func() *scrub.Scrubber {
 		}
 	}
 	return scrub.New().Add(rules...).MustBuild()
-}()
+})
 
 var placeholder = map[string]string{"secret.keyed": "value", "secret.suffixed": "value", "cloud.aws_access_key_id": "aws-access-key", "cloud.openai_key": "api-key"}
 
@@ -104,7 +105,7 @@ func (r *Redactor) Redact(s string) string {
 			s = strings.ReplaceAll(s, k.value, hold("<secret:"+k.name+">"))
 		}
 	}
-	s = patterns.Redact(s)
+	s = patterns().Redact(s)
 	if len(held) == 0 {
 		return s
 	}

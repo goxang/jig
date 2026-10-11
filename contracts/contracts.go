@@ -12,6 +12,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 
 	"gopkg.in/yaml.v3"
 
@@ -52,7 +53,7 @@ type Capability struct {
 	Actions []string `yaml:"actions"`
 }
 
-var all = func() map[string]*Contract {
+var all = sync.OnceValue(func() map[string]*Contract {
 	out := map[string]*Contract{}
 	dirs, _ := fs.Glob(files, "*/v1.yaml")
 	for _, f := range dirs {
@@ -65,20 +66,20 @@ var all = func() map[string]*Contract {
 		out[c.ID] = &c
 	}
 	return out
-}()
+})
 
 // Get returns a contract by id (metrics/1); a bare name means its version 1.
 func Get(id string) *Contract {
 	if !strings.Contains(id, "/") {
 		id += "/1"
 	}
-	return all[id]
+	return all()[id]
 }
 
 // IDs are every contract's id, sorted.
 func IDs() []string {
-	out := make([]string, 0, len(all))
-	for id := range all {
+	out := make([]string, 0, len(all()))
+	for id := range all() {
 		out = append(out, id)
 	}
 	sort.Strings(out)
@@ -88,8 +89,8 @@ func IDs() []string {
 // ForKind is the contract that stands in for a component kind (runtime, metrics, ...), or nil.
 func ForKind(kind string) *Contract {
 	for _, id := range IDs() {
-		if all[id].Kind == kind {
-			return all[id]
+		if all()[id].Kind == kind {
+			return all()[id]
 		}
 	}
 	return nil

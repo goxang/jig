@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"slices"
 	"strconv"
 	"syscall"
 )
@@ -30,6 +31,11 @@ func (s sandboxSpec) args() []string {
 		out = append(out, "--port", strconv.Itoa(int(p)))
 	}
 	return out
+}
+
+// unconfined is a sandbox that would restrict nothing (fs: / and any host), so it is not worth an exec.
+func (s sandboxSpec) unconfined() bool {
+	return len(s.ports) == 0 && slices.Contains(s.rw, "/")
 }
 
 type listFlag []string

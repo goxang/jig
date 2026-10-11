@@ -11,6 +11,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
+	"time"
 
 	"gopkg.in/yaml.v3"
 
@@ -140,14 +142,37 @@ var fragmentKeys = map[string]bool{"tasks": true, "queries": true, "dashboards":
 
 var nameRE = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
 
+type parsedManifest struct {
+	mod  time.Time
+	size int64
+	m    *Manifest
+}
+
+// manifests caches parsed manifests by file; a command discovers plugins several times.
+var manifests sync.Map
+
 // LoadManifest reads dir/jig-plugin.yaml. Unknown keys are warnings, so an older jig loads a newer plugin.
+// Callers share the result and must not change it.
 func LoadManifest(dir string) (*Manifest, error) {
 	file := filepath.Join(dir, ManifestFile)
+	st, err := os.Stat(file)
+	if err != nil {
+		return nil, err
+	}
+	if c, ok := manifests.Load(file); ok {
+		if c := c.(parsedManifest); c.mod.Equal(st.ModTime()) && c.size == st.Size() {
+			return c.m, nil
+		}
+	}
 	raw, err := os.ReadFile(file)
 	if err != nil {
 		return nil, err
 	}
-	return ParseManifest(raw, file)
+	m, err := ParseManifest(raw, file)
+	if err == nil {
+		manifests.Store(file, parsedManifest{st.ModTime(), st.Size(), m})
+	}
+	return m, err
 }
 
 func ParseManifest(raw []byte, file string) (*Manifest, error) {
@@ -165,10 +190,7 @@ func ParseManifest(raw []byte, file string) (*Manifest, error) {
 	if !nameRE.MatchString(m.Name) {
 		return nil, fmt.Errorf("%s: name %q: want lower-case letters, digits and dashes", file, m.Name)
 	}
-	known := map[string]bool{}
-	for _, k := range structKeys() {
-		known[k] = true
-	}
+	known := knownKeys()
 	frag := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
 	top := root.Content[0]
 	for i := 0; i+1 < len(top.Content); i += 2 {
@@ -193,6 +215,14 @@ func ParseManifest(raw []byte, file string) (*Manifest, error) {
 	}
 	return m, nil
 }
+
+var knownKeys = sync.OnceValue(func() map[string]bool {
+	known := map[string]bool{}
+	for _, k := range structKeys() {
+		known[k] = true
+	}
+	return known
+})
 
 func structKeys() []string {
 	var out []string

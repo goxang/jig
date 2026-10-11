@@ -166,54 +166,58 @@ func (a *App) ScaleBy(ctx context.Context, names []string, delta int, set bool) 
 // errors become StateUnknown rows.
 func (a *App) StatusAll(ctx context.Context, names []string) []core.Status {
 	out := make([]core.Status, len(names))
-	byRT := map[core.Runtime][]int{}
-	svcs := map[int]*spec.Service{}
-	for i, n := range names {
-		rt, s, err := a.Owner(n)
-		if err != nil {
-			out[i] = core.Status{Service: n, State: core.StateUnknown, Message: err.Error()}
-			continue
-		}
-		byRT[rt] = append(byRT[rt], i)
-		svcs[i] = s
-	}
 	var wg sync.WaitGroup
-	for rt, idx := range byRT {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			if l, ok := core.As[core.StatusLister](rt); ok {
-				list := make([]*spec.Service, len(idx))
-				for j, i := range idx {
-					list[j] = svcs[i]
-				}
-				sts, err := l.StatusAll(ctx, list)
-				if err == nil && len(sts) == len(idx) {
-					for j, i := range idx {
-						sts[j].Service = names[i]
-						out[i] = sts[j]
-					}
-					return
-				}
+	// services of this environment first, so its runtime works while the infra environment loads
+	for _, shared := range []bool{false, true} {
+		byRT := map[core.Runtime][]int{}
+		svcs := map[int]*spec.Service{}
+		for i, n := range names {
+			if s, ok := a.Spec.Services[n]; ok && s.Shared != shared || !ok && shared {
+				continue
 			}
-			var inner sync.WaitGroup
-			for _, i := range idx {
-				inner.Add(1)
-				go func() {
-					defer inner.Done()
-					st, err := rt.Status(ctx, svcs[i])
-					if err != nil {
-						st = core.Status{State: core.StateUnknown, Message: err.Error()}
-					}
-					st.Service = names[i]
-					out[i] = st
-				}()
+			rt, s, err := a.Owner(n)
+			if err != nil {
+				out[i] = core.Status{Service: n, State: core.StateUnknown, Message: err.Error()}
+				continue
 			}
-			inner.Wait()
-		}()
+			byRT[rt] = append(byRT[rt], i)
+			svcs[i] = s
+		}
+		for rt, idx := range byRT {
+			wg.Go(func() { a.statusOn(ctx, rt, idx, names, svcs, out) })
+		}
 	}
 	wg.Wait()
 	return out
+}
+
+func (a *App) statusOn(ctx context.Context, rt core.Runtime, idx []int, names []string, svcs map[int]*spec.Service, out []core.Status) {
+	if l, ok := core.As[core.StatusLister](rt); ok {
+		list := make([]*spec.Service, len(idx))
+		for j, i := range idx {
+			list[j] = svcs[i]
+		}
+		sts, err := l.StatusAll(ctx, list)
+		if err == nil && len(sts) == len(idx) {
+			for j, i := range idx {
+				sts[j].Service = names[i]
+				out[i] = sts[j]
+			}
+			return
+		}
+	}
+	var inner sync.WaitGroup
+	for _, i := range idx {
+		inner.Go(func() {
+			st, err := rt.Status(ctx, svcs[i])
+			if err != nil {
+				st = core.Status{State: core.StateUnknown, Message: err.Error()}
+			}
+			st.Service = names[i]
+			out[i] = st
+		})
+	}
+	inner.Wait()
 }
 
 // bridge makes shared services reachable inside this environment's runtime, when it needs that.

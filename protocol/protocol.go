@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 )
 
 //go:generate go test -run TestGenerated -update .
@@ -15,17 +16,17 @@ import (
 //go:embed jig1.schema.json
 var SchemaJSON []byte
 
-var schema = func() map[string]any {
+var schema = sync.OnceValue(func() map[string]any {
 	var s map[string]any
 	if err := json.Unmarshal(SchemaJSON, &s); err != nil {
 		panic(err)
 	}
 	return s
-}()
+})
 
 // Def is the schema of one $defs entry, such as Frame.
 func Def(name string) map[string]any {
-	d, _ := schema["$defs"].(map[string]any)[name].(map[string]any)
+	d, _ := schema()["$defs"].(map[string]any)[name].(map[string]any)
 	return d
 }
 
@@ -37,7 +38,7 @@ type MethodSpec struct {
 	Notify bool   `json:"notify"`
 }
 
-var methods = func() map[string]MethodSpec {
+var methods = sync.OnceValue(func() map[string]MethodSpec {
 	var s struct {
 		Methods map[string]MethodSpec `json:"methods"`
 	}
@@ -45,16 +46,16 @@ var methods = func() map[string]MethodSpec {
 		panic(err)
 	}
 	return s.Methods
-}()
+})
 
 func Method(name string) (MethodSpec, bool) {
-	m, ok := methods[name]
+	m, ok := methods()[name]
 	return m, ok
 }
 
 func Methods() []string {
-	out := make([]string, 0, len(methods))
-	for k := range methods {
+	out := make([]string, 0, len(methods()))
+	for k := range methods() {
 		out = append(out, k)
 	}
 	sort.Strings(out)

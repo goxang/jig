@@ -43,6 +43,15 @@ jobs:
       - run: go test -race -count=1 ./...
       - run: cd sdk && go test -race -count=1 ./...
 
+  bench:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - run: JIG_BENCH=1 go test -count=1 -v -run 'Budget' ./internal/bench ./host
+
 
   version:
     runs-on: ubuntu-latest
@@ -113,7 +122,7 @@ jobs:
           retention-days: 1
 
   release:
-    needs: [version, lint, test, build]
+    needs: [version, lint, test, bench, build]
     if: github.event_name == 'push' && needs.version.outputs.skip != '1'
     runs-on: ubuntu-latest
     permissions:
