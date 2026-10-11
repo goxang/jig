@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image/color"
 	"strings"
+	"unicode"
 
 	"charm.land/lipgloss/v2"
 
@@ -181,6 +182,25 @@ func clip(body string, w, h int) string {
 	return strings.Join(lines, "\n")
 }
 
+// ltr fences right-to-left text (Persian, Arabic, Hebrew) with LRM marks: terminals that reorder
+// bidi text (VTE) otherwise swap it with the cells around it on the line.
+func ltr(s string) string {
+	if strings.HasPrefix(s, "\u200e") || !strings.ContainsFunc(s, func(r rune) bool {
+		return unicode.In(r, unicode.Arabic, unicode.Hebrew, unicode.Syriac, unicode.Thaana)
+	}) {
+		return s
+	}
+	return "\u200e" + s + "\u200e"
+}
+
+// closeLTR fences the end again when truncating cut it off.
+func closeLTR(s, cut string) string {
+	if strings.HasPrefix(s, "\u200e") && !strings.HasSuffix(cut, "\u200e") {
+		return cut + "\u200e"
+	}
+	return cut
+}
+
 func truncate(s string, w int) string {
 	if w <= 0 {
 		return ""
@@ -193,10 +213,11 @@ func truncate(s string, w int) string {
 }
 
 func padRight(s string, w int) string {
+	s = ltr(s)
 	if d := w - lipgloss.Width(s); d > 0 {
 		return s + strings.Repeat(" ", d)
 	}
-	return truncate(s, w)
+	return closeLTR(s, truncate(s, w))
 }
 
 func stateDot(s core.State) string {

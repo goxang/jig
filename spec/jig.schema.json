@@ -1732,7 +1732,7 @@
           "$ref": "#/definitions/LogsUI"
         },
         "mode": {
-          "description": "Simple (fewer columns, keys and panels, for newcomers) or detailed (the default); V switches it in the UI.",
+          "description": "Detailed (the default), simple (fewer columns, keys and screens), software (the dev screens and views for developers) or product (metrics and views for product); V picks it.",
           "type": [
             "string",
             "number",
@@ -2020,7 +2020,7 @@
           "$ref": "#/definitions/UI"
         }
       ],
-      "description": "{tabs, mode, logs}: the screens and their order (left out, every screen the project configures something for); mode: simple starts newcomers on fewer screens, columns and keys (V switches); logs"
+      "description": "{tabs, mode, logs}: the screens and their order (left out, every screen the project configures something for); mode: detailed (default), simple (fewer screens, columns and keys), software (dev screens and views for developers) or product (metrics and views tagged modes: [product]); V picks one; logs"
     },
     "vars": {
       "additionalProperties": {

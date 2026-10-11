@@ -20,7 +20,9 @@ type View struct {
 	Key  string
 	// File holds the layout instead, relative to the file that declares the view.
 	File string
-	Root protocol.Node
+	// Modes are the UI modes that show the view (software, product); none shows it in every mode.
+	Modes []string
+	Root  protocol.Node
 }
 
 // Layouts are the widgets that hold other widgets.
@@ -43,6 +45,10 @@ func (v *View) UnmarshalYAML(n *yaml.Node) error {
 			v.Key = val.Value
 		case "file":
 			v.File = val.Value
+		case "modes":
+			if err := val.Decode(&v.Modes); err != nil {
+				return err
+			}
 		case "slot":
 			if err := v.slot(val); err != nil {
 				return err

@@ -20,7 +20,7 @@ func TestZonesDoNotOverlap(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := &model{ctx: context.Background(), app: a, opened: map[int]bool{}, all: allTabs(), refreshed: map[int]time.Time{}, hx: -1, hy: -1}
-	m.tabs = newTabs(a, m.all, false)
+	m.tabs = newTabs(a, m.all, "detailed")
 	m.sched = newScheduler(a)
 	for _, w := range []int{100, 160, 220} {
 		m.Update(tea.WindowSizeMsg{Width: w, Height: 40})

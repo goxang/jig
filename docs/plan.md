@@ -311,7 +311,7 @@ views:
   Games:
     slot: { tab: { key: G } }
     tabs:
-      Snake:  { widget: terminal, command: go run ./snake }
+      Snake:  { widget: terminal, command: bash snake.sh }
       2048:   { widget: terminal, command: ./2048.sh, keep: true }   # keeps running while hidden
       Files:  { widget: terminal, command: yazi }
 ```

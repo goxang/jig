@@ -85,7 +85,8 @@ type model struct {
 	tabs   []tab
 	all    map[string]tab
 	active int
-	// simple is the newcomer's view: fewer screens, columns and keys (V)
+	// mode is detailed, simple, software or product (V); simple and product draw fewer columns and keys
+	mode   string
 	simple bool
 	opened map[int]bool
 	w, h   int
@@ -268,9 +269,17 @@ func allTabs() map[string]tab {
 // advanced are the screens the simple view leaves out (unless ui.tabs names them).
 var advanced = map[string]bool{"queries": true, "load": true, "manifests": true, "hosts": true}
 
+// modes are the UI modes V offers, with what each shows.
+var modes = [][2]string{
+	{"detailed", "every screen, column and key"},
+	{"simple", "fewer screens, columns and keys"},
+	{"software", "the dev screens and the views for developers"},
+	{"product", "metrics and the views for product: issues, docs, merge requests"},
+}
+
 // newTabs picks from all the screens ui.tabs lists, else every screen the project gives something
-// to show, minus the advanced ones in the simple view.
-func newTabs(a *engine.App, all map[string]tab, simple bool) []tab {
+// to show that the mode keeps.
+func newTabs(a *engine.App, all map[string]tab, mode string) []tab {
 	views := addViews(a, all)
 	if ui := a.Spec.UI; ui != nil && len(ui.Tabs) > 0 {
 		var out []tab
@@ -283,27 +292,76 @@ func newTabs(a *engine.App, all map[string]tab, simple bool) []tab {
 	}
 	var out []tab
 	for _, n := range spec.Screens {
-		if configured(a, n) && !(simple && advanced[n]) {
+		if configured(a, n) && showScreen(mode, n) {
 			out = append(out, all[n])
 		}
 	}
-	return append(out, views...)
+	for _, t := range views {
+		if vt, ok := t.(*viewTab); !ok || showView(mode, vt) {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+func showScreen(mode, n string) bool {
+	switch mode {
+	case "simple":
+		return !advanced[n]
+	case "product":
+		return n == "metrics"
+	}
+	return true
+}
+
+// showView keeps a view tagged with the mode; untagged views show in every mode but product.
+func showView(mode string, t *viewTab) bool {
+	if t.title == "Home" || mode == "detailed" || mode == "" {
+		return true
+	}
+	if t.title == "Plugins" {
+		return mode == "software"
+	}
+	if t.v == nil || len(t.v.Modes) == 0 {
+		return mode != "product"
+	}
+	return mode == "simple" || slices.Contains(t.v.Modes, mode)
 }
 
 func modeFile(a *engine.App) string { return filepath.Join(a.Spec.Dir, ".jig", "ui-mode") }
 
-// startSimple is the view V last chose in this project, else ui.mode.
-func startSimple(a *engine.App) bool {
+// startMode is the mode V last chose in this project, else ui.mode.
+func startMode(a *engine.App) string {
+	mode := ""
 	if raw, err := os.ReadFile(modeFile(a)); err == nil {
-		return strings.TrimSpace(string(raw)) == "simple"
+		mode = strings.TrimSpace(string(raw))
+	} else if a.Spec.UI != nil {
+		mode = a.Spec.UI.Mode
 	}
-	return a.Spec.UI != nil && a.Spec.UI.Mode == "simple"
+	for _, md := range modes {
+		if md[0] == mode {
+			return mode
+		}
+	}
+	return "detailed"
 }
 
-// toggleMode switches between the simple and the detailed view, keeping each screen's state.
-func (m *model) toggleMode() tea.Cmd {
-	m.simple = !m.simple
-	mode := map[bool]string{true: "simple", false: "detailed"}[m.simple]
+// pickMode offers the modes, previewing none: the tabs change once one is chosen.
+func (m *model) pickMode() {
+	var items, desc []string
+	sel := 0
+	for i, md := range modes {
+		items, desc = append(items, md[0]), append(desc, md[1])
+		if md[0] == m.mode {
+			sel = i
+		}
+	}
+	m.pick("view mode", items, desc, sel, false, func(c []string) tea.Cmd { return m.setMode(c[0]) })
+}
+
+// setMode switches the mode, keeping each screen's state.
+func (m *model) setMode(mode string) tea.Cmd {
+	m.mode, m.simple = mode, mode == "simple" || mode == "product"
 	if err := os.MkdirAll(filepath.Dir(modeFile(m.app)), 0o755); err == nil {
 		_ = os.WriteFile(modeFile(m.app), []byte(mode+"\n"), 0o644)
 	}
@@ -312,7 +370,7 @@ func (m *model) toggleMode() tea.Cmd {
 	for i, t := range m.tabs {
 		opened[t] = m.opened[i]
 	}
-	m.tabs = newTabs(m.app, m.all, m.simple)
+	m.tabs = newTabs(m.app, m.all, m.mode)
 	m.opened, m.active = map[int]bool{}, 0
 	for i, t := range m.tabs {
 		m.opened[i] = opened[t]
@@ -320,7 +378,7 @@ func (m *model) toggleMode() tea.Cmd {
 			m.active = i
 		}
 	}
-	m.setStatus(mode+" view (V switches)", false)
+	m.setStatus(mode+" mode (V switches)", false)
 	return m.openTab(m.active)
 }
 
@@ -399,8 +457,9 @@ func run(ctx context.Context, a *engine.App, s *Session, init func(m *model)) er
 	if t, err := LoadTheme(CurrentTheme()); err == nil {
 		applyTheme(t)
 	}
-	m := &model{ctx: ctx, app: a, yes: a.Confirmed, opened: map[int]bool{}, all: allTabs(), simple: startSimple(a), refreshed: map[int]time.Time{}, hx: -1, hy: -1, splitFrac: loadSplits()}
-	m.tabs = newTabs(a, m.all, m.simple)
+	m := &model{ctx: ctx, app: a, yes: a.Confirmed, opened: map[int]bool{}, all: allTabs(), mode: startMode(a), refreshed: map[int]time.Time{}, hx: -1, hy: -1, splitFrac: loadSplits()}
+	m.simple = m.mode == "simple" || m.mode == "product"
+	m.tabs = newTabs(a, m.all, m.mode)
 	m.sched = newScheduler(a)
 	m.specAt = specTime(a)
 	if st, err := os.Stat(filepath.Join(a.Spec.Dir, ".jig", host.DevStamp)); err == nil {
@@ -933,7 +992,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.services, m.svcBusy = nil, false
 		m.opened, m.refreshed = map[int]bool{}, map[int]time.Time{}
 		m.all = allTabs()
-		m.tabs = newTabs(m.app, m.all, m.simple)
+		m.tabs = newTabs(m.app, m.all, m.mode)
 		m.active = min(m.active, len(m.tabs)-1)
 		for i, t := range m.tabs {
 			if t.name() == screen {
@@ -1521,7 +1580,8 @@ func (m *model) key(k tea.KeyPressMsg) tea.Cmd {
 			m.pickTheme()
 			return nil
 		case "V":
-			return m.toggleMode()
+			m.pickMode()
+			return nil
 		case "M":
 			m.mouseOff = !m.mouseOff
 			if m.mouseOff {
@@ -2199,8 +2259,8 @@ func (m *model) header() string {
 	} else if a.Env.Protected {
 		left += " " + badge(cRed).Render(" PROTECTED ")
 	}
-	if m.simple {
-		left += sDim.Render("  simple view")
+	if m.mode != "detailed" {
+		left += sDim.Render("  " + m.mode)
 	}
 	if b := m.alertBadge(); b != "" {
 		left += " " + b
@@ -2342,7 +2402,7 @@ func (m *model) interaction() (box, keys string) {
 	hs := m.tabs[m.active].hints()
 	hs = append(hs[:min(n, len(hs)):min(n, len(hs))], [2]string{"?", "all keys"}, [2]string{"@", "AI"})
 	if m.simple {
-		hs = append(hs, [2]string{"V", "detailed view"})
+		hs = append(hs, [2]string{"V", "mode"})
 	} else {
 		hs = append(hs, [2]string{m.keyFor("env"), "env"})
 		if ns := m.keyFor("namespace"); ns != "" && m.app.Namespace() != "" && !m.app.Env.Protected {
@@ -2483,7 +2543,7 @@ func (m *model) helpLines() []string {
 		{k("go") + " then a letter", "go to a screen by its letter: l logs, m metrics, t traces, d data, s services, k kv, q queries… (g shows them all)"}, {". right-click", "this screen's keys as a menu"},
 		{"tab ⇧tab  1-9 0", "next, previous, nth screen (or click its name)"}, {"ctrl+←→", "switch the sub-tab inside a screen"}, {k("env"), "switch environment"}, {k("namespace"), "switch or create a Kubernetes namespace"}, {k("task"), "run a task (ctrl+o there shows its steps)"},
 		{"↑↓ / wheel", "move"}, {"enter / dbl-click", "open, run"}, {"ctrl+alt+←→  ctrl+alt+↑↓", "sort by the next / previous column; ↑ ascending, ↓ descending (or click a header; also < >, alt+↑↓, ctrl+⇧ arrows)"}, {"+ - z", "expand all, fold all, toggle (trees, dashboard rows)"},
-		{"esc ⌫", "back: closes what is open, then returns to the screen you jumped from"}, {"drag a border", "resize panes (kept for next time; it lights up under the mouse)"}, {"@", "AI chat about this screen (jig ai config sets it up)"}, {"A", "alerts (header badge)"}, {"!", "activity: builds, deploys and tasks you started with their output; x stops one, enter types its input, tab errors, y copies"}, {k("kubeconfig"), "fetch the environment's kubeconfig (Rancher API key, URL or file) into yours"}, {k("envinfo"), "this environment: variables, databases, addresses (↑↓, / searches, e edits a variable)"}, {"ctrl+w", "watch: rebuild and restart services as their sources change (errors in A)"}, {"ctrl+p", "colour theme, previewed as you move (jig theme --save to make your own)"}, {"ctrl+r", "reload jig.yaml after you or the assistant edited it (filters stay)"}, {k("save"), "save this session: jig opens on it from now on, as you leave it, filters included (jig --fresh starts clean)"}, {"M", "mouse on/off (off: select text)"}, {"V", "simple / detailed view"}, {"?", "this help"}, {"q  ctrl+c", "quit"},
+		{"esc ⌫", "back: closes what is open, then returns to the screen you jumped from"}, {"drag a border", "resize panes (kept for next time; it lights up under the mouse)"}, {"@", "AI chat about this screen (jig ai config sets it up)"}, {"A", "alerts (header badge)"}, {"!", "activity: builds, deploys and tasks you started with their output; x stops one, enter types its input, tab errors, y copies"}, {k("kubeconfig"), "fetch the environment's kubeconfig (Rancher API key, URL or file) into yours"}, {k("envinfo"), "this environment: variables, databases, addresses (↑↓, / searches, e edits a variable)"}, {"ctrl+w", "watch: rebuild and restart services as their sources change (errors in A)"}, {"ctrl+p", "colour theme, previewed as you move (jig theme --save to make your own)"}, {"ctrl+r", "reload jig.yaml after you or the assistant edited it (filters stay)"}, {k("save"), "save this session: jig opens on it from now on, as you leave it, filters included (jig --fresh starts clean)"}, {"M", "mouse on/off (off: select text)"}, {"V", "mode: detailed, simple, software (dev screens) or product (metrics, issues, docs)"}, {"?", "this help"}, {"q  ctrl+c", "quit"},
 	}
 	var b strings.Builder
 	for _, r := range rows {

@@ -50,3 +50,15 @@ func TestGridAltArrowsOrder(t *testing.T) {
 		t.Error("alt+up did not sort ascending")
 	}
 }
+
+func TestGridCtrlAltArrowsSort(t *testing.T) {
+	g := newGrid("t", gcol{title: "a"}, gcol{title: "b"})
+	g.sortBy = 0
+	if !g.key(tea.KeyPressMsg{Code: tea.KeyRight, Mod: tea.ModCtrl | tea.ModAlt}) || g.sortBy != 1 {
+		t.Errorf("ctrl+alt+right: sortBy %d", g.sortBy)
+	}
+	g.key(tea.KeyPressMsg{Code: tea.KeyDown, Mod: tea.ModCtrl | tea.ModAlt})
+	if !g.desc {
+		t.Error("ctrl+alt+down did not sort descending")
+	}
+}

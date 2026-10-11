@@ -43,7 +43,7 @@ is out of date.
 | `reports` | metrics, traces and queries a run is measured by, with tests, load results, compares, templates and publishing: `jig report start` and `stop`, `jig report`, a suite's `report:`, the Load screen's `W` (see below) |
 | `load` | named load runs: a generator, a profile, a rate, a duration and assertions for `jig load run` (see below) |
 | `otel` | OpenTelemetry for every app and load service (see below) |
-| `ui` | `{tabs, mode, logs}`: the screens and their order (left out, every screen the project configures something for); `mode: simple` starts newcomers on fewer screens, columns and keys (`V` switches); `logs` (see below) |
+| `ui` | `{tabs, mode, logs}`: the screens and their order (left out, every screen the project configures something for); `mode`: `detailed` (default), `simple` (fewer screens, columns and keys), `software` (dev screens and views for developers) or `product` (metrics and views tagged `modes: [product]`); `V` picks one; `logs` (see below) |
 | `keys` | the key preset: `jig` (the default) or `rig` (rig's keys). A personal choice, so usually in `.jig/local.yaml` or `~/.config/jig/config.yaml` |
 | `compat` | `{rig_env: true}`: task steps also get `RIG_ENV`, `RIG_FILE`, `RIG_YES`, `RIG_TASK` and `RIG_ARGS`, for scripts written for rig; `jig migrate` sets it |
 | `agents` | `name: {on, instructions, tools, approve}`: assistants that run on an event or a schedule (see below) |

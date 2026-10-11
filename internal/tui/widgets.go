@@ -109,7 +109,9 @@ func (t *viewTab) leaf(m *model, wn *wnode, x, y, w, h int, focused bool) string
 	case "text":
 		return wrapText(textOf(t, n, f), w, tokenStyle(view.Prop(n, "color")))
 	case "markdown":
-		return renderMarkdown(textOf(t, n, f), w)
+		lines := strings.Split(renderMarkdown(textOf(t, n, f), w), "\n")
+		wn.st = min(scrollOf(wn), max(0, len(lines)-h))
+		return strings.Join(lines[scrollOf(wn):], "\n")
 	case "code":
 		return codeBody(textOf(t, n, f), w, h, scrollOf(wn))
 	case "diff":
@@ -125,7 +127,14 @@ func (t *viewTab) leaf(m *model, wn *wnode, x, y, w, h int, focused bool) string
 	case "calendar":
 		return calendarWidget(f, n, w, time.Now())
 	case "board":
-		return boardWidget(wn, w, h, focused)
+		if wn.filter == "" && !(focused && t.filtering) {
+			return boardWidget(wn, w, h, focused)
+		}
+		bar := sAccent.Render("/ ") + wn.filter
+		if focused && t.filtering {
+			bar += "▏"
+		}
+		return bar + sDim.Render("  esc clears") + "\n" + boardWidget(wn, w, h-1, focused)
 	case "terminal":
 		return t.terminalBody(m, wn, x, y, w, h, focused)
 	case "canvas":
@@ -156,6 +165,16 @@ func (t *viewTab) widgetKey(m *model, wn *wnode, k tea.KeyPressMsg) tea.Cmd {
 			return nil
 		}
 		st.key(k)
+	case *boardState:
+		switch {
+		case st.key(k.String()):
+		case k.String() == "enter" && wn.preview != nil:
+			wn.previewOff = !wn.previewOff
+		case k.String() == "enter" && st.cur >= 0:
+			if ref := frames.RowRef(wn.frame, st.cur); ref != "" {
+				return t.openRef(m, ref)
+			}
+		}
 	case *jsonTree:
 		st.key(k)
 	case *chartView:
@@ -206,7 +225,7 @@ func (t *viewTab) widgetKey(m *model, wn *wnode, k tea.KeyPressMsg) tea.Cmd {
 }
 
 // scrolls are the widgets ↑↓ scroll.
-var scrolls = map[string]bool{"code": true, "diff": true, "timeline": true}
+var scrolls = map[string]bool{"code": true, "diff": true, "timeline": true, "markdown": true}
 
 func scrollOf(wn *wnode) int {
 	s, _ := wn.st.(int)
@@ -214,7 +233,7 @@ func scrollOf(wn *wnode) int {
 }
 
 func (t *viewTab) widgetClick(m *model, wn *wnode, h hit) tea.Cmd {
-	if term, ok := wn.st.(*terminal); ok && h.double {
+	if term, ok := wn.st.(*terminal); ok {
 		term.input = true
 	}
 	return nil
@@ -303,9 +322,16 @@ func (t *viewTab) tableBody(m *model, wn *wnode, x, y, w, h int, focused bool) s
 	}
 	g, _ := wn.st.(*grid)
 	rules, _ := wn.n.Props["columns"].(map[string]any)
-	if g == nil || len(g.cols) != len(f.Fields) {
+	var shown []int
+	for j, fl := range f.Fields {
+		if r, ok := rules[fl.Name].(map[string]any); !ok || r["hide"] != true {
+			shown = append(shown, j)
+		}
+	}
+	if g == nil || len(g.cols) != len(shown) {
 		var cols []gcol
-		for _, fl := range f.Fields {
+		for _, j := range shown {
+			fl := f.Fields[j]
 			c := col(strings.ToUpper(fl.Name), 0)
 			if fl.Type == protocol.TypeNumber || fl.Type == protocol.TypeInt {
 				c = rcol(strings.ToUpper(fl.Name), 0)
@@ -323,8 +349,9 @@ func (t *viewTab) tableBody(m *model, wn *wnode, x, y, w, h int, focused bool) s
 	}
 	rows := make([]grow, 0, frames.Len(f))
 	for i := range frames.Len(f) {
-		cells := make([]string, len(f.Fields))
-		for j, fl := range f.Fields {
+		cells := make([]string, len(shown))
+		for c, j := range shown {
+			fl := f.Fields[j]
 			v := f.Columns[j][i]
 			s := frames.Format(fl, v)
 			if r, ok := rules[fl.Name].(map[string]any); ok {
@@ -334,12 +361,12 @@ func (t *viewTab) tableBody(m *model, wn *wnode, x, y, w, h int, focused bool) s
 					}
 				}
 			}
-			cells[j] = s
+			cells[c] = s
 		}
-		keys := make([]any, len(f.Fields))
-		for j := range f.Fields {
+		keys := make([]any, len(shown))
+		for c, j := range shown {
 			if x, ok := toFloat(f.Columns[j][i]); ok {
-				keys[j] = x
+				keys[c] = x
 			}
 		}
 		if wn.filter != "" && !fuzzy(stripANSI(strings.Join(cells, " ")), wn.filter) {
@@ -695,6 +722,12 @@ func textOf(t *viewTab, n protocol.Node, f *protocol.Frame) string {
 	if s := view.Prop(n, "text"); s != "" {
 		return s
 	}
+	if fl := view.Prop(n, "field"); fl != "" {
+		if c := frames.Column(f, fl); len(c) > 0 {
+			return fmt.Sprint(c[0])
+		}
+		return ""
+	}
 	if p := view.Prop(n, "file"); p != "" {
 		raw, err := os.ReadFile(filepath.Join(t.dir, p))
 		if err != nil {
@@ -924,8 +957,44 @@ func calendarWidget(f *protocol.Frame, n protocol.Node, w int, now time.Time) st
 	return strings.Join(head, "\n")
 }
 
+// boardState is a board's cursor: a column, a card in it, and each column's scroll.
+type boardState struct {
+	col, card int
+	off       map[string]int
+	// cur is the frame row under the cursor, -1 when the board is empty
+	cur int
+	// cols are the cards' row indexes per column, as last drawn
+	cols [][]int
+}
+
+func (b *boardState) key(k string) bool {
+	switch k {
+	case "left", "h":
+		if b.col == 0 {
+			return false
+		}
+		b.col--
+	case "right", "l":
+		if b.col >= len(b.cols)-1 {
+			return false
+		}
+		b.col++
+	case "up", "k":
+		b.card = max(0, b.card-1)
+	case "down", "j":
+		b.card++
+	case "home", "g":
+		b.card = 0
+	case "end", "G":
+		b.card = 1 << 30
+	default:
+		return false
+	}
+	return true
+}
+
 // boardWidget is Kanban: a column per value of by: (in columns: order), a card per row showing
-// card: (else the title field, else the first).
+// card: (else the title field, else the first), led by its key: field when the frame has one.
 func boardWidget(wn *wnode, w, h int, focused bool) string {
 	n, f := wn.n, wn.frame
 	by, card := cmp.Or(view.Prop(n, "by"), "status"), view.Prop(n, "card")
@@ -935,9 +1004,10 @@ func boardWidget(wn *wnode, w, h int, focused bool) string {
 			card = "title"
 		}
 	}
-	st, _ := wn.st.(*cursorState)
+	key := cmp.Or(view.Prop(n, "key"), "key")
+	st, _ := wn.st.(*boardState)
 	if st == nil {
-		st = &cursorState{}
+		st = &boardState{off: map[string]int{}, cur: -1}
 		wn.st = st
 	}
 	var order []string
@@ -953,31 +1023,69 @@ func boardWidget(wn *wnode, w, h int, focused bool) string {
 		if !slices.Contains(order, k) {
 			order = append(order, k)
 		}
+		if wn.filter != "" && !fuzzy(rowText(r), wn.filter) {
+			continue
+		}
 		cards[k] = append(cards[k], i)
 	}
 	if len(order) == 0 {
+		st.cur = -1
 		return sDim.Render("no cards")
 	}
-	cw := max(8, w/len(order))
-	st.sel = min(st.sel, max(0, len(rows)-1))
-	var cols []string
-	idx := 0
+	st.cols = st.cols[:0]
 	for _, c := range order {
-		lines := []string{sTitle.Render(padRight(fmt.Sprintf("%s (%d)", c, len(cards[c])), cw-1))}
-		for _, i := range cards[c] {
-			line := padRight("▏"+str(rows[i][card]), cw-1)
-			if idx == st.sel && focused {
-				line = sCursor.Render(line)
-				st.ref = frames.RowRef(f, i)
-			}
-			if len(lines) < h {
-				lines = append(lines, line)
-			}
-			idx++
-		}
-		cols = append(cols, lipgloss.NewStyle().Width(cw).Render(strings.Join(lines, "\n")))
+		st.cols = append(st.cols, cards[c])
 	}
-	return lipgloss.JoinHorizontal(lipgloss.Top, cols...)
+	st.col = min(st.col, len(order)-1)
+	st.card = max(0, min(st.card, len(cards[order[st.col]])-1))
+	st.cur = -1
+	cw := max(10, w/len(order))
+	var out []string
+	for ci, c := range order {
+		head := sTitle.Render(padRight(fmt.Sprintf("%s %s", c, sDim.Render(strconv.Itoa(len(cards[c])))), cw-1))
+		if ci == st.col && focused {
+			head = sAccent.Render(padRight(fmt.Sprintf("%s %d", c, len(cards[c])), cw-1))
+		}
+		lines := []string{head + " ", sDim.Render(strings.Repeat("─", cw-1)) + " "}
+		ids := cards[c]
+		vis := h - 2
+		off := st.off[c]
+		if ci == st.col {
+			off = scroll(st.card, off, vis, len(ids))
+			st.off[c] = off
+		}
+		for k := off; k < min(len(ids), off+vis); k++ {
+			i := ids[k]
+			text := str(rows[i][card])
+			if id := str(rows[i][key]); id != "" && key != card {
+				text = sDim.Render(id) + " " + text
+			}
+			line := padRight(" "+text, cw-1)
+			if ci == st.col && k == st.card {
+				st.cur = i
+				if focused {
+					line = sCursor.Render(padRight(" "+stripANSI(text), cw-1))
+				} else {
+					line = sSelected.Render(padRight(" "+stripANSI(text), cw-1))
+				}
+			}
+			lines = append(lines, line+" ")
+		}
+		for len(lines) < h {
+			lines = append(lines, strings.Repeat(" ", cw))
+		}
+		out = append(out, strings.Join(lines[:h], "\n"))
+	}
+	return lipgloss.JoinHorizontal(lipgloss.Top, out...)
+}
+
+func rowText(r map[string]any) string {
+	var b strings.Builder
+	for _, v := range r {
+		b.WriteString(fmt.Sprint(v))
+		b.WriteByte(' ')
+	}
+	return b.String()
 }
 
 // canvasBody asks the plugin that owns the widget to draw it: widget: <plugin>.<name> via canvas.

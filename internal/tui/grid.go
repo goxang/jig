@@ -186,19 +186,19 @@ func (g *grid) key(k tea.KeyPressMsg) bool {
 		return true
 	}
 	switch k.String() {
-	case "alt+ctrl+right", "ctrl+shift+right", ">":
+	case "ctrl+alt+right", "ctrl+shift+right", ">":
 		g.sortBy = (g.sortBy + 1) % len(g.cols)
 		g.sortRows()
-	case "alt+ctrl+left", "ctrl+shift+left", "<":
+	case "ctrl+alt+left", "ctrl+shift+left", "<":
 		g.sortBy = (max(g.sortBy, 0) - 1 + len(g.cols)) % len(g.cols)
 		g.sortRows()
 	// VTE (GNOME's terminal) keeps ctrl+shift+↑↓ and GNOME ctrl+alt+arrows: alt+↑↓ and < > always work
-	case "alt+ctrl+up", "alt+ctrl+down", "ctrl+shift+up", "ctrl+shift+down", "alt+up", "alt+down":
+	case "ctrl+alt+up", "ctrl+alt+down", "ctrl+shift+up", "ctrl+shift+down", "alt+up", "alt+down":
 		g.sortBy = max(g.sortBy, 0)
 		switch k.String() {
-		case "alt+ctrl+up", "ctrl+shift+up", "alt+up":
+		case "ctrl+alt+up", "ctrl+shift+up", "alt+up":
 			g.desc = false
-		case "alt+ctrl+down", "ctrl+shift+down", "alt+down":
+		case "ctrl+alt+down", "ctrl+shift+down", "alt+down":
 			g.desc = true
 		}
 		g.sortRows()
@@ -361,10 +361,11 @@ func stripANSIKeepSpace(s string) string {
 }
 
 func padLeft(s string, w int) string {
+	s = ltr(s)
 	if d := w - lipgloss.Width(s); d > 0 {
 		return strings.Repeat(" ", d) + s
 	}
-	return truncate(s, w)
+	return closeLTR(s, truncate(s, w))
 }
 
 // printable keeps a cell one line of known width: a tab or newline from SQL text or kubectl output

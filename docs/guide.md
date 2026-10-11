@@ -61,7 +61,11 @@ A right-click opens the screen's actions as a menu where you clicked, with each 
 Opening a document or link (`enter` on a doc, a ticket, a page) lists the apps on this machine that can open
 it: the system's default first, then the others registered for its type (LibreOffice, Kate, …), the browsers, the
 editor in the terminal, and copying the link.
-In a plugin's table (Jira, GitLab, Confluence pages) `/` filters the rows as you type, fzf style; `esc` clears it. On a Kubernetes
+In a plugin's table or board (Jira, GitLab, Confluence pages) `/` filters the rows as you type, fzf style; `esc` clears it;
+`Q` edits its query (JQL, a search), `v` shows the selected row's details beside it, and the keys in the footer act on the row
+(Jira: `m` move, `e` edit, `c` comment, `a` assign, `I` the AI does it, `o` its MR; GitLab: `i` its issue).
+`V` picks the mode: detailed, simple (fewer screens, columns and keys), software (the dev screens) or product
+(metrics, issues, docs, merge requests). A shell pane takes the keys while focused; `ctrl+]` leaves it, a click goes back. On a Kubernetes
 cluster, dangerous changes (stop, deploy, delete, edits) ask first and `enter` confirms; local, docker
 and kind never ask. `?` shows the keys of the current screen.
 Drag over any text (results, queries, test output, the chat) to copy it; the selection stays inside the

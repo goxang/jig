@@ -3,10 +3,12 @@ package tui
 import (
 	"cmp"
 	"context"
+	"encoding/json"
 	"fmt"
 	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -47,6 +49,8 @@ type viewTab struct {
 	err   string
 	// filtering is typing into the focused table's / filter
 	filtering bool
+	// previewRow is the row the preview panes show, for ${row.x} in their titles
+	previewRow map[string]any
 }
 
 // wnode is a widget of the tree with its live state.
@@ -63,6 +67,14 @@ type wnode struct {
 	id         int
 	st         any
 	filter     string
+	// preview is the pane beside a table or board showing its selected row (preview: prop)
+	preview *wnode
+	// bound is the binding a preview pane last fetched, to drop answers for rows left behind; tpl
+	// its binding before ${row.x} expands
+	bound string
+	tpl   protocol.Binding
+	// previewOff hides the preview pane (v; a board's enter)
+	previewOff bool
 }
 
 type viewDataMsg struct {
@@ -70,6 +82,7 @@ type viewDataMsg struct {
 	n   *wnode
 	f   *protocol.Frame
 	err error
+	key string
 }
 
 type viewStreamMsg struct {
@@ -180,6 +193,9 @@ func (t *viewTab) walkVisible(fn func(*wnode)) {
 			return
 		}
 		fn(wn)
+		if wn.preview != nil {
+			walk(wn.preview)
+		}
 		if view.Kind(wn.n) == "tabs" {
 			if wn.tab < len(wn.kids) {
 				walk(wn.kids[wn.tab])
@@ -234,7 +250,7 @@ func (t *viewTab) load(wn *wnode) tea.Cmd {
 		if err == nil {
 			f, err = view.Apply(f, ops, func(o protocol.Binding) (*protocol.Frame, error) { return fetch.Get(ctx, o) })
 		}
-		return viewDataMsg{t: t, n: wn, f: f, err: err}
+		return viewDataMsg{t: t, n: wn, f: f, err: err, key: view.Key(b)}
 	}
 }
 
@@ -274,6 +290,9 @@ func (t *viewTab) update(m *model, msg tea.Msg) tea.Cmd {
 		if msg.t != t {
 			return nil
 		}
+		if msg.n.bound != "" && msg.n.bound != msg.key {
+			return nil
+		}
 		msg.n.loading = false
 		if msg.err != nil && msg.t.ctx.Err() != nil {
 			return nil
@@ -282,7 +301,7 @@ func (t *viewTab) update(m *model, msg tea.Msg) tea.Cmd {
 		if msg.f != nil || msg.err == nil {
 			msg.n.frame = msg.f
 		}
-		return nil
+		return t.syncPreviews()
 	case viewStreamMsg:
 		if msg.t != t {
 			return nil
@@ -353,9 +372,14 @@ func (t *viewTab) focusTerm() (*terminal, bool) {
 }
 
 func (t *viewTab) key(m *model, k tea.KeyPressMsg) tea.Cmd {
+	cmd := t.keyFocused(m, k)
+	return batch(cmd, t.syncPreviews())
+}
+
+func (t *viewTab) keyFocused(m *model, k tea.KeyPressMsg) tea.Cmd {
 	if term, ok := t.focusTerm(); ok && term.input {
 		if k.String() == "ctrl+]" {
-			term.input = false
+			term.input, term.left = false, true
 			return nil
 		}
 		term.key(k)
@@ -379,8 +403,27 @@ func (t *viewTab) key(m *model, k tea.KeyPressMsg) tea.Cmd {
 		}
 		return nil
 	}
-	if k.String() == "/" && t.focus != nil && view.Kind(t.focus.n) == "table" {
+	if k.String() == "/" && t.focus != nil && filterable[view.Kind(t.focus.n)] {
 		t.filtering = true
+		return nil
+	}
+	if t.focus != nil {
+		if b, ok := t.focus.st.(*boardState); ok && b.key(k.String()) {
+			return nil
+		}
+	}
+	if wn := t.focus; k.String() == "Q" && wn != nil && wn.n.Bind != nil && wn.n.Bind.Args["query"] != nil {
+		m.ask(wn.n.Bind.Source+" query", fmt.Sprint(wn.n.Bind.Args["query"]), func(q string) tea.Cmd {
+			b := *wn.n.Bind
+			b.Args = maps.Clone(b.Args)
+			b.Args["query"] = q
+			wn.n.Bind, wn.frame, wn.err = &b, nil, nil
+			return t.load(wn)
+		})
+		return nil
+	}
+	if k.String() == "v" && t.focus != nil && t.focus.preview != nil {
+		t.focus.previewOff = !t.focus.previewOff
 		return nil
 	}
 	switch k.String() {
@@ -484,9 +527,46 @@ func (t *viewTab) rowAction(m *model, wn *wnode, key string) (tea.Cmd, bool) {
 		if label == "<nil>" {
 			label = name
 		}
-		return t.run(m, label, name, args), true
+		if p, ok := am["ai"].(string); ok {
+			c := m.chatOpen()
+			c.input.SetValue(fmt.Sprint(expandRow(p, row)))
+			c.input.CursorEnd()
+			return nil, true
+		}
+		return t.fill(m, wn, label, args, row, func(a protocol.Args) tea.Cmd { return t.run(m, label, name, a) }), true
 	}
 	return nil, false
+}
+
+// fill asks for the args written ${ask} (an input; ${ask:field} starts from the row's field, to edit
+// it) and ${pick:field} (one of the values the frame has in field: a board's columns), then runs done.
+func (t *viewTab) fill(m *model, wn *wnode, label string, args protocol.Args, row map[string]any, done func(protocol.Args) tea.Cmd) tea.Cmd {
+	for _, k := range slices.Sorted(maps.Keys(args)) {
+		v, _ := args[k].(string)
+		set := func(val string) tea.Cmd {
+			args[k] = val
+			return t.fill(m, wn, label, args, row, done)
+		}
+		if f, ok := strings.CutPrefix(v, "${pick:"); ok && strings.HasSuffix(f, "}") {
+			var items []string
+			for _, x := range frames.Column(wn.frame, strings.TrimSuffix(f, "}")) {
+				if s := fmt.Sprint(x); !slices.Contains(items, s) {
+					items = append(items, s)
+				}
+			}
+			m.pick(label+": "+k, items, nil, 0, false, func(c []string) tea.Cmd { return set(c[0]) })
+			return nil
+		}
+		if v == "${ask}" || strings.HasPrefix(v, "${ask:") && strings.HasSuffix(v, "}") {
+			init := ""
+			if f := strings.TrimSuffix(strings.TrimPrefix(v, "${ask:"), "}"); f != v && row[f] != nil {
+				init = fmt.Sprint(row[f])
+			}
+			m.ask(label+": "+k, init, set)
+			return nil
+		}
+	}
+	return done(args)
 }
 
 // run runs an action through the Engine, so policy, confirmation and audit apply.
@@ -536,6 +616,12 @@ func (t *viewTab) currentRow(wn *wnode) map[string]any {
 	if wn.frame == nil {
 		return nil
 	}
+	if b, ok := wn.st.(*boardState); ok {
+		if b.cur < 0 || b.cur >= frames.Len(wn.frame) {
+			return nil
+		}
+		return frames.Row(wn.frame, b.cur)
+	}
 	if g, ok := wn.st.(*grid); ok {
 		if r, ok := g.current(); ok {
 			if i, err := strconv.Atoi(r.id); err == nil && i < frames.Len(wn.frame) {
@@ -549,27 +635,36 @@ func (t *viewTab) currentRow(wn *wnode) map[string]any {
 	return nil
 }
 
+// hints lead with the focused widget's own actions: the footer shows only the first few.
 func (t *viewTab) hints() [][2]string {
-	h := [][2]string{{"←→", "focus"}, {"r", "refresh"}}
-	if t.tabsOf(nil) != nil {
-		h = append(h, [2]string{"ctrl+←→", "tabs"})
-	}
+	var h [][2]string
 	if t.focus != nil {
-		switch view.Kind(t.focus.n) {
-		case "table":
-			h = append(h, [2]string{"enter", "open"}, [2]string{"/", "filter"}, [2]string{"y Y", "copy"})
-		case "terminal":
-			h = append(h, [2]string{"enter", "type into it"}, [2]string{"R", "restart"})
-		case "form":
-			h = append(h, [2]string{"enter", "edit"}, [2]string{"ctrl+s", "submit"})
-		}
 		acts, _ := t.focus.n.Props["actions"].([]any)
 		for _, a := range acts {
 			am, _ := a.(map[string]any)
 			h = append(h, [2]string{fmt.Sprint(am["key"]), fmt.Sprint(firstNonNil(am["name"], am["action"]))})
 		}
+		if t.focus.preview != nil {
+			h = append(h, [2]string{"v", "details"})
+		}
+		switch view.Kind(t.focus.n) {
+		case "table":
+			h = append(h, [2]string{"enter", "open"}, [2]string{"/", "filter"}, [2]string{"y Y", "copy"})
+		case "board":
+			h = append(h, [2]string{"/", "filter"})
+		case "terminal":
+			h = append(h, [2]string{"enter", "type into it"}, [2]string{"R", "restart"})
+		case "form":
+			h = append(h, [2]string{"enter", "edit"}, [2]string{"ctrl+s", "submit"})
+		}
+		if b := t.focus.n.Bind; b != nil && b.Args["query"] != nil {
+			h = append(h, [2]string{"Q", "query"})
+		}
 	}
-	return h
+	if t.tabsOf(nil) != nil {
+		h = append(h, [2]string{"ctrl+←→", "tabs"})
+	}
+	return append(h, [2]string{"←→", "focus"}, [2]string{"r", "refresh"})
 }
 
 func firstNonNil(v ...any) any {
@@ -619,6 +714,19 @@ func (t *viewTab) draw(m *model, wn *wnode, x, y, w, h int) string {
 	case "scroll":
 		return t.scrollDraw(m, wn, x, y, w, h)
 	}
+	if p := t.previewOf(wn); p != nil && !wn.previewOff && w >= 60 {
+		lw := w * 45 / 100
+		if pct, err := strconv.Atoi(strings.TrimSuffix(fmt.Sprint(p.n.Props["width"]), "%")); err == nil && pct > 0 && pct < 100 {
+			lw = w - w*pct/100
+		}
+		left := t.drawLeaf(m, wn, x, y, lw, h)
+		return lipgloss.JoinHorizontal(lipgloss.Top, left, t.drawLeaf(m, p, x+lw, y, w-lw, h))
+	}
+	return t.drawLeaf(m, wn, x, y, w, h)
+}
+
+func (t *viewTab) drawLeaf(m *model, wn *wnode, x, y, w, h int) string {
+	wn.x, wn.y, wn.w, wn.h = x, y, w, h
 	t.order = append(t.order, wn)
 	focused := wn == t.focus
 	m.zone(fmt.Sprintf("view:%d", wn.id), x, y, w, h)
@@ -626,6 +734,9 @@ func (t *viewTab) draw(m *model, wn *wnode, x, y, w, h int) string {
 		return clip(t.leaf(m, wn, x, y, w, h, focused), w, h)
 	}
 	title := view.Prop(wn.n, "title")
+	if wn.bound != "" {
+		title = fmt.Sprint(expandRow(title, t.previewRow))
+	}
 	if term, ok := wn.st.(*terminal); ok && term.input {
 		title += sDim.Render(" · ctrl+] leaves")
 	}
@@ -769,6 +880,10 @@ func (t *viewTab) scrollDraw(m *model, wn *wnode, x, y, w, h int) string {
 }
 
 func (t *viewTab) click(m *model, h hit) tea.Cmd {
+	return batch(t.clickAt(m, h), t.syncPreviews())
+}
+
+func (t *viewTab) clickAt(m *model, h hit) tea.Cmd {
 	var id, sub int
 	if n, _ := fmt.Sscanf(h.id, "viewtab:%d:%d", &id, &sub); n == 2 {
 		var cmd tea.Cmd
@@ -948,3 +1063,96 @@ actions:
   - {key: U, name: upgrade, command: "plugin up ${row.name}"}
   - {key: D, name: remove, command: "plugin rm ${row.name}", danger: true}
 `)
+
+// previewOf is wn's preview pane, made from its preview: prop on first use.
+// filterFirst filters the focused table or board, else the first one showing.
+func (t *viewTab) filterFirst(q string) {
+	if t.root == nil {
+		t.build()
+	}
+	target := t.focus
+	if target == nil || !filterable[view.Kind(target.n)] {
+		target = nil
+		t.walkVisible(func(wn *wnode) {
+			if target == nil && filterable[view.Kind(wn.n)] {
+				target = wn
+			}
+		})
+	}
+	if target != nil {
+		target.filter, t.focus = q, target
+	}
+}
+
+// filterable are the widgets / filters.
+var filterable = map[string]bool{"table": true, "board": true}
+
+func (t *viewTab) previewOf(wn *wnode) *wnode {
+	if wn.preview != nil {
+		return wn.preview
+	}
+	raw, ok := wn.n.Props["preview"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	raw = maps.Clone(raw)
+	if raw["widget"] == nil {
+		raw["widget"] = "markdown"
+	}
+	var y yaml.Node
+	b, _ := yaml.Marshal(raw)
+	if yaml.Unmarshal(b, &y) != nil || len(y.Content) == 0 {
+		return nil
+	}
+	n, err := view.Parse(y.Content[0])
+	if err != nil || n.Bind == nil {
+		return nil
+	}
+	wn.preview = &wnode{n: n, id: 1<<20 + wn.id, bound: "-", tpl: *n.Bind}
+	wn.previewOff, _ = n.Props["hidden"].(bool)
+	wn.preview.n.Bind = nil
+	return wn.preview
+}
+
+// syncPreviews points each showing preview pane at its table's selected row and fetches it.
+func (t *viewTab) syncPreviews() tea.Cmd {
+	var cmds []tea.Cmd
+	t.walkVisible(func(wn *wnode) {
+		p := t.previewOf(wn)
+		row := t.currentRow(wn)
+		if p == nil || row == nil {
+			return
+		}
+		b := protocol.Binding{Source: p.tpl.Source, Every: p.tpl.Every, Args: protocol.Args{}}
+		for k, v := range p.tpl.Args {
+			b.Args[k] = expandRow(v, row)
+		}
+		if key := view.Key(b); key != p.bound {
+			t.previewRow = row
+			p.n.Bind, p.bound, p.frame, p.err, p.st = &b, key, nil, nil, nil
+			cmds = append(cmds, t.load(p))
+		}
+	})
+	return batch(cmds...)
+}
+
+// aiContext is the focused widget's source and selected row, and the preview beside it.
+func (t *viewTab) aiContext(m *model) string {
+	wn := t.focus
+	if wn == nil {
+		return ""
+	}
+	var b strings.Builder
+	if wn.n.Bind != nil {
+		fmt.Fprintf(&b, "widget %s from source %s %v\n", view.Kind(wn.n), wn.n.Bind.Source, wn.n.Bind.Args)
+	}
+	if row := t.currentRow(wn); row != nil {
+		raw, _ := json.Marshal(row)
+		fmt.Fprintf(&b, "selected row: %s\n", raw)
+	}
+	if p := wn.preview; p != nil && p.frame != nil && !wn.previewOff {
+		raw, _ := json.Marshal(frames.Rows(p.frame))
+		fmt.Fprintf(&b, "its details (%s): %s\n", p.tpl.Source, raw)
+	}
+	return b.String()
+}

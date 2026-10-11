@@ -165,10 +165,20 @@ func (m *model) command(line string) tea.Cmd {
 			return nil
 		}
 	case "open":
+		// open <screen> [words]: the words filter a view's table or board (open Jira PIN-12)
 		want := strings.ToLower(strings.Join(args, " "))
 		for i, t := range m.tabs {
 			if strings.ToLower(t.name()) == want {
 				return m.jump(i)
+			}
+		}
+		if len(args) > 1 {
+			for i, t := range m.tabs {
+				if v, ok := t.(*viewTab); ok && strings.EqualFold(t.name(), args[0]) {
+					cmd := m.jump(i)
+					v.filterFirst(strings.Join(args[1:], " "))
+					return cmd
+				}
 			}
 		}
 		m.setStatus("no screen "+want, true)

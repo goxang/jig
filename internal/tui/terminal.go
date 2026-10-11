@@ -31,6 +31,8 @@ type terminal struct {
 	// keep leaves the program running while the view is hidden
 	keep  bool
 	input bool
+	// shell takes the keys whenever it has the focus, until ctrl+] leaves it
+	shell, left bool
 
 	emu  *vt.SafeEmulator
 	pty  *os.File
@@ -70,7 +72,7 @@ func newTerminal(n protocol.Node, project, base string) (*terminal, error) {
 	if len(argv) == 0 {
 		return nil, errors.New("terminal: command is empty")
 	}
-	t := &terminal{argv: argv, dir: project}
+	t := &terminal{argv: argv, dir: project, shell: n.Props["command"] == nil}
 	if d := view.Prop(n, "dir"); d != "" {
 		if !filepath.IsAbs(d) {
 			d = filepath.Join(base, d)
@@ -296,7 +298,9 @@ func (t *viewTab) terminalBody(m *model, wn *wnode, x, y, w, h int, focused bool
 	term.x, term.y = x, y+m.originY
 	term.resize(w, h)
 	if !focused {
-		term.input = false
+		term.input, term.left = false, false
+	} else if term.shell && !term.left && !term.exited.Load() {
+		term.input = true
 	}
 	out := term.lines()
 	if term.exited.Load() {

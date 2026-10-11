@@ -21,6 +21,9 @@ views:
 | `home` | a tile on the Home screen, which appears once any view has this slot |
 | `{tab: {key: G}}` | a screen with its own key |
 
+`modes: [software, product]` shows a view only in those UI modes (`V`); a view without `modes:` shows in
+every mode but `product`.
+
 A plugin installed for the user (`~/.config/jig/plugins`) shows its views in a project only when
 jig.yaml configures it under `plugins:`, its `detect:` matches (`files` globs, `git_remote` in
 `.git/config`), or it has neither `detect:` nor a config schema. A contract's default view shows only
@@ -48,15 +51,15 @@ off up to a minute and keep the last frame. `r` refetches.
 
 | widget | props |
 |---|---|
-| `table` | `columns: [{name, color, ref, width}]`, `actions`; enter opens a row's ref, `y`/`Y` copy |
+| `table` | `columns: [{name, color, ref, width, hide}]`, `actions`; enter opens a row's ref, `y`/`Y` copy, `/` filters |
 | `list` `kv` `tree` | the frame as lines, key/value pairs, a JSON tree |
 | `stat` `gauge` `progress` | `value`, `unit`, `min`, `max`, `thresholds`, `color` |
 | `bar` `sparkline` `chart` `heatmap` | `series`, `time`, `value`, `unit`, `colors` |
-| `text` `markdown` `code` `diff` | `text`, `file`, or the frame |
+| `text` `markdown` `code` `diff` | `text`, `file`, `field` (one column of the frame), or the frame |
 | `logs` | a stream of lines; `stream: true` |
 | `waterfall` `timeline` `graph` | spans, events, nodes and edges |
 | `calendar` | `time`; the month, with a count on each day that has events |
-| `board` | `by` (the column field), `card` (the title field), `columns` |
+| `board` | `by` (the column field), `card` (the title field), `key` (shown before it), `columns`; arrows or hjkl move, `/` filters |
 | `form` | `schema`, or `action` (its args), `submit` |
 | `terminal` | `command` (string or list; default `$SHELL`), `dir` (default the project; relative to the view's own folder), `env`, `keep` (runs while hidden). Keys, and clicks when the program asks for the mouse, go to the program; ctrl+] leaves |
 | `canvas` | drawn by `plugin` through `widget.render` |
@@ -76,7 +79,13 @@ actions:
 ```
 
 `action:` runs through the engine (policy, confirmation, audit). `command:` is a palette line, the CLI's
-grammar; `${ask}` in it asks first, `danger: true` confirms.
+grammar (`open Jira ${row.issue}` jumps to a view, filtered). `ai:` opens the chat with the prompt typed
+in. In args, `${ask}` asks first, `${ask:field}` asks with the row's value filled in, `${pick:field}`
+picks from the values the frame has; `danger: true` confirms.
+
+A table or board takes `preview:` (a widget, `width: 45%`, `hidden: true`) shown beside it for the
+selected row: `${row.x}` in its args and title. `v` shows or hides it, enter on a board card too. A
+binding with a `query` arg gets `Q` to edit it.
 
 ## Keys
 

@@ -144,8 +144,8 @@ type UI struct {
 	// Tabs are the screens shown, in order (number keys follow it); left out, every screen the
 	// project configures something for shows, in the order of Screens.
 	Tabs []string `yaml:"tabs"`
-	// Mode is simple (fewer columns, keys and panels, for newcomers) or detailed (the default); V
-	// switches it in the UI.
+	// Mode is detailed (the default), simple (fewer columns, keys and screens), software (the dev
+	// screens and views for developers) or product (metrics and views for product); V picks it.
 	Mode string  `yaml:"mode"`
 	Logs *LogsUI `yaml:"logs"`
 }
