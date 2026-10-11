@@ -719,6 +719,10 @@ func (m *model) needsConfirm(dangerous bool) bool {
 // act runs a change, asking first when needsConfirm says so; the answer also counts as the
 // confirmation a protected environment needs.
 func (m *model) act(label string, dangerous bool, f func(ctx context.Context) error) tea.Cmd {
+	return m.actIf(m.needsConfirm(dangerous), label, f)
+}
+
+func (m *model) actIf(ask bool, label string, f func(ctx context.Context) error) tea.Cmd {
 	if err := m.app.Writable(); err != nil {
 		m.setStatus(label+": "+err.Error(), true)
 		return nil
@@ -729,7 +733,7 @@ func (m *model) act(label string, dangerous bool, f func(ctx context.Context) er
 		defer func() { a.Confirmed = m.yes }()
 		return m.runJob(ctx, label, f)
 	}
-	if !m.needsConfirm(dangerous) {
+	if !ask {
 		m.busy++
 		return run
 	}

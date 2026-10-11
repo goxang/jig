@@ -83,7 +83,9 @@ actions:
 `action:` runs through the engine (policy, confirmation, audit). `command:` is a palette line, the CLI's
 grammar (`open Jira ${row.issue}` jumps to a view, filtered). `ai:` opens the chat with the prompt typed
 in. In args, `${ask}` asks first, `${ask:field}` asks with the row's value filled in, `${pick:field}`
-picks from the values the frame has; `danger: true` confirms.
+picks from the values the frame has; `danger: true` confirms, and so does an action the plugin marks as danger
+(push, discard), in any environment. An action of a plugin not in use is left out, so one key can name
+both `gitlab.scm.open` and `github.scm.open`.
 
 A table or board takes `preview:` (a widget, `width: 45%`, `hidden: true`) shown beside it for the
 selected row: `${row.x}` in its args and title. `v` shows or hides it, enter on a board card too. A

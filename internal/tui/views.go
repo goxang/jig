@@ -505,7 +505,7 @@ func (t *viewTab) rowAction(m *model, wn *wnode, key string) (tea.Cmd, bool) {
 	acts, _ := wn.n.Props["actions"].([]any)
 	for _, a := range acts {
 		am, _ := a.(map[string]any)
-		if fmt.Sprint(am["key"]) != key {
+		if fmt.Sprint(am["key"]) != key || unserved(t.eng, am) {
 			continue
 		}
 		row := t.currentRow(wn)
@@ -617,7 +617,28 @@ func (t *viewTab) run(m *model, label, action string, args protocol.Args) tea.Cm
 		}
 		return err
 	}
-	return m.act(label, actionDangerous(e, action), refresh)
+	// a plugin's danger (a push, a discard) is not undone by switching environments: always ask,
+	// naming what it acts on
+	danger := actionDangerous(e, action)
+	if danger {
+		for _, k := range slices.Sorted(maps.Keys(args)) {
+			if s, ok := args[k].(string); ok && s != "" {
+				label += " " + s
+			}
+		}
+	}
+	return m.actIf(danger || m.needsConfirm(false), label, refresh)
+}
+
+// unserved is an action of a plugin not in use, so a view can offer gitlab.scm.open and
+// github.scm.open on the same key.
+func unserved(e *engine.Local, am map[string]any) bool {
+	name, ok := am["action"].(string)
+	if !ok || e == nil {
+		return false
+	}
+	_, found := e.Action(name)
+	return !found
 }
 
 func actionDangerous(e *engine.Local, name string) bool {
@@ -670,7 +691,9 @@ func (t *viewTab) hints() [][2]string {
 		acts, _ := t.focus.n.Props["actions"].([]any)
 		for _, a := range acts {
 			am, _ := a.(map[string]any)
-			h = append(h, [2]string{fmt.Sprint(am["key"]), fmt.Sprint(firstNonNil(am["name"], am["action"]))})
+			if !unserved(t.eng, am) {
+				h = append(h, [2]string{fmt.Sprint(am["key"]), fmt.Sprint(firstNonNil(am["name"], am["action"]))})
+			}
 		}
 		if t.focus.preview != nil {
 			h = append(h, [2]string{"v", "details"})
