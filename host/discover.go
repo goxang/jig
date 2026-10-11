@@ -37,7 +37,8 @@ func StateDir() string  { return filepath.Join(xdg("XDG_STATE_HOME", ".local/sta
 func CacheDir() string  { return filepath.Join(xdg("XDG_CACHE_HOME", ".cache"), "jig") }
 
 // Discover finds the project's plugins. A later scope replaces an earlier one of the same name: what
-// jig.lock pins, then user plugins, then project plugins (under workspace trust), then plugins.<name>.path.
+// jig.lock pins, then what the user's own lock pins (jig plugin add --user), then user plugins, then
+// project plugins (under workspace trust), then plugins.<name>.path.
 func Discover(dir string, cfg map[string]*spec.Plugin) (ms []*Manifest, warnings []string) {
 	found := map[string]*Manifest{}
 	add := func(d string) {
@@ -87,6 +88,16 @@ func Discover(dir string, cfg map[string]*spec.Plugin) (ms []*Manifest, warnings
 			warnings = append(warnings, fmt.Sprintf("plugin %s %s is locked but not installed (any jig command installs it)", n, l.Version))
 		}
 	}
+	if user, err := ReadLock(ConfigDir()); err == nil {
+		for _, n := range user.Names() {
+			l := user.Plugins[n]
+			if p := parseSource(l.Source); p.kind == "path" {
+				add(resolveIn(ConfigDir(), p.path))
+			} else if d := storePath(n, l.Version); exists(d) {
+				add(d)
+			}
+		}
+	}
 	scan := func(root string) {
 		ents, _ := os.ReadDir(root)
 		for _, e := range ents {
@@ -116,6 +127,17 @@ func Discover(dir string, cfg map[string]*spec.Plugin) (ms []*Manifest, warnings
 	}
 	sort.Slice(ms, func(i, j int) bool { return ms[i].Name < ms[j].Name })
 	return ms, warnings
+}
+
+func resolveIn(dir, p string) string {
+	if rest, ok := strings.CutPrefix(p, "~/"); ok {
+		home, _ := os.UserHomeDir()
+		return filepath.Join(home, rest)
+	}
+	if filepath.IsAbs(p) {
+		return p
+	}
+	return filepath.Join(dir, p)
 }
 
 func canon(v string) string {

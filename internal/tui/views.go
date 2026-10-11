@@ -838,23 +838,11 @@ func span(wn *wnode) int {
 }
 
 func (t *viewTab) tabsDraw(m *model, wn *wnode, x, y, w, h int) string {
-	var strip []string
-	cx := x
+	var labels []string
 	for i, k := range wn.kids {
-		title := view.Prop(k.n, "title")
-		if title == "" {
-			title = strconv.Itoa(i + 1)
-		}
-		st := sSubOff
-		if i == wn.tab {
-			st = sSubOn
-		}
-		s := st.Render(title)
-		m.zone(fmt.Sprintf("viewtab:%d:%d", wn.id, i), cx, y, lipgloss.Width(s), 1)
-		cx += lipgloss.Width(s) + 1
-		strip = append(strip, s)
+		labels = append(labels, cmp.Or(view.Prop(k.n, "title"), strconv.Itoa(i+1)))
 	}
-	head := padRight(strings.Join(strip, sSubSep), w)
+	head := padRight(m.stripDrop(fmt.Sprintf("viewtab:%d", wn.id), x, y, labels, wn.tab, w), w)
 	if wn.tab >= len(wn.kids) {
 		return head
 	}

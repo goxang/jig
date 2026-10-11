@@ -570,8 +570,14 @@ func Human(v float64, unit string) string {
 		return time.Duration(v * float64(time.Second)).Round(roundFor(v)).String()
 	case "ms":
 		return time.Duration(v * float64(time.Millisecond)).Round(roundFor(v / 1000)).String()
+	case "µs":
+		return time.Duration(v * float64(time.Microsecond)).Round(roundFor(v / 1e6)).String()
+	case "ns":
+		return time.Duration(v).String()
 	case "bytes", "B":
 		return bytes(v)
+	case "bytes/s":
+		return bytes(v) + "/s"
 	case "%", "percent":
 		return fmt.Sprintf("%.1f%%", v)
 	case "ratio":

@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -41,9 +42,10 @@ func (a *App) VarValues(ctx context.Context, v *spec.DashVar) ([]string, error) 
 }
 
 // DefaultVar is what a variable starts as: its default, else all (when offered), else the first value.
+// A default the values no longer hold (a Grafana export's host) is skipped.
 func DefaultVar(v *spec.DashVar, values []string) []string {
 	switch {
-	case v.Default != "":
+	case v.Default != "" && (len(values) == 0 || slices.Contains(values, v.Default)):
 		return []string{v.Default}
 	case v.All:
 		return []string{AllValue}

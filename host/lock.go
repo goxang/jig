@@ -60,6 +60,9 @@ func (l *Lock) Write(dir string) error {
 	}
 	b = append([]byte("# written by jig plugin; commit it, do not edit it\n"), b...)
 	remember(dir)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
 	return writeAtomic(filepath.Join(dir, LockFile), b, 0o644)
 }
 

@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"github.com/goxang/jig/spec"
 	"os"
 	"path/filepath"
 	"strings"
@@ -250,5 +251,29 @@ func TestSharedFileOnceVendored(t *testing.T) {
 	}
 	if got, _ := os.ReadFile(filepath.Join(storePath("a", "1.0.0"), "bin/std")); string(got) != "#!/bin/sh\n" {
 		t.Fatalf("vendored shared file: %q", got)
+	}
+}
+
+func TestUserPlugins(t *testing.T) {
+	isolate(t)
+	ctx := context.Background()
+	mirror := fakeRegistry(t, map[string]map[string]string{"arcade": {"1.0.0": ""}})
+	proj := t.TempDir()
+	mine := &Installer{Dir: ConfigDir(), Registry: &Registry{Mirror: mirror}, Yes: true}
+	if err := mine.Add(ctx, []string{"arcade"}); err != nil {
+		t.Fatal(err)
+	}
+	if exists(filepath.Join(proj, LockFile)) {
+		t.Fatal("a user plugin wrote the project's jig.lock")
+	}
+	ms, _ := Discover(proj, nil)
+	if len(ms) != 1 || ms[0].Name != "arcade" || !ms[0].Relevant(proj, nil) {
+		t.Fatalf("user plugin not discovered in a project: %v", ms)
+	}
+	if ms, _ := Discover(proj, map[string]*spec.Plugin{"arcade": {Off: true}}); len(ms) != 0 {
+		t.Fatal("plugins.arcade.off does not hide a user plugin")
+	}
+	if removed, _ := GC(); len(removed) != 0 {
+		t.Fatalf("gc removed a user-locked plugin: %v", removed)
 	}
 }

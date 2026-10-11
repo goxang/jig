@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"image/color"
+	"maps"
 	"math"
 	"net"
 	"path"
@@ -48,6 +49,7 @@ type dashVarsMsg struct {
 	gen     int
 	dash    string
 	choices map[string][]string
+	chosen  map[string][]string
 	err     error
 }
 
@@ -237,21 +239,35 @@ func (t *metricsTab) fetchAll(m *model) tea.Cmd {
 	return t.fetch(m, name, ps)
 }
 
+// fetchVars resolves the variables in order, each query seeing the values chosen before it
+// ($nodename's query filters on $job); a value its choices no longer hold falls back to the default.
 func (t *metricsTab) fetchVars(m *model, name string, d *spec.Dashboard) tea.Cmd {
 	a, gen, ctx := m.app, m.gen, m.ctx
+	start, end := t.win.span(time.Now())
+	rng := end.Sub(start)
+	step := max(rng/120, time.Second)
+	chosen := maps.Clone(t.vars[name])
+	if chosen == nil {
+		chosen = map[string][]string{}
+	}
 	return func() tea.Msg {
 		c, cancel := context.WithTimeout(ctx, 15*time.Second)
 		defer cancel()
 		out := map[string][]string{}
 		var errs []string
-		for n, v := range d.Vars {
-			vs, err := a.VarValues(c, v)
+		for _, n := range varsByDependency(d) {
+			v := *d.Vars[n]
+			v.Query = engine.ExpandQuery(v.Query, chosen, rng, step)
+			vs, err := a.VarValues(c, &v)
 			if err != nil {
 				errs = append(errs, "$"+n+": "+err.Error())
 			}
 			out[n] = vs
+			if cur := chosen[n]; len(cur) == 0 || len(vs) > 0 && !slices.Contains(cur, engine.AllValue) && !slices.ContainsFunc(cur, func(x string) bool { return slices.Contains(vs, x) }) {
+				chosen[n] = engine.DefaultVar(d.Vars[n], vs)
+			}
 		}
-		msg := dashVarsMsg{gen: gen, dash: name, choices: out}
+		msg := dashVarsMsg{gen: gen, dash: name, choices: out, chosen: chosen}
 		if len(errs) > 0 {
 			sort.Strings(errs)
 			msg.err = fmt.Errorf("%s", strings.Join(errs, "; "))
@@ -387,14 +403,7 @@ func (t *metricsTab) update(m *model, msg tea.Msg) tea.Cmd {
 		if msg.err != nil {
 			t.varErr = msg.err.Error()
 		}
-		if t.vars[msg.dash] == nil {
-			t.vars[msg.dash] = map[string][]string{}
-		}
-		for n, v := range m.app.Spec.Dashboards[msg.dash].Vars {
-			if len(t.vars[msg.dash][n]) == 0 {
-				t.vars[msg.dash][n] = engine.DefaultVar(v, msg.choices[n])
-			}
-		}
+		t.vars[msg.dash] = msg.chosen
 		t.pickPending(msg.dash)
 		return t.fetchAll(m)
 	case panelsMsg:
@@ -660,6 +669,9 @@ func (t *metricsTab) pickValues(m *model, name string) {
 			t.vars[dash] = map[string][]string{}
 		}
 		t.vars[dash][name] = chosen
+		if dependsOn(t.dashboard(m), name) {
+			t.choices[dash] = nil
+		}
 		return t.reload(m)
 	}
 	if v.Multi {
@@ -668,6 +680,39 @@ func (t *metricsTab) pickValues(m *model, name string) {
 		m.pick("$"+name, items, nil, max(0, slices.Index(items, firstOf(t.vars[dash][name]))), false, done)
 	}
 	m.picker.at = &[2]int{t.varX[name], 3}
+}
+
+// varsByDependency is VarOrder with each variable after the ones its query uses (imports lose
+// Grafana's order).
+func varsByDependency(d *spec.Dashboard) []string {
+	pending := slices.Clone(d.VarOrder)
+	var out []string
+	for len(pending) > 0 {
+		next := pending[0]
+		for _, n := range pending {
+			if !slices.ContainsFunc(pending, func(o string) bool { return o != n && uses(d.Vars[n].Query, o) }) {
+				next = n
+				break
+			}
+		}
+		out = append(out, next)
+		pending = slices.DeleteFunc(pending, func(o string) bool { return o == next })
+	}
+	return out
+}
+
+func uses(query, name string) bool {
+	return strings.Contains(query, "${"+name+"}") || regexp.MustCompile(`\$`+regexp.QuoteMeta(name)+`\b`).MatchString(query)
+}
+
+// dependsOn says whether another variable's query uses $name, so its choices change with it.
+func dependsOn(d *spec.Dashboard, name string) bool {
+	for _, v := range d.Vars {
+		if uses(v.Query, name) {
+			return true
+		}
+	}
+	return false
 }
 
 func firstOf(s []string) string {
@@ -1096,7 +1141,7 @@ func (t *metricsTab) header(m *model, w int) string {
 	if t.source != "" {
 		src = sDim.Render(" from ") + sAccent.Render(t.source)
 	}
-	line1 := sAccent.Render(" ≡ ") + truncate(m.strip("mdash", 3, 0, names, t.dashIndex(m)), max(0, w-rw-3-lipgloss.Width(src))) + src
+	line1 := sAccent.Render(" ≡ ") + m.stripDrop("mdash", 3, 0, names, t.dashIndex(m), max(0, w-rw-3-lipgloss.Width(src))) + src
 	line1 += strings.Repeat(" ", max(0, w-lipgloss.Width(line1)-rw)) + right
 
 	line1 += "\n" + m.stripRule(3, w)

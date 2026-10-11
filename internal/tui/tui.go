@@ -174,6 +174,8 @@ type model struct {
 	originY int
 	// stripAt is where the active label of the last strip drawn starts and ends, from its left
 	stripAt [2]int
+	// drops are the labels of the strips drawn as dropdowns, by zone id
+	drops map[string][]string
 	// hx, hy is the cell under the mouse (-1 when unknown), for hover highlights
 	hx, hy  int
 	tabSpan [][2]int
@@ -1219,6 +1221,10 @@ func (m *model) mouse(e mouseEvent) tea.Cmd {
 	if m.picker != nil {
 		return m.picker.click(m, h)
 	}
+	if id, ok := strings.CutSuffix(h.id, ":drop"); ok && m.drops[id] != nil {
+		m.dropdown(id, e.X, e.Y)
+		return nil
+	}
 	if d, ok := m.tabs[m.active].(dragger); ok && !h.double && d.drag(m, h, dragPress) {
 		m.dragZone, m.sel = h.id, nil
 	}
@@ -1350,6 +1356,45 @@ func (m *model) stripFrom(id string, x, y int, labels []string, active, from int
 		b.WriteString(p)
 	}
 	return b.String()
+}
+
+// stripDrop is a strip while its labels fit in w cells, else a dropdown: the active label with ▾;
+// a click lists every label, and picking one clicks it.
+func (m *model) stripDrop(id string, x, y int, labels []string, active, w int) string {
+	n := 0
+	for _, l := range labels {
+		n += lipgloss.Width(sSubOff.Render(l)) + 1
+	}
+	if n-1 <= w || len(labels) == 0 {
+		return m.strip(id, x, y, labels, active)
+	}
+	lab := labels[min(max(active, 0), len(labels)-1)]
+	on := sSubOn.Render(lab + " ▾")
+	s := on + sDim.Render(fmt.Sprintf(" %d of %d", active+1, len(labels)))
+	m.zone(id+":drop", x, y, lipgloss.Width(s), 1)
+	if m.drops == nil {
+		m.drops = map[string][]string{}
+	}
+	m.drops[id] = labels
+	m.stripAt = [2]int{0, lipgloss.Width(on)}
+	return truncate(s, w)
+}
+
+// dropdown lists the labels of strip id where the pointer is; choosing one clicks its label.
+func (m *model) dropdown(id string, x, y int) {
+	var items []string
+	for _, l := range m.drops[id] {
+		items = append(items, ansi.Strip(l))
+	}
+	t := m.tabs[m.active]
+	m.pick(t.name(), items, nil, 0, false, func(chosen []string) tea.Cmd {
+		c, ok := t.(clicker)
+		if i := slices.Index(items, firstOf(chosen)); ok && i >= 0 {
+			return c.click(m, hit{id: fmt.Sprintf("%s:%d", id, i)})
+		}
+		return nil
+	})
+	m.picker.at = &[2]int{x, y - m.originY + 1}
 }
 
 // stripRule is the line under the last strip drawn, lead cells in: thin, heavy accent under the

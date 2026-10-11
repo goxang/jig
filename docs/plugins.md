@@ -8,6 +8,7 @@ importers, contracts and anything else jig.yaml can hold.
 ```bash
 jig plugin search gitlab            # the registry index
 jig plugin add pack/gitlab          # install and pin in jig.lock: a name, pack/<name>, git URL, archive or path
+jig plugin add -u arcade            # only for you, in every project: ~/.config/jig/jig.lock
 jig plugin ls                       # what the project has, where from, on or off
 jig plugin off jira                 # for you (.jig/local.yaml); --project writes jig.yaml
 jig plugin up                       # upgrade within each major version
@@ -15,7 +16,7 @@ jig plugin info gitlab              # what it provides and its permissions
 jig plugin logs gitlab -F           # its stderr; trace shows the JSON-RPC exchange (JIG_TRACE=gitlab)
 ```
 
-jig finds plugins in what `jig.lock` pins, then `~/.config/jig/plugins`, then `.jig/plugins`, then
+jig finds plugins in what `jig.lock` pins, then your own `~/.config/jig/jig.lock`, then `~/.config/jig/plugins`, then `.jig/plugins`, then
 `plugins.<name>.path`; a later one of the same name wins. `plugins.<name>:` in jig.yaml configures one
 against its `config:` schema. A plugin in `~/.config/jig/plugins` shows its views only in projects
 it applies to (see [views](views.md)). A pack is a plugin that is mostly `requires:`.

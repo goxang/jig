@@ -72,7 +72,7 @@ Every command; `jig <command> --help` has its flags. Generated from the code.
 | `metrics targets` | the environment's services with metrics as a Prometheus file_sd list (for a local Prometheus container) |
 | `migrate` | move a rig project to jig (rig.yaml to jig.yaml, .rig state, ~/.config/rig), or rewrite jig.yaml to version 1 |
 | `ns [namespace]` | Kubernetes namespaces: list them, switch this environment to one (kept until --reset), --create a new one |
-| `plugin add <source>...` | install plugins and pin them in jig.lock: a name, pack/<name>, host/owner/repo[/sub]@ref, a .tar.gz URL or a path |
+| `plugin add <source>...` | install plugins and pin them in jig.lock (--user: only for you): a name, pack/<name>, host/owner/repo[/sub]@ref, a .tar.gz URL or a path |
 | `plugin check <name>` | check a plugin against the contracts it implements, live |
 | `plugin dev [folder]` | link a plugin folder into this project, rebuild it on change and show its RPC trace |
 | `plugin gc` | delete installed plugin versions no project locks |

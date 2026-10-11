@@ -698,7 +698,7 @@ func (t *servicesTab) view(m *model, w, h int) string {
 		return panel(title, sDim.Render("asking the runtime…"), w, h, true)
 	}
 	names := t.sectionNames(m)
-	strip := m.stripFit("svc:section", 1, 1, t.sectionLabels(m, names), slices.Index(names, t.section), w-2)
+	strip := m.stripDrop("svc:section", 1, 1, t.sectionLabels(m, names), slices.Index(names, t.section), w-2)
 	if hint := sDim.Render("  ctrl+←→ · dbl-click marks"); lipgloss.Width(strip)+lipgloss.Width(hint) <= w-2 {
 		strip += hint
 	}

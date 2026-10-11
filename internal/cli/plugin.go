@@ -42,7 +42,12 @@ func installer(dir string) *host.Installer {
 
 // ensurePlugins installs what jig.lock pins and this machine lacks; true means the project must reload.
 func ensurePlugins(dir string) (bool, error) {
+	mine, err := installer(host.ConfigDir()).Ensure(context.Background())
+	if err != nil {
+		fmt.Fprintln(os.Stderr, amber("your plugins: ")+err.Error())
+	}
 	changed, err := installer(dir).Ensure(context.Background())
+	changed = changed || mine
 	if err != nil && !errors.Is(err, host.ErrUntrusted) {
 		fmt.Fprintln(os.Stderr, amber("plugins: ")+err.Error())
 		return changed, nil
@@ -52,7 +57,19 @@ func ensurePlugins(dir string) (bool, error) {
 
 func pluginCommand() *cobra.Command {
 	pc := &cobra.Command{Use: "plugin", Aliases: []string{"plugins"}, Short: "list, find, add, upgrade and switch plugins"}
-	var major, project, follow bool
+	var major, project, follow, user bool
+	// scope is where add, rm and up pin: the project's jig.lock, or with --user the user's own
+	// (~/.config/jig/jig.lock), whose plugins every project shows and no repository carries
+	scope := func() string {
+		if user {
+			return host.ConfigDir()
+		}
+		return projectDir()
+	}
+	userFlag := func(c *cobra.Command) *cobra.Command {
+		c.Flags().BoolVarP(&user, "user", "u", false, "for you in every project (~/.config/jig/jig.lock), not in this project's jig.lock")
+		return c
+	}
 
 	pc.AddCommand(&cobra.Command{
 		Use: "ls", Short: "the project's plugins: version, kind, where from, on or off",
@@ -67,11 +84,15 @@ func pluginCommand() *cobra.Command {
 			}
 			ms, warn := host.Discover(dir, all)
 			lock, _ := host.ReadLock(dir)
+			mine, _ := host.ReadLock(host.ConfigDir())
 			var rows [][]string
 			for _, m := range ms {
 				state, from := green("on"), dim(m.Dir)
 				if c := cfg[m.Name]; c != nil && c.Off {
 					state = dim("off")
+				}
+				if l := mine.Plugins[m.Name]; l != nil {
+					from = l.Source + dim(" (yours: --user)")
 				}
 				if l := lock.Plugins[m.Name]; l != nil {
 					from = l.Source
@@ -152,25 +173,32 @@ func pluginCommand() *cobra.Command {
 	}
 	pc.AddCommand(logs("logs", "the plugin's stderr and host/log lines", host.LogFile))
 	pc.AddCommand(logs("trace", "the plugin's JSON-RPC exchange, recorded while JIG_TRACE names it (or is *)", host.TraceFile))
-	pc.AddCommand(&cobra.Command{
-		Use: "add <source>...", Short: "install plugins and pin them in jig.lock: a name, pack/<name>, host/owner/repo[/sub]@ref, a .tar.gz URL or a path",
+	pc.AddCommand(userFlag(&cobra.Command{
+		Use: "add <source>...", Short: "install plugins and pin them in jig.lock (--user: only for you): a name, pack/<name>, host/owner/repo[/sub]@ref, a .tar.gz URL or a path",
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return installer(projectDir()).Add(cmd.Context(), args)
+			if user {
+				for i, a := range args {
+					if strings.HasPrefix(a, "./") || strings.HasPrefix(a, "../") {
+						args[i], _ = filepath.Abs(a)
+					}
+				}
+			}
+			return installer(scope()).Add(cmd.Context(), args)
 		},
-	})
-	pc.AddCommand(&cobra.Command{
+	}))
+	pc.AddCommand(userFlag(&cobra.Command{
 		Use: "rm <name>...", Aliases: []string{"remove"}, Short: "unpin plugins (and what a removed pack brought)", Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return installer(projectDir()).Remove(args)
+			return installer(scope()).Remove(args)
 		},
-	})
-	up := &cobra.Command{
+	}))
+	up := userFlag(&cobra.Command{
 		Use: "up [name...]", Short: "upgrade plugins within their major version (all when none is named)",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return installer(projectDir()).Up(cmd.Context(), args, major)
+			return installer(scope()).Up(cmd.Context(), args, major)
 		},
-	}
+	})
 	up.Flags().BoolVar(&major, "major", false, "allow a new major version")
 	pc.AddCommand(up)
 	for _, on := range []bool{true, false} {
