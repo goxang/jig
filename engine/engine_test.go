@@ -279,3 +279,35 @@ func TestIgnoreState(t *testing.T) {
 		t.Fatalf("a .jig/* rule got .jig/ added: %q", raw)
 	}
 }
+
+func TestVarsSetReachesTheRuntime(t *testing.T) {
+	var db string
+	plugin.Register(core.KindRuntime, "fakevars", "runtime that keeps its env", func(_ core.Env, c *spec.Component) (any, error) {
+		var o struct {
+			Env map[string]string `yaml:"env"`
+		}
+		if err := c.Node.Decode(&o); err != nil {
+			return nil, err
+		}
+		db = o.Env["DB_URL"]
+		return &fake{running: map[string]int{}}, nil
+	})
+	p := filepath.Join(t.TempDir(), "jig.yaml")
+	project := "project: t\ndefault: test\nvars: {MAIN_DB: Switch}\nservices: {api: {}}\nenvironments:\n  test: {runtime: {type: fakevars, env: {DB_URL: 'db/${MAIN_DB}'}}}\n"
+	if err := os.WriteFile(p, []byte(project), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	a, err := Open(p, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := a.SetState(context.Background(), map[string]string{"var.MAIN_DB": "lt_Switch"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Open(p, ""); err != nil {
+		t.Fatal(err)
+	}
+	if db != "db/lt_Switch" {
+		t.Fatalf("runtime env DB_URL = %q, want db/lt_Switch", db)
+	}
+}

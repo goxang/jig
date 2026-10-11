@@ -111,15 +111,12 @@ func Open(file, env string) (*App, error) {
 	if err := a.pickNamespace(); err != nil {
 		return nil, err
 	}
-	rc := *e.Runtime
-	rc.Name, rc.Kind = "runtime", string(core.KindRuntime)
-	v, _, err := a.newComponent(&rc)
-	if err != nil {
+	if err := a.newRuntime(); err != nil {
 		return nil, err
 	}
-	a.runtime = v.(core.Runtime)
 	// `jig vars set` lives in the environment's state, which needs the runtime; values in jig.yaml
-	// (queries, tasks, components) were expanded without it, so expand again with the overrides
+	// (queries, tasks, components, the runtime's own env) were expanded without it, so expand again
+	// with the overrides and rebuild the runtime from them
 	if over := a.varOverrides(); len(over) > 0 {
 		if p, e, err = read(over); err != nil {
 			return nil, err
@@ -128,8 +125,25 @@ func Open(file, env string) (*App, error) {
 		if err := a.pickNamespace(); err != nil {
 			return nil, err
 		}
+		if c, ok := a.runtime.(io.Closer); ok {
+			_ = c.Close()
+		}
+		if err := a.newRuntime(); err != nil {
+			return nil, err
+		}
 	}
 	return a, nil
+}
+
+func (a *App) newRuntime() error {
+	rc := *a.Env.Runtime
+	rc.Name, rc.Kind = "runtime", string(core.KindRuntime)
+	v, _, err := a.newComponent(&rc)
+	if err != nil {
+		return err
+	}
+	a.runtime = v.(core.Runtime)
+	return nil
 }
 
 func (a *App) varOverrides() map[string]string {
