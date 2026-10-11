@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
+
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/goxang/jig/protocol"
@@ -39,5 +41,22 @@ func TestNewerWidgetFallsBack(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Errorf("%s: %q", widget, got)
 		}
+	}
+}
+
+func TestTableFilter(t *testing.T) {
+	tab := newViewTab("x", nil, "")
+	f := &protocol.Frame{Fields: []protocol.Field{{Name: "title"}}, Columns: [][]any{{"psw-deck-tabesh", "Shetab", "Overview"}}}
+	wn := &wnode{n: protocol.Node{Widget: "table"}, frame: f}
+	tab.focus = wn
+	for _, k := range []string{"/", "t", "a"} {
+		tab.key(nil, tea.KeyPressMsg{Code: rune(k[0]), Text: k})
+	}
+	got := ansi.Strip(tab.tableBody(&model{}, wn, 0, 0, 60, 10, true))
+	if !strings.Contains(got, "psw-deck-tabesh") || !strings.Contains(got, "Shetab") || strings.Contains(got, "Overview") || !strings.Contains(got, "2 of 3") {
+		t.Fatalf("%s", got)
+	}
+	if !tab.clearFilter() || tab.focus.filter != "" {
+		t.Fatal("esc did not clear the filter")
 	}
 }

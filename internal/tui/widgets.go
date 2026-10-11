@@ -243,7 +243,7 @@ func (t *viewTab) openRow(m *model, wn *wnode) tea.Cmd {
 	}
 	if u, _ := row["url"].(string); strings.Contains(u, "://") {
 		title, _ := row["title"].(string)
-		return m.openWith(title, u)
+		return m.openWith(strings.TrimLeft(title, "│├└─ "), u)
 	}
 	return nil
 }
@@ -321,8 +321,8 @@ func (t *viewTab) tableBody(m *model, wn *wnode, x, y, w, h int, focused bool) s
 		g.sortBy = -1
 		wn.st = g
 	}
-	rows := make([]grow, frames.Len(f))
-	for i := range rows {
+	rows := make([]grow, 0, frames.Len(f))
+	for i := range frames.Len(f) {
 		cells := make([]string, len(f.Fields))
 		for j, fl := range f.Fields {
 			v := f.Columns[j][i]
@@ -342,10 +342,21 @@ func (t *viewTab) tableBody(m *model, wn *wnode, x, y, w, h int, focused bool) s
 				keys[j] = x
 			}
 		}
-		rows[i] = grow{id: strconv.Itoa(i), cells: cells, keys: keys}
+		if wn.filter != "" && !fuzzy(stripANSI(strings.Join(cells, " ")), wn.filter) {
+			continue
+		}
+		rows = append(rows, grow{id: strconv.Itoa(i), cells: cells, keys: keys})
 	}
 	g.set(rows)
-	return g.view(m, x, y, w, h, focused)
+	if wn.filter == "" && !(focused && t.filtering) {
+		return g.view(m, x, y, w, h, focused)
+	}
+	bar := sAccent.Render("/ ") + wn.filter
+	if focused && t.filtering {
+		bar += "▏"
+	}
+	bar += sDim.Render(fmt.Sprintf("  %d of %d  esc clears", len(rows), frames.Len(f)))
+	return bar + "\n" + g.view(m, x, y+1, w, h-1, focused)
 }
 
 // cursorState is a list or board's selected item.

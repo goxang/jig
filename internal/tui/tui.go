@@ -1548,6 +1548,9 @@ func (m *model) key(k tea.KeyPressMsg) tea.Cmd {
 				return m.openTab(10)
 			}
 		case "esc", "backspace":
+			if f, ok := t.(interface{ clearFilter() bool }); ok && s == "esc" && f.clearFilter() {
+				return nil
+			}
 			if cmd, ok := m.back(); ok {
 				return cmd
 			}

@@ -60,7 +60,8 @@ Tabs have no numbers: `g` then a letter jumps to one (`?` lists them), `tab`/`sh
 A right-click opens the screen's actions as a menu where you clicked, with each action's key beside it.
 Opening a document or link (`enter` on a doc, a ticket, a page) lists the apps on this machine that can open
 it: the system's default first, then the others registered for its type (LibreOffice, Kate, …), the browsers, the
-editor in the terminal, and copying the link. On a Kubernetes
+editor in the terminal, and copying the link.
+In a plugin's table (Jira, GitLab, Confluence pages) `/` filters the rows as you type, fzf style; `esc` clears it. On a Kubernetes
 cluster, dangerous changes (stop, deploy, delete, edits) ask first and `enter` confirms; local, docker
 and kind never ask. `?` shows the keys of the current screen.
 Drag over any text (results, queries, test output, the chat) to copy it; the selection stays inside the
@@ -90,7 +91,7 @@ logs, data, tests] }` picks the screens and their order, and the number keys fol
 running when you quit jig, and a saved session reopened later follows it again or shows how it ended. `ctrl+e` shows the environment (variables with secrets hidden, each
 component's address and database; `/` searches it, `e` edits a variable), `N` switches or creates a Kubernetes namespace, and the Metrics screen's
 `m` points the dashboards at another metrics source. `S` saves the session (screens, query results and history) and pins it: from then on `jig` opens on it as you left it
-(`jig --fresh` starts clean and unpins; `jig resume` picks another),
+(`jig --fresh` starts clean on the default environment and unpins; `jig resume` picks another),
 under the user's config directory (`~/.config/jig/projects/...`); `M` frees the mouse so
 the terminal can select text; the header shows alerts (`A`). `q q` (or `ctrl+c ctrl+c`) quits, at once unless a test run or an
 operation is still going, or load generators are sending: those stop with jig (tests, queries, port

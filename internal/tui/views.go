@@ -45,6 +45,8 @@ type viewTab struct {
 	// order is every focusable widget in the last frame, in draw order
 	order []*wnode
 	err   string
+	// filtering is typing into the focused table's / filter
+	filtering bool
 }
 
 // wnode is a widget of the tree with its live state.
@@ -60,6 +62,7 @@ type wnode struct {
 	x, y, w, h int
 	id         int
 	st         any
+	filter     string
 }
 
 type viewDataMsg struct {
@@ -84,6 +87,9 @@ func newViewTab(title string, v *view.View, dir string) *viewTab {
 func (t *viewTab) name() string { return t.title }
 
 func (t *viewTab) typing() bool {
+	if t.filtering {
+		return true
+	}
 	if t.focus == nil {
 		return false
 	}
@@ -92,6 +98,14 @@ func (t *viewTab) typing() bool {
 		return st.input
 	}
 	return false
+}
+
+func (t *viewTab) clearFilter() bool {
+	if t.focus == nil || t.focus.filter == "" {
+		return false
+	}
+	t.focus.filter = ""
+	return true
 }
 
 func (t *viewTab) interval() time.Duration { return time.Second }
@@ -347,6 +361,28 @@ func (t *viewTab) key(m *model, k tea.KeyPressMsg) tea.Cmd {
 		term.key(k)
 		return nil
 	}
+	if t.filtering && t.focus != nil {
+		switch k.String() {
+		case "esc":
+			t.focus.filter, t.filtering = "", false
+		case "enter", "down", "up":
+			t.filtering = false
+			return t.widgetKey(m, t.focus, k)
+		case "backspace":
+			if r := []rune(t.focus.filter); len(r) > 0 {
+				t.focus.filter = string(r[:len(r)-1])
+			}
+		default:
+			if k.Text != "" {
+				t.focus.filter += k.Text
+			}
+		}
+		return nil
+	}
+	if k.String() == "/" && t.focus != nil && view.Kind(t.focus.n) == "table" {
+		t.filtering = true
+		return nil
+	}
 	switch k.String() {
 	case "left", "right":
 		t.moveFocus(map[string]int{"left": -1, "right": 1}[k.String()])
@@ -521,7 +557,7 @@ func (t *viewTab) hints() [][2]string {
 	if t.focus != nil {
 		switch view.Kind(t.focus.n) {
 		case "table":
-			h = append(h, [2]string{"enter", "open"}, [2]string{"y Y", "copy"})
+			h = append(h, [2]string{"enter", "open"}, [2]string{"/", "filter"}, [2]string{"y Y", "copy"})
 		case "terminal":
 			h = append(h, [2]string{"enter", "type into it"}, [2]string{"R", "restart"})
 		case "form":
