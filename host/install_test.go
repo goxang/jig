@@ -187,3 +187,17 @@ func TestMinisign(t *testing.T) {
 		t.Fatal("a signature over other bytes verified")
 	}
 }
+
+func TestSignVerifies(t *testing.T) {
+	pub, secret, err := Keygen()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sig, err := Sign(secret, "checksums.txt", []byte("sums"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyMinisign(pub, sig, []byte("sums")); err != nil {
+		t.Fatal(err)
+	}
+}

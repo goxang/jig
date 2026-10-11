@@ -41,6 +41,15 @@ echo "jig: downloading $asset ($version)"
 curl -fsSL "$base/$asset" -o "$tmp/$asset"
 curl -fsSL "$base/checksums.txt" -o "$tmp/checksums.txt"
 
+# minisign, when installed, checks checksums.txt against goxang's key (host.OfficialKey)
+if command -v minisign >/dev/null 2>&1; then
+  curl -fsSL "$base/checksums.txt.minisig" -o "$tmp/checksums.txt.minisig"
+  minisign -Vq -P RWSO4FXV354ZdKG69JB39vUGx5l3XooSJoWp0c8T/bWN548qByjgecLr -m "$tmp/checksums.txt" -x "$tmp/checksums.txt.minisig" || {
+    echo "jig: checksums.txt is not signed by goxang" >&2
+    exit 1
+  }
+fi
+
 want=$(grep " $asset\$" "$tmp/checksums.txt" | cut -d' ' -f1)
 if command -v sha256sum >/dev/null 2>&1; then
   got=$(sha256sum "$tmp/$asset" | cut -d' ' -f1)

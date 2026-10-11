@@ -1,7 +1,8 @@
 name: ci
 
 # Every push to main that passes gets the next version: feat commits bump the minor version,
-# anything else the patch. The release carries the binaries the build jobs made, checksums and install.sh.
+# anything else the patch. The release carries the binaries the build jobs made, checksums signed with
+# the JIG_SIGNING_KEY secret, and install.sh.
 on:
   push:
     branches: [main]
@@ -119,6 +120,9 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
       - uses: actions/download-artifact@v4
         with:
           path: dist
@@ -127,9 +131,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.version.outputs.tag }}
+          JIG_SIGNING_KEY: ${{ secrets.JIG_SIGNING_KEY }}
         run: |
           cp install.sh dist/
           (cd dist && sha256sum * > checksums.txt)
+          go run ./internal/sign dist/checksums.txt
           git tag "$TAG" "$GITHUB_SHA"
           for i in 1 2 3; do git push origin "$TAG" && break; sleep $((i * 10)); done
           for i in 1 2 3; do gh release create "$TAG" dist/* --title "jig $TAG" --generate-notes && break; sleep $((i * 10)); done

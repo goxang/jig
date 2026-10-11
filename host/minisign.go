@@ -3,19 +3,22 @@ package host
 import (
 	"bytes"
 	"crypto/ed25519"
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
+	"time"
 
 	"golang.org/x/crypto/blake2b"
 )
 
-// OfficialKey is the minisign public key goxang's artifacts are signed with; empty in builds without one.
-var OfficialKey = ""
+// OfficialKey is the minisign public key goxang's artifacts are signed with.
+var OfficialKey = "RWSO4FXV354ZdKG69JB39vUGx5l3XooSJoWp0c8T/bWN548qByjgecLr"
 
 // verifyMinisign checks a minisign signature (legacy Ed or prehashed ED) of data by pubkey.
 func verifyMinisign(pubkey, sig string, data []byte) error {
@@ -81,4 +84,36 @@ func publisherKey(publisher, offered string) (string, error) {
 		return "", err
 	}
 	return offered, writeAtomic(file, b, 0o600)
+}
+
+// Keygen makes a minisign key pair: the public key as minisign writes it, the secret as a base64 key id
+// and ed25519 seed (not minisign's encrypted format), for Sign.
+func Keygen() (pub, secret string, err error) {
+	id := make([]byte, 8)
+	if _, err := rand.Read(id); err != nil {
+		return "", "", err
+	}
+	pk, sk, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return "", "", err
+	}
+	pub = base64.StdEncoding.EncodeToString(slices.Concat([]byte("Ed"), id, pk))
+	return pub, base64.StdEncoding.EncodeToString(slices.Concat(id, sk.Seed())), nil
+}
+
+// Sign makes a prehashed minisign signature file of data, named file in its trusted comment.
+func Sign(secret, file string, data []byte) (string, error) {
+	raw, err := base64.StdEncoding.DecodeString(strings.TrimSpace(secret))
+	if err != nil || len(raw) != 8+ed25519.SeedSize {
+		return "", errors.New("not a Keygen secret")
+	}
+	id, sk := raw[:8], ed25519.NewKeyFromSeed(raw[8:])
+	h := blake2b.Sum512(data)
+	sig := ed25519.Sign(sk, h[:])
+	trusted := fmt.Sprintf("timestamp:%d\tfile:%s\thashed", time.Now().Unix(), file)
+	global := ed25519.Sign(sk, slices.Concat(sig, []byte(trusted)))
+	return "untrusted comment: signature from jig secret key\n" +
+		base64.StdEncoding.EncodeToString(slices.Concat([]byte("ED"), id, sig)) + "\n" +
+		"trusted comment: " + trusted + "\n" +
+		base64.StdEncoding.EncodeToString(global) + "\n", nil
 }
