@@ -490,6 +490,9 @@ func (t *viewTab) keyFocused(m *model, k tea.KeyPressMsg) tea.Cmd {
 			t.unsearch(t.focus)
 			return nil
 		case "enter", "down", "up":
+			if _, _, ok := describing(t.focus.filter); ok && k.String() == "enter" {
+				return t.askFilter(m, t.focus)
+			}
 			if wn := t.focus; k.String() == "enter" && wn.filter != "" && wn.matches == 0 && searchable(wn) {
 				t.filtering = false
 				return t.search(wn, wn.filter)
@@ -1228,7 +1231,9 @@ func addViews(a *engine.App, all map[string]tab) []tab {
 			home = append(home, tile)
 			return
 		}
-		if v.Slot != "tab" {
+		if v.Slot == "command" && v.Command != "" {
+			key = "cmd:" + v.Command
+		} else if v.Slot != "tab" {
 			return
 		}
 		t, ok := all[key].(*viewTab)
@@ -1240,6 +1245,9 @@ func addViews(a *engine.App, all map[string]tab) []tab {
 		if plugin, _, ok := strings.Cut(strings.TrimPrefix(key, "view:"), "/"); ok {
 			t.title = cmp.Or(v.Title, title)
 			servedBy[t] = plugin
+		}
+		if v.Slot == "command" {
+			return
 		}
 		ranks[t] = rank
 		out = append(out, t)
@@ -1485,4 +1493,30 @@ func (t *viewTab) aiContext(m *model) string {
 		fmt.Fprintf(&b, "its details (%s): %s\n", p.tpl.Source, raw)
 	}
 	return b.String()
+}
+
+// askFilter turns "@?words" typed in a widget's filter into a filter the AI writes in a prompt.
+func (t *viewTab) askFilter(m *model, wn *wnode) tea.Cmd {
+	typed := wn.filter
+	t.filtering, wn.filter = false, ""
+	var cols []string
+	var rows [][]string
+	if f := wn.frame; f != nil {
+		for _, fl := range f.Fields {
+			cols = append(cols, fl.Name)
+		}
+		for r := range min(frames.Len(f), 30) {
+			row := make([]string, len(f.Fields))
+			for i, fl := range f.Fields {
+				row[i] = frames.Format(fl, f.Columns[i][r])
+			}
+			rows = append(rows, row)
+		}
+	}
+	hint := rowFilterHint + "; the columns: " + strings.Join(cols, ", ") + within("first rows", sampleRows(rows, 30))
+	m.askChecked("filter: words, *glob*, or column=value column!=value column~text", typed, hint, keepsSome(cols, rows), func(v string) tea.Cmd {
+		wn.filter = strings.TrimSpace(v)
+		return nil
+	})
+	return m.completeLater()
 }

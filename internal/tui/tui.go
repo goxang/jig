@@ -642,10 +642,17 @@ func (m *model) openTab(i int) tea.Cmd {
 }
 
 // pluginsScreen opens the Plugins screen, appended to the screens until another one opens.
-func (m *model) pluginsScreen() tea.Cmd {
-	p := m.all["view:Plugins"]
+func (m *model) pluginsScreen() tea.Cmd { return m.transientScreen(m.all["view:Plugins"]) }
+
+// transientScreen shows a screen that is no tab (:plugins, a plugin's command) until another one opens.
+func (m *model) transientScreen(p tab) tea.Cmd {
 	if i := slices.Index(m.tabs, p); i >= 0 {
 		return m.jump(i)
+	}
+	if last := len(m.tabs) - 1; m.transient {
+		m.tabs, m.transient = m.tabs[:last], false
+		delete(m.opened, last)
+		delete(m.refreshed, last)
 	}
 	m.tabs = append(m.tabs, p)
 	m.transient = true
@@ -2504,7 +2511,7 @@ func (m *model) interaction() (box, keys string) {
 	case m.confirm != nil:
 		hs := [][2]string{{"enter", "confirm"}, {"any other key", "cancel"}}
 		if m.confirm.always != nil {
-			hs = append(hs[:1], [2]string{"a", "yes, and always this session"}, hs[1])
+			hs = append(hs[:1], [2]string{"a", "yes, and everything else this session"}, hs[1])
 		}
 		return m.confirmBox(), keyHints(hs)
 	case m.prompt != nil && m.prompt.popup:
@@ -2660,16 +2667,62 @@ var screenHelp = map[string]string{
 // unchanged from before, just no longer rendered as one fixed block.
 func (m *model) helpLines() []string {
 	k := func(command string) string { return cmp.Or(m.keyFor(command), ":"+command) }
-	rows := [][2]string{
-		{":", "command palette, the CLI's grammar: :restart parser, :kv get key, :open Logs"}, {k("search"), "search screens, services, tasks, actions, plugins"},
-		{". right-click", "this screen's keys as a menu"}, {":plugins", "the plugins in use: info, logs, add, turn on or off, upgrade, remove"},
-		{"⇧←→  tab ⇧tab", "next, previous screen (or click its name; ctrl+k finds one by name)"}, {"ctrl+←→", "switch the sub-tab inside a screen"}, {k("env"), "switch environment"}, {k("namespace"), "switch or create a Kubernetes namespace"}, {k("task"), "run a task (ctrl+o there shows its steps)"},
-		{"↑↓ / wheel", "move"}, {"enter / dbl-click", "open, run"}, {"ctrl+alt+←→  ctrl+alt+↑↓", "sort by the next / previous column; ↑ ascending, ↓ descending (or click a header; also < >, alt+↑↓, ctrl+⇧ arrows)"}, {"+ - z", "expand all, fold all, toggle (trees, dashboard rows)"},
-		{"esc ⌫", "back: closes what is open, then returns to the screen you jumped from"}, {"drag a border", "resize panes (kept for next time; it lights up under the mouse)"}, {"drag a header │", "resize a table column"}, {"rest on a cell", "its whole text, when cut off"}, {"@", "AI chat about this screen (jig ai config sets it up)"}, {"A", "alerts (header badge)"}, {"!", "activity: builds, deploys and tasks you started with their output; x stops one, enter types its input, tab errors, y copies"}, {k("kubeconfig"), "fetch the environment's kubeconfig (Rancher API key, URL or file) into yours"}, {k("envinfo"), "this environment: variables, databases, addresses (↑↓, / searches, e edits a variable)"}, {"ctrl+w", "watch: rebuild and restart services as their sources change (errors in A)"}, {"ctrl+p", "colour theme, previewed as you move (jig theme --save to make your own)"}, {"ctrl+r", "reload jig.yaml after you or the assistant edited it (filters stay)"}, {k("save"), "save this session: jig opens on it from now on, as you leave it, filters included (jig --fresh starts clean)"}, {"M", "mouse on/off (off: select text)"}, {"V", "mode: detailed, simple, software (dev screens) or product (metrics, issues, docs)"}, {"?", "this help"}, {"q  ctrl+c", "quit"},
+	groups := []struct {
+		title string
+		rows  [][2]string
+	}{
+		{"Commands", [][2]string{
+			{":", "command palette, the CLI's grammar: :restart parser, :kv get key, :open Logs"},
+			{k("search"), "search screens, services, tasks, actions, plugins"},
+			{k("task"), "run a task (ctrl+o there shows its steps)"},
+			{". right-click", "this screen's keys as a menu"},
+			{":plugins", "the plugins in use: info, logs, add, turn on or off, upgrade, remove"},
+		}},
+		{"Move around", [][2]string{
+			{"⇧←→  tab ⇧tab", "next, previous screen (or click its name; ctrl+k finds one by name)"},
+			{"ctrl+←→", "switch the sub-tab inside a screen"},
+			{"↑↓ / wheel", "move"},
+			{"enter / dbl-click", "open, run"},
+			{"esc ⌫", "back: closes what is open, then returns to the screen you jumped from"},
+			{"drag a border", "resize panes (kept for next time; it lights up under the mouse)"},
+		}},
+		{"Lists and tables", [][2]string{
+			{"/", "filter: words, *glob*, column=value, column!=value, column~text; @?words lets the AI write it"},
+			{"ctrl+alt+←→  ctrl+alt+↑↓", "sort by the next / previous column; ↑ ascending, ↓ descending (or click a header; also < >, alt+↑↓, ctrl+⇧ arrows)"},
+			{"+ - z", "expand all, fold all, toggle (trees, dashboard rows)"},
+			{"drag a header │", "resize a table column"},
+			{"rest on a cell", "its whole text, when cut off"},
+		}},
+		{"Environment and session", [][2]string{
+			{k("env"), "switch environment"},
+			{k("namespace"), "switch or create a Kubernetes namespace"},
+			{k("envinfo"), "this environment: variables, databases, addresses (↑↓, / searches, e edits a variable)"},
+			{k("kubeconfig"), "fetch the environment's kubeconfig (Rancher API key, URL or file) into yours"},
+			{"ctrl+w", "watch: rebuild and restart services as their sources change (errors in A)"},
+			{"ctrl+r", "reload jig.yaml after you or the assistant edited it (filters stay)"},
+			{k("save"), "save this session: jig opens on it from now on, as you leave it, filters included (jig --fresh starts clean)"},
+		}},
+		{"Assistant and activity", [][2]string{
+			{"@", "AI chat about this screen (jig ai config sets it up)"},
+			{"A", "alerts (header badge)"},
+			{"!", "activity: builds, deploys and tasks you started with their output; x stops one, enter types its input, tab errors, y copies"},
+		}},
+		{"Look", [][2]string{
+			{"ctrl+p", "colour theme, previewed as you move (jig theme --save to make your own)"},
+			{"M", "mouse on/off (off: select text)"},
+			{"V", "mode: detailed, simple, software (dev screens) or product (metrics, issues, docs)"},
+		}},
+		{"Leave", [][2]string{{"?", "this help"}, {"q  ctrl+c", "quit"}}},
 	}
 	var b strings.Builder
-	for _, r := range rows {
-		b.WriteString(sKey.Render(padRight(r[0], 18)) + " " + r[1] + "\n")
+	for i, g := range groups {
+		if i > 0 {
+			b.WriteByte('\n')
+		}
+		b.WriteString(sTitle.Render(g.title) + "\n")
+		for _, r := range g.rows {
+			b.WriteString(sKey.Render(padRight(r[0], 18)) + " " + r[1] + "\n")
+		}
 	}
 	name := m.tabs[m.active].name()
 	b.WriteString("\n" + sTitle.Render(name) + "  " + sDim.Render(screenHelp[name]) + "\n")

@@ -74,6 +74,8 @@ type placed struct {
 type metricsTab struct {
 	// varX is where each variable's label starts on the header's variables line, for its dropdown
 	varX map[string]int
+	// rangeX and refreshX are where the range and refresh labels start, for their dropdowns
+	rangeX, refreshX int
 	// source replaces the metrics component of panels that name none (m picks it)
 	source    string
 	dash      int
@@ -794,13 +796,14 @@ func (t *metricsTab) pickRange(m *model) {
 	for _, r := range ranges {
 		items = append(items, "last "+rangeText(r))
 	}
-	m.pick("time range (drag across a chart zooms in, Z zooms out, , . shift)", items, nil, t.win.rng, false, func(chosen []string) tea.Cmd {
+	m.pick("time range", items, nil, t.win.rng, false, func(chosen []string) tea.Cmd {
 		if i := slices.Index(items, firstOf(chosen)); i >= 0 {
 			t.win.preset(i)
 			return t.reload(m)
 		}
 		return nil
 	})
+	m.picker.at = &[2]int{t.rangeX, 3}
 }
 
 func (t *metricsTab) pickRefresh(m *model) {
@@ -814,6 +817,7 @@ func (t *metricsTab) pickRefresh(m *model) {
 		}
 		return nil
 	})
+	m.picker.at = &[2]int{t.refreshX, 3}
 }
 
 // ---- series ----
@@ -1171,6 +1175,7 @@ func (t *metricsTab) header(m *model, w int) string {
 	m.zone("mzoomout", w-rw+3, 0, 1, 1)
 	m.zone("mshift:1", w-rw+5, 0, 1, 1)
 	m.zone("mrange", w-rw+6, 0, 3+lipgloss.Width(rangeLab), 1)
+	t.rangeX, t.refreshX = w-rw+6, w-1-lipgloss.Width(refLab)
 	m.zone("mrefresh", w-1-lipgloss.Width(refLab), 0, lipgloss.Width(refLab), 1)
 	m.zone("mdash-more", 0, 0, 3, 1)
 	src := ""

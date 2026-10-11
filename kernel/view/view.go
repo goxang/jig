@@ -15,9 +15,11 @@ import (
 // View is one entry under views: in jig.yaml or a plugin manifest.
 type View struct {
 	Title string
-	// Slot is tab, subtab:<view>, service.section, detail:<scheme>, panel or home.
+	// Slot is tab, command, subtab:<view>, service.section, detail:<scheme>, panel or home.
 	Slot string
-	Key  string
+	// Command is the palette command that opens a view of slot command: slot: { command: usage }
+	Command string
+	Key     string
 	// File holds the layout instead, relative to the file that declares the view.
 	File string
 	// Modes are the UI modes that show the view (software, product); none shows it in every mode.
@@ -79,6 +81,10 @@ func (v *View) slot(n *yaml.Node) error {
 		return fmt.Errorf("line %d: slot is a name or { <name>: { key: K } }", n.Line)
 	}
 	v.Slot = n.Content[0].Value
+	if v.Slot == "command" {
+		v.Command = n.Content[1].Value
+		return nil
+	}
 	var o struct{ Key string }
 	if err := n.Content[1].Decode(&o); err != nil {
 		return err

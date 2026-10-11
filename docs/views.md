@@ -20,6 +20,7 @@ views:
 | `tab` | a top-level screen (the default) |
 | `home` | a tile on the Home screen, which appears once any view has this slot |
 | `{tab: {key: G}}` | a screen with its own key |
+| `{command: usage}` | no tab: `:usage` opens the screen until you leave it |
 | `off` | nowhere; a plugin uses it to keep its contract's default view away |
 
 `modes: [software, product]` shows a view only in those UI modes (`V`); a view without `modes:` shows in

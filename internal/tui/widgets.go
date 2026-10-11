@@ -349,6 +349,14 @@ func (t *viewTab) tableBody(m *model, wn *wnode, x, y, w, h int, focused bool) s
 		wn.st = g
 	}
 	rows := make([]grow, 0, frames.Len(f))
+	var match func([]string) bool
+	if wn.filter != "" {
+		names := make([]string, len(shown))
+		for c, j := range shown {
+			names[c] = f.Fields[j].Name
+		}
+		match = rowMatcher(wn.filter, names)
+	}
 	var fo *tableFold
 	if pf := foldField(wn); pf != "" && wn.filter == "" {
 		fo = wn.index(f, pf)
@@ -401,8 +409,14 @@ func (t *viewTab) tableBody(m *model, wn *wnode, x, y, w, h int, focused bool) s
 				keys[c] = x
 			}
 		}
-		if wn.filter != "" && !fuzzy(stripANSI(strings.Join(cells, " ")), wn.filter) {
-			continue
+		if match != nil {
+			plain := make([]string, len(cells))
+			for c := range cells {
+				plain[c] = stripANSI(cells[c])
+			}
+			if !match(plain) {
+				continue
+			}
 		}
 		rows = append(rows, grow{id: strconv.Itoa(i), cells: cells, keys: keys})
 	}
@@ -414,6 +428,9 @@ func (t *viewTab) tableBody(m *model, wn *wnode, x, y, w, h int, focused bool) s
 	bar := sAccent.Render("/ ") + wn.filter
 	if focused && t.filtering {
 		bar += "▏"
+	}
+	if wn.filter == "" {
+		bar += sDim.Render("words · col=value col!=value col~text · *glob* · @?plain words")
 	}
 	bar += sDim.Render(fmt.Sprintf("  %d of %d  esc clears", len(rows), frames.Len(f)))
 	if len(rows) == 0 && searchable(wn) {

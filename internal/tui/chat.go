@@ -849,7 +849,7 @@ func (m *model) chatUpdate(msg tea.Msg) (tea.Cmd, bool) {
 		}
 		m.aiAllowed[string(msg)] = true
 		m.busy = max(0, m.busy-1)
-		m.setStatus("always allowed for the assistant this session: "+string(msg), false)
+		m.setStatus("the assistant may change anything this session", false)
 		return nil, true
 	case aiModelsMsg:
 		m.modelsListed(msg)
@@ -862,7 +862,7 @@ func (m *model) chatUpdate(msg tea.Msg) (tea.Cmd, bool) {
 func (m *model) bridge(b bridgeMsg) tea.Cmd {
 	switch b.req.Op {
 	case "approve":
-		if cmd := b.req.Command; cmd != "" && m.aiAllowed[cmd] {
+		if cmd := b.req.Command; m.aiAllowed["*"] || (cmd != "" && m.aiAllowed[cmd]) {
 			b.reply <- ai.Reply{OK: true, Text: "allowed for this session"}
 			return nil
 		}
@@ -874,11 +874,9 @@ func (m *model) bridge(b bridgeMsg) tea.Cmd {
 			b.reply <- ai.Reply{OK: true, Text: "the user, in jig"}
 			return statusMsg{text: "approved for the assistant"}
 		}, cancel: func() { b.reply <- ai.Reply{Text: "declined in jig"} }}
-		if cmd := b.req.Command; cmd != "" {
-			m.confirm.always = func() tea.Msg {
-				b.reply <- ai.Reply{OK: true, Text: "the user, in jig (always this session)"}
-				return aiAllowMsg(cmd)
-			}
+		m.confirm.always = func() tea.Msg {
+			b.reply <- ai.Reply{OK: true, Text: "the user, in jig (everything this session)"}
+			return aiAllowMsg("*")
 		}
 		return nil
 	case "audit":

@@ -133,6 +133,9 @@ func (m *model) command(line string) tea.Cmd {
 			return s.ops(m, map[string]string{"start": "s", "stop": "x", "restart": "r", "deploy": "d", "build": "b", "logs": "l"}[verb], args)
 		}
 	}
+	if t, ok := m.all["cmd:"+verb]; ok {
+		return m.transientScreen(t)
+	}
 	return m.runJig(line, f)
 }
 

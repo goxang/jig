@@ -29,8 +29,8 @@ shared files (one `jig-std` per platform) in `files/`.
 
 [goxang/jig-plugins](https://github.com/goxang/jig-plugins) holds them, grouped in packs: `pack/std`
 (runtimes, builders, git, imports), `pack/data`, `pack/observability`, `pack/qa`, `pack/gitlab`,
-`pack/github`, `pack/atlassian`, `pack/cloud-aws` and `pack/product`; plus `slack`, `mcp-bridge` and
-`arcade`. Most are one Go binary, `jig-std`; `jig-std list` prints what each one serves.
+`pack/github`, `pack/atlassian`, `pack/cloud-aws` and `pack/product`; plus `slack`, `mcp-bridge`,
+`arcade`, `plugin-tree` (`:plugintree`: dependencies, how each talks to jig) and `jig-usage` (`:usage`: CPU and memory of jig and its plugins). Most are one Go binary, `jig-std`; `jig-std list` prints what each one serves.
 
 ## Writing one
 
