@@ -21,6 +21,11 @@ views:
 | `home` | a tile on the Home screen, which appears once any view has this slot |
 | `{tab: {key: G}}` | a screen with its own key |
 
+A plugin installed for the user (`~/.config/jig/plugins`) shows its views in a project only when
+jig.yaml configures it under `plugins:`, its `detect:` matches (`files` globs, `git_remote` in
+`.git/config`), or it has neither `detect:` nor a config schema. A contract's default view shows only
+for a plugin without views of its own.
+
 ## Layouts
 
 `grid: [[a, b], [c]]` (rows of cells) · `tabs: {Name: widget, ...}` (sub-tabs, ctrl+←→) ·
@@ -52,7 +57,7 @@ off up to a minute and keep the last frame. `r` refetches.
 | `waterfall` `timeline` `graph` | spans, events, nodes and edges |
 | `board` | `by` (the column field), `card` (the title field), `columns` |
 | `form` | `schema`, or `action` (its args), `submit` |
-| `terminal` | `command` (string or list; default `$SHELL`), `dir`, `env`, `keep` (runs while hidden). Keys go to the program; ctrl+] leaves |
+| `terminal` | `command` (string or list; default `$SHELL`), `dir` (default the project; relative to the view's own folder), `env`, `keep` (runs while hidden). Keys go to the program; ctrl+] leaves |
 | `canvas` | drawn by `plugin` through `widget.render` |
 
 Colours are theme tokens: `ok`, `warn`, `err`, `info`, `accent`, `muted`, `border`, `fg`, `series1`…

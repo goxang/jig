@@ -179,3 +179,28 @@ func writeAtomic(path string, b []byte, mode os.FileMode) error {
 	}
 	return os.Rename(tmp.Name(), path)
 }
+
+// Relevant reports whether m belongs on dir's screens. Project plugins always do; a user-wide one
+// does when jig.yaml configures it, its detect matches, or it has neither detect nor config.
+func (m *Manifest) Relevant(dir string, cfg map[string]*spec.Plugin) bool {
+	if c, ok := cfg[m.Name]; ok {
+		return c == nil || !c.Off
+	}
+	if filepath.Dir(m.Dir) != filepath.Join(ConfigDir(), "plugins") {
+		return true
+	}
+	if m.Detect == nil {
+		return len(m.Config) == 0
+	}
+	for _, g := range m.Detect.Files {
+		if hits, _ := filepath.Glob(filepath.Join(dir, g)); len(hits) > 0 {
+			return true
+		}
+	}
+	if r := m.Detect.GitRemote; r != "" {
+		// ponytail: reads .git/config in dir only, not a parent repo's or a worktree's
+		b, _ := os.ReadFile(filepath.Join(dir, ".git", "config"))
+		return strings.Contains(string(b), r)
+	}
+	return false
+}

@@ -813,6 +813,9 @@ func addViews(a *engine.App, all map[string]tab) []tab {
 	}
 	ms, _ := host.Discover(a.Spec.Dir, a.Spec.Plugins)
 	for _, m := range ms {
+		if !m.Relevant(a.Spec.Dir, a.Spec.Plugins) {
+			continue
+		}
 		names := make([]string, 0, len(m.Views))
 		for n := range m.Views {
 			names = append(names, n)
@@ -830,7 +833,11 @@ func addViews(a *engine.App, all map[string]tab) []tab {
 			}
 			add("view:"+m.Name+"."+n, n, &v, m.Dir, remote)
 		}
+		// a plugin with its own views has laid out what the contract views would show
 		for _, id := range m.Implements {
+			if len(names) > 0 {
+				break
+			}
 			if c := contracts.Get(id); c != nil && c.View != nil {
 				var v view.View
 				if err := yaml.Unmarshal(c.View, &v); err != nil {

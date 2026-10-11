@@ -51,7 +51,8 @@ type termMsg struct{}
 
 const scrollback = 10000
 
-func newTerminal(n protocol.Node, project string) (*terminal, error) {
+// newTerminal starts in project; a relative dir prop resolves against base, the view's own dir.
+func newTerminal(n protocol.Node, project, base string) (*terminal, error) {
 	var argv []string
 	switch c := n.Props["command"].(type) {
 	case string:
@@ -69,7 +70,7 @@ func newTerminal(n protocol.Node, project string) (*terminal, error) {
 	t := &terminal{argv: argv, dir: project}
 	if d := view.Prop(n, "dir"); d != "" {
 		if !filepath.IsAbs(d) {
-			d = filepath.Join(project, d)
+			d = filepath.Join(base, d)
 		}
 		t.dir = d
 	}
@@ -238,7 +239,7 @@ func (t *terminal) lines() []string {
 func (t *viewTab) terminalBody(m *model, wn *wnode, w, h int, focused bool) string {
 	term, _ := wn.st.(*terminal)
 	if term == nil {
-		nt, err := newTerminal(wn.n, m.app.Spec.Dir)
+		nt, err := newTerminal(wn.n, m.app.Spec.Dir, t.dir)
 		if err != nil {
 			return sRed.Render(err.Error())
 		}

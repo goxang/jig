@@ -11,7 +11,7 @@ import (
 )
 
 func TestTerminalRunsAProgram(t *testing.T) {
-	term, err := newTerminal(protocol.Node{Widget: "terminal", Props: protocol.Args{"command": []any{"sh"}}}, t.TempDir())
+	term, err := newTerminal(protocol.Node{Widget: "terminal", Props: protocol.Args{"command": []any{"sh"}}}, t.TempDir(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
