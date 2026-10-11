@@ -19,6 +19,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"golang.org/x/mod/semver"
 	"golang.org/x/sync/errgroup"
@@ -793,12 +794,25 @@ func (in *Installer) restore(ctx context.Context, name string, l *Locked, index 
 // trust shows what the workspace would run and asks once; nobody to ask fails with the command to run.
 func (in *Installer) trust(ctx context.Context, lock *Lock, missing []string) (bool, error) {
 	in.say("This project runs plugins:")
+	// the index only describes permissions here: one short try, not a wait per plugin on a slow network
+	index := sync.OnceValue(func() *Index {
+		ictx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		ix, _ := in.Registry.Index(ictx, false)
+		return ix
+	})
 	for _, n := range lock.Names() {
 		l := lock.Plugins[n]
 		perms := "(permissions in jig.lock)"
-		if m, err := LoadManifest(storePath(n, l.Version)); err == nil {
+		dir := storePath(n, l.Version)
+		if src := parseSource(l.Source); src.kind == "path" && filepath.IsAbs(src.path) {
+			dir = src.path
+		} else if src.kind == "path" {
+			dir = filepath.Join(in.Dir, src.path)
+		}
+		if m, err := LoadManifest(dir); err == nil {
 			perms = describePerms(m.Permissions)
-		} else if ix, err := in.Registry.Index(ctx, false); err == nil && ix.Plugins[n] != nil && ix.Plugins[n].Versions[l.Version] != nil {
+		} else if ix := index(); ix != nil && ix.Plugins[n] != nil && ix.Plugins[n].Versions[l.Version] != nil {
 			perms = describePerms(ix.Plugins[n].Versions[l.Version].Permissions)
 		}
 		in.say("  %s %s from %s: %s", n, l.Version, l.Source, perms)
