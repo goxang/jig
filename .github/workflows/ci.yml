@@ -64,8 +64,6 @@ jobs:
         with:
           repository: goxang/jig-plugins
           path: jig-plugins
-          # needed while jig-plugins is private
-          token: ${{ secrets.GOXANG_READ_TOKEN || github.token }}
       - uses: actions/setup-go@v6
         with:
           go-version-file: jig/go.mod
