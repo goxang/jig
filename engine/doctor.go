@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"os/exec"
 	"slices"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/goxang/jig/core"
+	"github.com/goxang/jig/host"
 	"github.com/goxang/jig/internal/kubectx"
 	"github.com/goxang/jig/internal/sh"
 	"github.com/goxang/jig/spec"
@@ -60,6 +62,7 @@ func (a *App) Doctor(ctx context.Context) []Check {
 	} else {
 		add(Check{Name: "variables", Status: CheckOK, Detail: "every ${NAME} is set"})
 	}
+	out = append(out, a.pluginChecks()...)
 	if a.Env == nil {
 		return append(out, Check{Name: "environment", Status: CheckFail, Detail: "none defined", Fix: "add one under environments: and set default:"})
 	}
@@ -90,6 +93,33 @@ func (a *App) Doctor(ctx context.Context) []Check {
 		out = append(out, a.portChecks(ctx)...)
 	}
 	return append(out, a.componentChecks(ctx, fix)...)
+}
+
+// pluginChecks are the plugins this project uses that need a credential nobody has given them yet.
+func (a *App) pluginChecks() []Check {
+	var out []Check
+	ms, _ := host.Discover(a.Spec.Dir, a.Spec.Plugins)
+	known := a.KnownSecrets()
+	for _, m := range ms {
+		secrets := m.Permissions.Secrets
+		if len(secrets) == 0 || !m.Relevant(a.Spec.Dir, a.Spec.Plugins) {
+			continue
+		}
+		if p := a.Spec.Plugins[m.Name]; p != nil && (p.Off || p.Config["token"] != nil) {
+			continue
+		}
+		set := slices.ContainsFunc(secrets, func(n string) bool {
+			_, env := os.LookupEnv(n)
+			return known[n] != "" || env
+		})
+		if set {
+			out = append(out, Check{Name: "plugin " + m.Name, Status: CheckOK, Detail: "has its credential"})
+			continue
+		}
+		out = append(out, Check{Name: "plugin " + m.Name, Status: CheckWarn, Detail: "no " + strings.Join(secrets, " or ") + ": its screens stay empty",
+			Fix: "jig secret set " + secrets[0] + " (kept in your config directory, never in the repository); or jig plugin off " + m.Name})
+	}
+	return out
 }
 
 func runtimeFix(typ string) string {

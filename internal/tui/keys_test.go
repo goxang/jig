@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"slices"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -89,5 +90,13 @@ func TestBuiltinViewsLoad(t *testing.T) {
 	})
 	if strings.Join(got, " ") != "gl.scm.mrs gl.scm.comment gl.scm.pipelines" {
 		t.Fatalf("served: %v", got)
+	}
+}
+
+func TestAlignTabs(t *testing.T) {
+	got := strings.Split(alignTabs("jira dev\nKIND\tNAME\nsource\tjira.tracker.board\n\nend"), "\x00")
+	want := []string{"jira dev", "\x01KIND    NAME", "\x01source  jira.tracker.board", "", "end"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("%q", got)
 	}
 }

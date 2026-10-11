@@ -4,10 +4,12 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"text/tabwriter"
 
 	tea "charm.land/bubbletea/v2"
 	"gopkg.in/yaml.v3"
@@ -177,13 +179,36 @@ func (m *model) runJig(line string, args []string) tea.Cmd {
 		}
 		if text != "" && program != nil {
 			box := &envBox{env: ":" + line}
-			for l := range strings.SplitSeq(text, "\n") {
+			inTable := false
+			for l := range strings.SplitSeq(alignTabs(text), "\x00") {
+				l, row := strings.CutPrefix(l, "\x01")
+				if row && !inTable {
+					l = sTitle.Render(l)
+				}
+				inTable = row
 				box.lines = append(box.lines, envLine{text: "  " + l})
 			}
 			program.Send(envInfoMsg{gen: gen, box: box})
 		}
 		return nil
 	})
+}
+
+// alignTabs lines up the tab-separated rows the CLI prints when piped; rows come back marked with
+// \x01 so the first of each table can be drawn as its header, lines separated by \x00.
+func alignTabs(text string) string {
+	var b strings.Builder
+	tw := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
+	for l := range strings.SplitSeq(text, "\n") {
+		if strings.Contains(l, "\t") {
+			fmt.Fprint(tw, "\x01"+l+"\x00\n")
+		} else {
+			tw.Flush()
+			b.WriteString(l + "\x00\n")
+		}
+	}
+	tw.Flush()
+	return strings.TrimSuffix(strings.ReplaceAll(b.String(), "\x00\n", "\x00"), "\x00")
 }
 
 // search is ctrl+k: screens, services, tasks, actions and plugins in one filtered list; each item

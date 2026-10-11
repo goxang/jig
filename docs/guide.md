@@ -21,7 +21,7 @@ jig load rate fleet 200 && jig load scale fleet +2
 jig task bootstrap            # a named list of steps from jig.yaml (jig task <tab> completes)
 jig watch api                 # rebuild and restart as the sources change (ctrl+w in the UI)
 jig why checkout is slow      # incident: logs, traces, metrics, deploys; the AI's root cause and fix; answer "fix"
-jig doctor                    # what this environment lacks: tools, cluster, ${VARS}, ports, components (--json)
+jig doctor                    # what this environment lacks: tools, cluster, ${VARS}, plugin credentials, ports, components (--json)
 jig vars set MAIN_DB=x        # manifest variables per environment; jig setenv api K=V for env
 jig data db Switch tables     # walk databases and caches
 jig data snapshot db before   # pg_dump/mysqldump/BACKUP into .jig/<env>/snapshots (S on the Data screen)
