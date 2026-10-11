@@ -341,3 +341,22 @@ func TestNetPort(t *testing.T) {
 		}
 	}
 }
+
+// Planted secrets, declared or not, never show in a script plugin's environment.
+func TestSecretsNeverReachPluginEnv(t *testing.T) {
+	t.Setenv("CANARY_SECRET", "canary-7f3a")
+	t.Setenv("OTHER_TOKEN", "canary-91c2")
+	t.Setenv("VISIBLE", "shown")
+	proj := t.TempDir()
+	m, _ := ParseManifest([]byte("name: s\npermissions: { env: [VISIBLE], secrets: [CANARY_SECRET] }\nsources: { env: { run: [env], format: lines } }\n"), filepath.Join(proj, "s/jig-plugin.yaml"))
+	h := &Host{Options: Options{Dir: proj}, plugins: map[string]*Plugin{}}
+	h.add(m, nil)
+	f, err := h.Query(context.Background(), "s.env", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := fmt.Sprint(f.Columns)
+	if strings.Contains(got, "canary-") || !strings.Contains(got, "VISIBLE=shown") {
+		t.Errorf("plugin environment: %s", got)
+	}
+}
