@@ -32,6 +32,11 @@ type Plugin struct {
 	Config map[string]any `yaml:",inline"`
 }
 
+type Compat struct {
+	// RigEnv also exports RIG_ENV, RIG_FILE, RIG_YES, RIG_TASK and RIG_ARGS to task steps.
+	RigEnv bool `yaml:"rig_env"`
+}
+
 type Project struct {
 	Version int      `yaml:"version"`
 	Name    string   `yaml:"project"`
@@ -79,6 +84,8 @@ type Project struct {
 	// Keys is the key preset: jig (the default) or rig. Usually set in .jig/local.yaml or
 	// ~/.config/jig/config.yaml, since it is a personal choice.
 	Keys string `yaml:"keys"`
+	// Compat keeps what scripts written for rig rely on.
+	Compat Compat `yaml:"compat"`
 	// AI tells the assistant (`jig ai`, @ in the UI) about the project: paths it must not read, notes.
 	AI *AI `yaml:"ai"`
 	// Agents are AI agents that run on an event or a schedule with a limited set of tools.

@@ -33,6 +33,12 @@ components:
 	if err != nil {
 		t.Fatal(err)
 	}
+	if k, typ, err := a.Kind("m"); k != core.KindMetrics || typ != "pm" || err != nil {
+		t.Fatalf("kind %q %q %v", k, typ, err)
+	}
+	if n := a.Names(core.KindMetrics); len(n) != 1 || n[0] != "m" {
+		t.Fatalf("metrics components %v", n)
+	}
 	c, err := a.Component("m")
 	if err != nil {
 		t.Fatal(err)

@@ -212,6 +212,19 @@
       },
       "type": "object"
     },
+    "Compat": {
+      "additionalProperties": false,
+      "properties": {
+        "rig_env": {
+          "description": "Also exports RIG_ENV, RIG_FILE, RIG_YES, RIG_TASK and RIG_ARGS to task steps.",
+          "type": [
+            "boolean",
+            "string"
+          ]
+        }
+      },
+      "type": "object"
+    },
     "Component": {
       "oneOf": [
         {
@@ -1816,6 +1829,14 @@
         "$ref": "#/definitions/Alert"
       },
       "type": "array"
+    },
+    "compat": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/Compat"
+        }
+      ],
+      "description": "{rig_env: true}: task steps also get RIG_ENV, RIG_FILE, RIG_YES, RIG_TASK and RIG_ARGS, for scripts written for rig; jig migrate sets it"
     },
     "components": {
       "additionalProperties": {

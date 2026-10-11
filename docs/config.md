@@ -45,6 +45,7 @@ is out of date.
 | `otel` | OpenTelemetry for every app and load service (see below) |
 | `ui` | `{tabs, mode, logs}`: the screens and their order (left out, every screen the project configures something for); `mode: simple` starts newcomers on fewer screens, columns and keys (`V` switches); `logs` (see below) |
 | `keys` | the key preset: `jig` (the default) or `rig` (rig's keys). A personal choice, so usually in `.jig/local.yaml` or `~/.config/jig/config.yaml` |
+| `compat` | `{rig_env: true}`: task steps also get `RIG_ENV`, `RIG_FILE`, `RIG_YES`, `RIG_TASK` and `RIG_ARGS`, for scripts written for rig; `jig migrate` sets it |
 | `agents` | `name: {on, instructions, tools, approve}`: assistants that run on an event or a schedule (see below) |
 | `policy` | `{roles, bind}`: who may run which actions where (see below) |
 | `ai` | `{deny: [globs], instructions: text, ideas: {screen: [questions]}}`: project paths the assistant never reads (on top of `.env`, keys and `secrets/`), notes it gets with every turn, and the questions tab offers in an empty chat per screen (`all` for every screen) |

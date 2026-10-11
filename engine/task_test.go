@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/goxang/jig/spec"
 )
 
 const taskFile = `
@@ -46,5 +48,25 @@ func TestRunTaskNamedParams(t *testing.T) {
 	got := out.String()
 	if !strings.Contains(got, "args=core rest=core ref=feature-x tag=v3") {
 		t.Fatalf("output = %q", got)
+	}
+}
+
+func TestRunTaskRigEnv(t *testing.T) {
+	a := openTask(t)
+	a.Spec.Tasks["env"] = spec.Task{Steps: []string{"echo env=$RIG_ENV task=$RIG_TASK"}}
+	var out bytes.Buffer
+	if err := a.RunTask(context.Background(), "env", nil, &out); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "env=test") {
+		t.Fatalf("RIG_ENV without compat: %q", out.String())
+	}
+	a.Spec.Compat.RigEnv = true
+	out.Reset()
+	if err := a.RunTask(context.Background(), "env", nil, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "env=test task=env") {
+		t.Fatalf("output = %q", out.String())
 	}
 }

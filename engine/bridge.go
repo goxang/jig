@@ -68,22 +68,30 @@ func (a *App) newComponent(c *spec.Component) (any, plugin.Adapter, error) {
 		}
 		return v, ad, err
 	}
-	p := a.Host().Get(c.Type)
+	p, kind := a.pluginKind(c)
 	if p == nil {
 		return plugin.New(a, c)
-	}
-	kind := core.Kind(c.Kind)
-	if kind == "" {
-		for _, id := range p.Implements {
-			if ct := contracts.Get(id); ct != nil && ct.Kind != "" {
-				kind = core.Kind(ct.Kind)
-				break
-			}
-		}
 	}
 	ad := plugin.Adapter{Kind: kind, Type: c.Type, Description: p.Description}
 	v, err := contracts.Bridge(kind, a.Host(), c.Type, c.Name, p.Provides(context.Background()))
 	return v, ad, err
+}
+
+// pluginKind is the plugin c's type names and the kind it serves: c's own, else its first contract's.
+func (a *App) pluginKind(c *spec.Component) (*host.Plugin, core.Kind) {
+	p := a.Host().Get(c.Type)
+	if p == nil {
+		return nil, ""
+	}
+	if c.Kind != "" {
+		return p, core.Kind(c.Kind)
+	}
+	for _, id := range p.Implements {
+		if ct := contracts.Get(id); ct != nil && ct.Kind != "" {
+			return p, core.Kind(ct.Kind)
+		}
+	}
+	return p, ""
 }
 
 func (a *App) hasPlugin(name string) bool {

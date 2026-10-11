@@ -20,7 +20,6 @@ import (
 	"github.com/goxang/jig/engine"
 	"github.com/goxang/jig/internal/viz"
 	"github.com/goxang/jig/manifest"
-	"github.com/goxang/jig/plugin"
 	"github.com/goxang/jig/scaffold"
 	"github.com/goxang/jig/spec"
 )
@@ -71,24 +70,6 @@ func projectCommands() []*cobra.Command {
 				printTable(os.Stdout, []string{"NAME", "KIND", "ADAPTER"}, crows)
 			}
 			return nil
-		},
-	}
-
-	plugins := &cobra.Command{
-		Use: "plugins", Short: "adapters built into this binary, by kind",
-		Run: func(*cobra.Command, []string) {
-			var rows [][]string
-			last := core.Kind("")
-			for _, a := range plugin.List() {
-				k := string(a.Kind)
-				if a.Kind == last {
-					k = ""
-				}
-				last = a.Kind
-				rows = append(rows, []string{bold(k), a.Type, dim(a.Description)})
-			}
-			printTable(os.Stdout, []string{"KIND", "TYPE", "WHAT"}, rows)
-			fmt.Println(dim("\nimports: " + strings.Join(spec.Importers(), ", ")))
 		},
 	}
 
@@ -420,7 +401,7 @@ Ingress→Service, HPA→workload, workload→ConfigMap/Secret/PVC/ServiceAccoun
 
 	version := &cobra.Command{Use: "version", Short: "print the version", Run: func(*cobra.Command, []string) { fmt.Println("jig", Version) }}
 
-	return []*cobra.Command{initCmd, env, vars, secret, nsCommand(), infraCommand(), task, source, manifests, hosts, mcpCommand(), plugins, version, upgradeCommand(), uninstallCommand(), migrateCommand()}
+	return []*cobra.Command{initCmd, env, vars, secret, nsCommand(), infraCommand(), task, source, manifests, hosts, mcpCommand(), version, upgradeCommand(), uninstallCommand(), migrateCommand(), lintCommand()}
 }
 
 func projectManifestDirs() []string {

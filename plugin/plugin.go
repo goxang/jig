@@ -81,7 +81,7 @@ func Resolve(c *spec.Component) (Adapter, error) {
 	case 1:
 		return found[0], nil
 	case 0:
-		return Adapter{}, fmt.Errorf("component %s: unknown type %q (see `jig plugins`)", c.Name, c.Type)
+		return Adapter{}, fmt.Errorf("component %s: unknown type %q (see `jig plugin ls`; `jig plugin add %s` installs it)", c.Name, c.Type, c.Type)
 	}
 	var kinds []string
 	for _, a := range found {

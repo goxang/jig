@@ -234,6 +234,11 @@ func (a *App) Kind(name string) (core.Kind, string, error) {
 		return "", "", fmt.Errorf("no component %q in %s (have %v)", name, a.Spec.File, a.componentNames())
 	}
 	ad, err := plugin.Resolve(c)
+	if err != nil {
+		if p, kind := a.pluginKind(c); p != nil && kind != "" {
+			return kind, c.Type, nil
+		}
+	}
 	return ad.Kind, ad.Type, err
 }
 

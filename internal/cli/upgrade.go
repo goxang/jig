@@ -9,35 +9,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-
-	"github.com/goxang/jig/spec"
 )
-
-func migrateCommand() *cobra.Command {
-	return &cobra.Command{
-		Use:   "migrate",
-		Short: fmt.Sprintf("rewrite the project file to the version this jig understands (%d)", spec.CurrentVersion),
-		RunE: func(*cobra.Command, []string) error {
-			file := g.file
-			if file == "" {
-				var err error
-				if file, err = spec.Find("."); err != nil {
-					return err
-				}
-			}
-			from, changed, err := spec.Migrate(file)
-			if err != nil {
-				return err
-			}
-			if !changed {
-				fmt.Printf("%s: already version %d, nothing to do\n", file, spec.CurrentVersion)
-				return nil
-			}
-			fmt.Printf("%s %s: version %d → %d\n", green("✓"), file, from, spec.CurrentVersion)
-			return nil
-		},
-	}
-}
 
 func upgradeCommand() *cobra.Command {
 	return &cobra.Command{

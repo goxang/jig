@@ -202,6 +202,13 @@ func (a *App) RunTask(ctx context.Context, name string, args []string, out io.Wr
 		env = append(env, "JIG_YES=1")
 	}
 	env = append(env, "JIG_TASK="+name, "JIG_ARGS="+strings.Join(positional, " "))
+	if a.Spec.Compat.RigEnv {
+		for _, kv := range slices.Clone(env) {
+			if rest, ok := strings.CutPrefix(kv, "JIG_"); ok {
+				env = append(env, "RIG_"+rest)
+			}
+		}
+	}
 	vars, _ := a.Vars(ctx)
 	for k, v := range vars {
 		env = append(env, k+"="+v.Value)

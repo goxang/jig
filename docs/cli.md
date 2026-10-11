@@ -53,6 +53,7 @@ Every command; `jig <command> --help` has its flags. Generated from the code.
 | `kv ls [prefix]` |  |
 | `kv put <key> <value\|@file>` |  |
 | `kv rm <key>` |  |
+| `lint` | list jig.yaml values its imports, includes or plugins already give (--fix removes them) |
 | `load down <generator>` | lower the rate one step |
 | `load ls` | generators with rate and counters |
 | `load rate <generator> <rps>` | set the rate (capped at the generator's max unless --force) |
@@ -69,7 +70,7 @@ Every command; `jig <command> --help` has its flags. Generated from the code.
 | `mcp` | serve jig to AI agents over MCP (stdio): status, up, deploy, build, logs, queries, load, kv, tasks |
 | `metrics [dashboard \| -- query]` | dashboard panels as charts, or one query: jig metrics -- 'sum(rate(x[1m]))' |
 | `metrics targets` | the environment's services with metrics as a Prometheus file_sd list (for a local Prometheus container) |
-| `migrate` | rewrite the project file to the version this jig understands (1) |
+| `migrate` | move a rig project to jig (rig.yaml to jig.yaml, .rig state, ~/.config/rig), or rewrite jig.yaml to version 1 |
 | `ns [namespace]` | Kubernetes namespaces: list them, switch this environment to one (kept until --reset), --create a new one |
 | `plugin add <source>...` | install plugins and pin them in jig.lock: a name, pack/<name>, host/owner/repo[/sub]@ref, a .tar.gz URL or a path |
 | `plugin check <name>` | check a plugin against the contracts it implements, live |
@@ -87,7 +88,6 @@ Every command; `jig <command> --help` has its flags. Generated from the code.
 | `plugin trace <name>` | the plugin's JSON-RPC exchange, recorded while JIG_TRACE names it (or is *) |
 | `plugin up [name...]` | upgrade plugins within their major version (all when none is named) |
 | `plugin vendor` | copy the locked plugins into .jig/vendor for offline installs |
-| `plugins` | adapters built into this binary, by kind |
 | `profile <service>` | capture a profile (cpu, heap, ... per profiler) and print its top |
 | `push <service\|group...> -t <tag>` | push images jig build --no-push left in the local Docker daemon to the environment's registry |
 | `query [saved-query [name=value...] \| component query...]` | run a saved query from jig.yaml, or an ad hoc one in a component's language (SQL, PromQL, redis, kubectl, ...) |
