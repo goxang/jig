@@ -56,7 +56,9 @@ protected environment asks nothing more.
 
 Screens load nothing until opened, and only the one showing refreshes. Everything is a sortable grid
 (`ctrl+alt+←→` pick the column, `ctrl+alt+↑` ascending, `ctrl+alt+↓` descending; `ctrl+shift` or `alt` arrows and `< >` too, or click a header) and works with the mouse.
-Tabs have no numbers: `g` then a letter jumps to one (`?` lists them), `tab`/`shift+tab` cycle, `1-9` still work.
+`shift+←→` (or `tab`/`shift+tab`, `1-9`) switch screens; `ctrl+k` finds one by name. `:plugins` opens the plugins in use
+(info, logs, add, turn on or off, upgrade, remove) until you switch away. When a screen's sub-tabs do not fit, they fold
+into a dropdown (`name ▾ 3 of 12`).
 A right-click opens the screen's actions as a menu where you clicked, with each action's key beside it.
 Opening a document or link (`enter` on a doc, a ticket, a page) lists the apps on this machine that can open
 it: the system's default first, then the others registered for its type (LibreOffice, Kate, …), the browsers, the
@@ -84,6 +86,7 @@ or shift+wheel, or by dragging past its edge). Copies go to the system clipboard
 | Load | generators, each asked on its own so the running ones (●, selected first) show at once, with target and actual rate and error share, and the total being sent; rate and config shared by every instance, instance count, `i` (or a click) one instance's charts or all, `c` their KV config, `v` their env, `W` saves a metrics report; `z` or a click shows a chart full size, with the Metrics panel view's legend, filter, range and drag to zoom |
 | Manifests | on Kubernetes it opens on what runs in the namespace (`c` switches to the files and back): field edits there apply to the cluster at once, `L` edits with kubectl, `s` writes the running object into the file that holds it; on the files: objects or folders (`t`), relations, a file's issues (`i`), apply (`a`), make a service (`n`); `→` (or a click) walks the object field by field like the KV screen: `enter` edits a value, `a` adds a field, `D` deletes one, each saved into the file at once with its comments kept; `/` searches every field and value and lands on the field; `e` edits an object in your editor and saves it into its file, `s` writes what the cluster runs into the file (only fields someone set, `$VARS` kept), `L` edits it on the cluster; `d` picks among every manifest folder of the project |
 | Hosts | nodes as htop-style CPU, memory and disk bars, the selected one's CPU history, a shell (double-click), and `p` the pods on a node, sortable by CPU, memory or age |
+| Files | the project's folders and files with a preview (Markdown rendered); `enter` opens a folder or edits a file, `⌫` goes up, `e` edits, `o` opens it with an app, `/` filters, `y` copies the path |
 | Tests | suites as tabs and the `go test` command they run; `r` runs, `f` reruns failures, `.` the selected test, `O` sets flags (race, cover, -run, …); a tree of packages and tests (`i` cycles failed/passed/skipped/running), its output beside it, benchmarks with the change since the last run, saved runs (`h`) |
 
 `jig` opens on the environment it last showed (`-e` or `$JIG_ENV` picks another). Screens switch with

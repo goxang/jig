@@ -27,11 +27,8 @@ func TestKeyPresets(t *testing.T) {
 	a, b := &namedTab{title: "Services"}, &namedTab{title: "Logs"}
 	m := &model{tabs: []tab{a, b}, opened: map[int]bool{0: true, 1: true}, refreshed: map[int]time.Time{},
 		app: &engine.App{Spec: &spec.Project{Keys: "jig"}}}
-	if _, ok := m.globalKey("g"); !ok || m.prefix != "g" {
-		t.Fatal("g is no prefix")
-	}
-	if m.globalKey("l"); m.active != 1 || m.prefix != "" {
-		t.Fatalf("g l: active %d", m.active)
+	if _, ok := m.globalKey("g"); ok {
+		t.Fatal("g is the screen's")
 	}
 	if m.globalKey(":"); m.prompt == nil {
 		t.Fatal(": opened no palette")
@@ -51,6 +48,7 @@ func TestKeyPresets(t *testing.T) {
 }
 
 func TestBuiltinViewsLoad(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	var v view.View
 	if err := v.Load(pluginsView); err != nil || v.Root.Widget != "table" || v.Root.Bind == nil || v.Root.Bind.Source != "plugins" {
 		t.Fatalf("plugins view: %v %+v", err, v.Root)
@@ -60,9 +58,19 @@ func TestBuiltinViewsLoad(t *testing.T) {
 		"b": {Title: "B", Slot: "tab", Root: protocol.Node{Widget: "text"}},
 	}}}
 	a.Spec.Plugins = map[string]*spec.Plugin{"x": {Off: true}}
-	tabs := addViews(a, map[string]tab{})
-	if len(tabs) != 3 || tabs[0].name() != "Home" || tabs[1].name() != "B" || tabs[2].name() != "Plugins" {
+	all := map[string]tab{}
+	tabs := addViews(a, all)
+	if len(tabs) != 2 || tabs[0].name() != "Home" || tabs[1].name() != "B" || all["view:Plugins"] == nil {
 		t.Fatalf("tabs = %v", tabs)
+	}
+	m := &model{tabs: tabs, all: all, opened: map[int]bool{0: true}, refreshed: map[int]time.Time{}, app: a, ctx: t.Context()}
+	m.pluginsScreen()
+	if len(m.tabs) != 3 || m.active != 2 {
+		t.Fatalf(":plugins: %d tabs, active %d", len(m.tabs), m.active)
+	}
+	m.openTab(0)
+	if len(m.tabs) != 2 || m.transient {
+		t.Fatal("Plugins stayed after leaving it")
 	}
 	var scm view.View
 	if err := yaml.Unmarshal(contracts.Get("scm").View, &scm); err != nil || scm.Title != "Merge requests" {

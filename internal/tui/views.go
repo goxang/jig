@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"sort"
@@ -924,6 +925,7 @@ func addViews(a *engine.App, all map[string]tab) []tab {
 	var out []tab
 	var home []protocol.Node
 	servedBy := map[*viewTab]string{}
+	rank, ranks := 20, map[tab]int{}
 	add := func(key, title string, v *view.View, dir, remote string) {
 		if v.Slot == "home" {
 			tile := v.Root
@@ -948,6 +950,7 @@ func addViews(a *engine.App, all map[string]tab) []tab {
 			t.title = cmp.Or(v.Title, title)
 			servedBy[t] = plugin
 		}
+		ranks[t] = rank
 		out = append(out, t)
 	}
 	for _, n := range a.Spec.ViewOrder {
@@ -960,6 +963,7 @@ func addViews(a *engine.App, all map[string]tab) []tab {
 		if !m.Relevant(a.Spec.Dir, a.Spec.Plugins) {
 			continue
 		}
+		rank = viewRank(m, a.Spec.Dir)
 		names := make([]string, 0, len(m.Views))
 		for n := range m.Views {
 			names = append(names, n)
@@ -1002,13 +1006,15 @@ func addViews(a *engine.App, all map[string]tab) []tab {
 			t.title = strings.ToUpper(plugin[:1]) + strings.ReplaceAll(plugin[1:], "-", " ")
 		}
 	}
-	if len(ms) > 0 || len(a.Spec.Plugins) > 0 {
+	// Plugins is no tab: :plugins opens it for a while (pluginsScreen)
+	if _, ok := all["view:Plugins"]; !ok {
 		v := view.View{Slot: "tab"}
 		if err := v.Load(pluginsView); err != nil {
 			panic(err)
 		}
-		add("view:Plugins", "Plugins", &v, a.Spec.Dir, "")
+		all["view:Plugins"] = newViewTab("Plugins", &v, a.Spec.Dir)
 	}
+	sort.SliceStable(out, func(i, j int) bool { return ranks[out[i]] < ranks[out[j]] })
 	if len(home) > 0 {
 		root := protocol.Node{Widget: "grid"}
 		for i := 0; i < len(home); i += 2 {
@@ -1018,6 +1024,23 @@ func addViews(a *engine.App, all map[string]tab) []tab {
 		out = append([]tab{out[len(out)-1]}, out[:len(out)-1]...)
 	}
 	return out
+}
+
+// viewRank orders the views: the dev loop's contracts (changes, merge requests, issues, docs), then
+// the project's own, then what a user installed for themselves (games), git-ignored ones included.
+func viewRank(m *host.Manifest, dir string) int {
+	for i, c := range []string{"vcs", "scm", "tracker", "docs"} {
+		for _, id := range m.Implements {
+			if strings.HasPrefix(id, c+"/") {
+				return 10 + i
+			}
+		}
+	}
+	rel, err := filepath.Rel(dir, m.Dir)
+	if err != nil || strings.HasPrefix(rel, "..") || exec.Command("git", "-C", dir, "check-ignore", "-q", rel).Run() == nil {
+		return 30
+	}
+	return 20
 }
 
 // served points a contract's standard view at the plugin serving it: scm.mrs becomes <plugin>.scm.mrs.

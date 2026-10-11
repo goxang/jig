@@ -28,14 +28,12 @@ func TestLTRTruncatedStaysFenced(t *testing.T) {
 func TestShowViewByMode(t *testing.T) {
 	jira := &viewTab{title: "Jira", v: &view.View{Modes: []string{"software", "product"}}}
 	games := &viewTab{title: "Games", v: &view.View{}}
-	plugins := &viewTab{title: "Plugins", v: &view.View{}}
 	for _, c := range []struct {
 		mode string
 		tab  *viewTab
 		want bool
 	}{
-		{"product", jira, true}, {"product", games, false}, {"product", plugins, false},
-		{"software", games, true}, {"software", plugins, true}, {"simple", plugins, false}, {"detailed", plugins, true},
+		{"product", jira, true}, {"product", games, false}, {"software", games, true}, {"detailed", games, true},
 	} {
 		if got := showView(c.mode, c.tab); got != c.want {
 			t.Errorf("%s %s = %v", c.mode, c.tab.title, got)

@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -19,14 +18,8 @@ import (
 // keyPresets map a key to a global command; keys left out go to the screen. Keys every preset
 // shares (q, @, ?, tab, digits, ...) stay in the global switch.
 var keyPresets = map[string]map[string]string{
-	"jig": {":": "palette", "ctrl+k": "search", "ctrl+e": "env", ".": "menu", "g": "go", "T": "task"},
+	"jig": {":": "palette", "ctrl+k": "search", "ctrl+e": "env", ".": "menu", "T": "task"},
 	"rig": {"S": "save", "ctrl+e": "envinfo", "ctrl+k": "kubeconfig", "E": "env", "T": "task", "N": "namespace", ":": "palette"},
-}
-
-// goKeys are the g prefix: a screen by name, or a key the screen takes for its selection.
-var goKeys = [][3]string{
-	{"l", "logs", "Logs"}, {"m", "metrics", "Metrics"}, {"t", "traces", "Traces"}, {"d", "data", "Data"},
-	{"s", "services", "Services"}, {"g", "top", ""},
 }
 
 // preset is keys: from the project (.jig/local.yaml), else ~/.config/jig/config.yaml, else jig.
@@ -44,11 +37,6 @@ func (m *model) preset() string {
 
 // globalKey runs the preset's command for s, or a view's own key; ok is false when neither has it.
 func (m *model) globalKey(s string) (tea.Cmd, bool) {
-	if m.prefix != "" {
-		p := m.prefix
-		m.prefix = ""
-		return m.goKey(s), p == "g"
-	}
 	if c, ok := keyPresets[m.preset()][s]; ok {
 		return m.command(c), true
 	}
@@ -58,56 +46,6 @@ func (m *model) globalKey(s string) (tea.Cmd, bool) {
 		}
 	}
 	return nil, false
-}
-
-// goTargets are goKeys plus, for every other screen, the first free letter of its name.
-func (m *model) goTargets() [][3]string {
-	out := slices.Clone(goKeys)
-	used := map[string]bool{}
-	named := map[string]bool{}
-	for _, g := range goKeys {
-		used[g[0]], named[g[2]] = true, true
-	}
-	for _, t := range m.tabs {
-		name := t.name()
-		if named[name] {
-			continue
-		}
-		for _, r := range strings.ToLower(name) {
-			if k := string(r); r >= 'a' && r <= 'z' && !used[k] {
-				used[k] = true
-				out = append(out, [3]string{k, strings.ToLower(name), name})
-				break
-			}
-		}
-	}
-	return out
-}
-
-func (m *model) goKey(s string) tea.Cmd {
-	for _, g := range m.goTargets() {
-		if g[0] != s {
-			continue
-		}
-		if g[2] == "" {
-			return m.tabs[m.active].update(m, keyOf("home"))
-		}
-		// the services screen takes l and m itself, with its selection
-		if _, ok := m.tabs[m.active].(*servicesTab); ok && (s == "l" || s == "m") {
-			return m.tabs[m.active].update(m, keyOf(s))
-		}
-		return m.command("open " + g[2])
-	}
-	return nil
-}
-
-// whichKey is the box of the pending prefix's keys.
-func (m *model) whichKey() string {
-	var hs [][2]string
-	for _, g := range m.goTargets() {
-		hs = append(hs, [2]string{"g " + g[0], g[1]})
-	}
-	return keyHints(hs)
 }
 
 // command runs a palette line: the CLI's grammar, with what the UI does itself handled here and
@@ -127,9 +65,6 @@ func (m *model) command(line string) tea.Cmd {
 		return nil
 	case "menu":
 		m.menu(nil)
-		return nil
-	case "go":
-		m.prefix = "g"
 		return nil
 	case "q", "quit":
 		return m.quit()
@@ -164,9 +99,14 @@ func (m *model) command(line string) tea.Cmd {
 			m.askTaskArgs(args[0], t.Args, nil)
 			return nil
 		}
+	case "plugins":
+		return m.pluginsScreen()
 	case "open":
 		// open <screen> [words]: the words filter a view's table or board (open Jira PIN-12)
 		want := strings.ToLower(strings.Join(args, " "))
+		if want == "plugins" {
+			return m.pluginsScreen()
+		}
 		for i, t := range m.tabs {
 			if strings.ToLower(t.name()) == want {
 				return m.jump(i)
@@ -254,6 +194,7 @@ func (m *model) search() {
 	for _, t := range m.tabs {
 		add("open "+t.name(), "screen")
 	}
+	add("plugins", "the plugins in use: info, logs, add, on, off, upgrade")
 	for _, s := range m.app.Spec.ServiceNames() {
 		add("service "+s, "service")
 	}

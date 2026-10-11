@@ -79,12 +79,14 @@ type zone struct {
 }
 
 type model struct {
-	ctx    context.Context
-	app    *engine.App
-	gen    int
-	tabs   []tab
-	all    map[string]tab
-	active int
+	ctx  context.Context
+	app  *engine.App
+	gen  int
+	tabs []tab
+	all  map[string]tab
+	// transient says the last screen is one :plugins appended
+	transient bool
+	active    int
 	// mode is detailed, simple, software or product (V); simple and product draw fewer columns and keys
 	mode   string
 	simple bool
@@ -162,8 +164,6 @@ type model struct {
 	showAlerts bool
 	// envInfo is the ctrl+e box: what this environment resolves to, nil when closed
 	envInfo *envBox
-	// prefix is a pressed key prefix (g) waiting for its second key
-	prefix string
 	// watch is ctrl+w's live rebuild, nil when off
 	watch *watching
 
@@ -265,7 +265,7 @@ type (
 func allTabs() map[string]tab {
 	return map[string]tab{"services": &servicesTab{}, "logs": &logsTab{}, "metrics": &metricsTab{}, "traces": &tracesTab{},
 		"queries": &queriesTab{}, "kv": &kvTab{}, "data": &dataTab{}, "load": &loadTab{}, "manifests": &manifestsTab{},
-		"hosts": &hostsTab{}, "tests": &testsTab{}}
+		"hosts": &hostsTab{}, "tests": &testsTab{}, "files": &filesTab{}}
 }
 
 // advanced are the screens the simple view leaves out (unless ui.tabs names them).
@@ -321,9 +321,6 @@ func showView(mode string, t *viewTab) bool {
 	if t.title == "Home" || mode == "detailed" || mode == "" {
 		return true
 	}
-	if t.title == "Plugins" {
-		return mode == "software"
-	}
 	if t.v == nil || len(t.v.Modes) == 0 {
 		return mode != "product"
 	}
@@ -372,7 +369,7 @@ func (m *model) setMode(mode string) tea.Cmd {
 	for i, t := range m.tabs {
 		opened[t] = m.opened[i]
 	}
-	m.tabs = newTabs(m.app, m.all, m.mode)
+	m.tabs, m.transient = newTabs(m.app, m.all, m.mode), false
 	m.opened, m.active = map[int]bool{}, 0
 	for i, t := range m.tabs {
 		m.opened[i] = opened[t]
@@ -461,7 +458,7 @@ func run(ctx context.Context, a *engine.App, s *Session, init func(m *model)) er
 	}
 	m := &model{ctx: ctx, app: a, yes: a.Confirmed, opened: map[int]bool{}, all: allTabs(), mode: startMode(a), refreshed: map[int]time.Time{}, hx: -1, hy: -1, splitFrac: loadSplits()}
 	m.simple = m.mode == "simple" || m.mode == "product"
-	m.tabs = newTabs(a, m.all, m.mode)
+	m.tabs, m.transient = newTabs(a, m.all, m.mode), false
 	m.sched = newScheduler(a)
 	m.specAt = specTime(a)
 	if st, err := os.Stat(filepath.Join(a.Spec.Dir, ".jig", host.DevStamp)); err == nil {
@@ -600,6 +597,7 @@ func (m *model) openTab(i int) tea.Cmd {
 	}
 	m.trail = nil
 	m.active = i
+	m.dropTransient()
 	m.refreshed[i] = time.Now()
 	if m.opened[i] {
 		return m.tabs[i].refresh(m)
@@ -611,6 +609,26 @@ func (m *model) openTab(i int) tea.Cmd {
 		cmd = batch(cmd, k.resume(m, m.views[t.name()]))
 	}
 	return cmd
+}
+
+// pluginsScreen opens the Plugins screen, appended to the screens until another one opens.
+func (m *model) pluginsScreen() tea.Cmd {
+	p := m.all["view:Plugins"]
+	if i := slices.Index(m.tabs, p); i >= 0 {
+		return m.jump(i)
+	}
+	m.tabs = append(m.tabs, p)
+	m.transient = true
+	return m.jump(len(m.tabs) - 1)
+}
+
+// dropTransient removes the screen pluginsScreen appended once another one is active.
+func (m *model) dropTransient() {
+	if last := len(m.tabs) - 1; m.transient && m.active != last {
+		m.tabs, m.transient = m.tabs[:last], false
+		delete(m.opened, last)
+		delete(m.refreshed, last)
+	}
 }
 
 // work is the context of the next one-off operation; ctrl+c cancels every one in flight.
@@ -994,7 +1012,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.services, m.svcBusy = nil, false
 		m.opened, m.refreshed = map[int]bool{}, map[int]time.Time{}
 		m.all = allTabs()
-		m.tabs = newTabs(m.app, m.all, m.mode)
+		m.tabs, m.transient = newTabs(m.app, m.all, m.mode), false
 		m.active = min(m.active, len(m.tabs)-1)
 		for i, t := range m.tabs {
 			if t.name() == screen {
@@ -2434,8 +2452,6 @@ func (m *model) interaction() (box, keys string) {
 		return m.promptBox(), m.promptKeys()
 	case m.picker != nil:
 		return "", " " + m.picker.hints()
-	case m.prefix != "":
-		return "", m.whichKey()
 	case m.chat != nil && m.chat.open && m.chat.focus:
 		return "", keyHints([][2]string{{"enter", "send"}, {"/", "commands"}, {"tab", "suggestion, completes a command"}, {"↑", "last sent"}, {"pgup pgdn wheel", "scroll"}, {"ctrl+x", "stop"}, {"esc", "hide"}, {"click left", "back to the screen"}})
 	}
@@ -2585,8 +2601,8 @@ func (m *model) helpLines() []string {
 	k := func(command string) string { return cmp.Or(m.keyFor(command), ":"+command) }
 	rows := [][2]string{
 		{":", "command palette, the CLI's grammar: :restart parser, :kv get key, :open Logs"}, {k("search"), "search screens, services, tasks, actions, plugins"},
-		{k("go") + " then a letter", "go to a screen by its letter: l logs, m metrics, t traces, d data, s services, k kv, q queries… (g shows them all)"}, {". right-click", "this screen's keys as a menu"},
-		{"tab ⇧tab  1-9 0", "next, previous, nth screen (or click its name)"}, {"ctrl+←→", "switch the sub-tab inside a screen"}, {k("env"), "switch environment"}, {k("namespace"), "switch or create a Kubernetes namespace"}, {k("task"), "run a task (ctrl+o there shows its steps)"},
+		{". right-click", "this screen's keys as a menu"}, {":plugins", "the plugins in use: info, logs, add, turn on or off, upgrade, remove"},
+		{"⇧←→  tab ⇧tab  1-9 0", "next, previous, nth screen (or click its name; ctrl+k finds one by name)"}, {"ctrl+←→", "switch the sub-tab inside a screen"}, {k("env"), "switch environment"}, {k("namespace"), "switch or create a Kubernetes namespace"}, {k("task"), "run a task (ctrl+o there shows its steps)"},
 		{"↑↓ / wheel", "move"}, {"enter / dbl-click", "open, run"}, {"ctrl+alt+←→  ctrl+alt+↑↓", "sort by the next / previous column; ↑ ascending, ↓ descending (or click a header; also < >, alt+↑↓, ctrl+⇧ arrows)"}, {"+ - z", "expand all, fold all, toggle (trees, dashboard rows)"},
 		{"esc ⌫", "back: closes what is open, then returns to the screen you jumped from"}, {"drag a border", "resize panes (kept for next time; it lights up under the mouse)"}, {"@", "AI chat about this screen (jig ai config sets it up)"}, {"A", "alerts (header badge)"}, {"!", "activity: builds, deploys and tasks you started with their output; x stops one, enter types its input, tab errors, y copies"}, {k("kubeconfig"), "fetch the environment's kubeconfig (Rancher API key, URL or file) into yours"}, {k("envinfo"), "this environment: variables, databases, addresses (↑↓, / searches, e edits a variable)"}, {"ctrl+w", "watch: rebuild and restart services as their sources change (errors in A)"}, {"ctrl+p", "colour theme, previewed as you move (jig theme --save to make your own)"}, {"ctrl+r", "reload jig.yaml after you or the assistant edited it (filters stay)"}, {k("save"), "save this session: jig opens on it from now on, as you leave it, filters included (jig --fresh starts clean)"}, {"M", "mouse on/off (off: select text)"}, {"V", "mode: detailed, simple, software (dev screens) or product (metrics, issues, docs)"}, {"?", "this help"}, {"q  ctrl+c", "quit"},
 	}

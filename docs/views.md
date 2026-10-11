@@ -20,6 +20,7 @@ views:
 | `tab` | a top-level screen (the default) |
 | `home` | a tile on the Home screen, which appears once any view has this slot |
 | `{tab: {key: G}}` | a screen with its own key |
+| `off` | nowhere; a plugin uses it to keep its contract's default view away |
 
 `modes: [software, product]` shows a view only in those UI modes (`V`); a view without `modes:` shows in
 every mode but `product`.
@@ -27,7 +28,8 @@ every mode but `product`.
 A plugin installed for the user (`~/.config/jig/plugins`) shows its views in a project only when
 jig.yaml configures it under `plugins:`, its `detect:` matches (`files` globs, `git_remote` in
 `.git/config`), or it has neither `detect:` nor a config schema. A contract's default view shows only
-for a plugin without views of its own.
+for a plugin without views of its own. Screens come first, then the views of plugins serving vcs,
+scm, tracker and docs, then the project's own, then the ones a user installed for themselves.
 
 ## Layouts
 

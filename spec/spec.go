@@ -138,7 +138,7 @@ type OTel struct {
 }
 
 // Screens are the UI's screens in their default order.
-var Screens = []string{"services", "logs", "metrics", "traces", "queries", "kv", "data", "load", "manifests", "hosts", "tests"}
+var Screens = []string{"services", "logs", "metrics", "traces", "tests", "data", "kv", "queries", "load", "manifests", "hosts", "files"}
 
 type UI struct {
 	// Tabs are the screens shown, in order (number keys follow it); left out, every screen the
