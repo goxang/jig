@@ -1,7 +1,7 @@
 name: {%.Name%}
 version: 0.1.0
 description: what {%.Name%} shows and does
-build: [go, build, -o, bin/{%.Name%}, .]
+build: [go, build, -mod=mod, -o, bin/{%.Name%}, .]
 server: {command: [bin/{%.Name%}]}
 skills: [skills/{%.Name%}]
 views:
