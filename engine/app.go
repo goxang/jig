@@ -517,8 +517,6 @@ func (a *App) DefaultImage(ctx context.Context, s *spec.Service) string {
 	return st["image."+s.Name]
 }
 
-// ignoreState adds .jig/ to the project's .gitignore once jig keeps state there, so pids, logs,
-// profiles and reports never show up as changes to commit. Projects outside git are left alone.
 // infer builds a jig.yaml for dir from its compose files, manifests and sources (jig init's
 // scaffold); nil when it finds nothing to run.
 func infer(dir string) (string, []byte) {
@@ -539,6 +537,8 @@ func infer(dir string) (string, []byte) {
 	return file, raw
 }
 
+// ignoreState adds .jig/ to the project's .gitignore once jig keeps state there, so pids, logs,
+// profiles and reports never show up as changes to commit. Projects outside git are left alone.
 func ignoreState(dir string) {
 	if _, err := os.Stat(filepath.Join(dir, ".jig")); err != nil {
 		return
@@ -549,8 +549,9 @@ func ignoreState(dir string) {
 	file := filepath.Join(dir, ".gitignore")
 	raw, _ := os.ReadFile(file)
 	for _, l := range strings.Split(string(raw), "\n") {
-		switch strings.TrimSpace(l) {
-		case ".jig", ".jig/", "/.jig", "/.jig/":
+		// .jig/* with !.jig/plugins/ keeps a project's own plugins in git
+		switch strings.TrimPrefix(strings.TrimSpace(l), "/") {
+		case ".jig", ".jig/", ".jig/*":
 			return
 		}
 	}

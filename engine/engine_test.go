@@ -272,4 +272,10 @@ func TestIgnoreState(t *testing.T) {
 	if got := string(raw); got != "bin/\n# jig: pids, logs, profiles, reports, test runs (jig.yaml)\n.jig/\n" {
 		t.Fatalf(".gitignore = %q", got)
 	}
+	own := "/.jig/*\n!/.jig/plugins/\n"
+	_ = os.WriteFile(gi, []byte(own), 0o644)
+	ignoreState(dir)
+	if raw, _ := os.ReadFile(gi); string(raw) != own {
+		t.Fatalf("a .jig/* rule got .jig/ added: %q", raw)
+	}
 }
