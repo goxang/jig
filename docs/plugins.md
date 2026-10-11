@@ -24,6 +24,13 @@ it applies to (see [views](views.md)). A pack is a plugin that is mostly `requir
 `registry:` in `~/.config/jig/config.yaml`) holds `index.json`, `<name>/<version>/<archive>` and the
 shared files (one `jig-std` per platform) in `files/`.
 
+## Official plugins
+
+[goxang/jig-plugins](https://github.com/goxang/jig-plugins) holds them, grouped in packs: `pack/std`
+(runtimes, builders, git, imports), `pack/data`, `pack/observability`, `pack/qa`, `pack/gitlab`,
+`pack/github`, `pack/atlassian`, `pack/cloud-aws` and `pack/product`; plus `slack`, `mcp-bridge` and
+`arcade`. Most are one Go binary, `jig-std`; `jig-std list` prints what each one serves.
+
 ## Writing one
 
 ```bash

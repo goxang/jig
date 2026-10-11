@@ -13,7 +13,7 @@ sources:
 What implementing one gets you:
 
 - **a component**: a contract with a kind (`metrics/1`, `runtime/1`, `logs/1`, ...) lets the plugin
-  stand in for a built-in adapter: `components: {m: {type: myplugin}}`. jig's screens, CLI and AI use
+  stand in for an official one: `components: {m: {type: myplugin}}`. jig's screens, CLI and AI use
   it like any other metrics store. The component's config reaches the plugin in `configure`.
 - **a standard view**: `scm`, `tracker`, `docs`, `iac`, `vcs`, `registry` and `secrets` come with a
   screen, added for every plugin that implements them and has no views of its own.

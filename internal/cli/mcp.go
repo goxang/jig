@@ -601,7 +601,7 @@ func mcpTools() []mcpTool {
 				}
 				return append(argv, flag(a, "force", "--force")...), nil
 			}},
-		{Name: "jig_docs", Description: "jig's reference: config (every jig.yaml key: services, environments, components, otel, ui tabs, dashboards and panels, queries, tests, tasks, alerts), guide (CLI commands, every TUI screen and its keys, AI, GoLand, MCP tools), design (adapters and what each kind does), manifests",
+		{Name: "jig_docs", Description: "jig's reference: config (every jig.yaml key: services, environments, components, otel, ui tabs, dashboards and panels, queries, tests, tasks, alerts), guide (CLI commands, every TUI screen and its keys, AI, GoLand, MCP tools), design (architecture, packages, component kinds and contracts), manifests",
 			InputSchema: schema(map[string]any{"name": pString("config (default), guide, design or manifests"), "search": pString("words: only the sections holding all of them (across every doc when name is empty), e.g. \"tasks steps\"; prefer it over reading a whole doc")}),
 			argv: func(a map[string]any) ([]string, error) {
 				argv := []string{"docs"}

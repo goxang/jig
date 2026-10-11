@@ -18,7 +18,7 @@ import (
 func docsCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:     "docs [config|guide|cli|plugins|protocol|contracts|views|security|design|manifests] [words...]",
-		Short:   "jig's reference, from the binary: every jig.yaml key (config), CLI, screens and AI (guide), adapters (design), manifests; words print only the sections holding them",
+		Short:   "jig's reference, from the binary: every jig.yaml key (config), CLI, screens and AI (guide), architecture (design), manifests; words print only the sections holding them",
 		Example: "  jig docs config tasks\n  jig docs load generator   (no doc named: every doc)",
 		RunE: func(_ *cobra.Command, args []string) error {
 			names := []string{"config"}

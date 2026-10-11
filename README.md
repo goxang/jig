@@ -8,19 +8,27 @@ services, infrastructure, data, Kubernetes, logs, metrics, tests. Local processe
 Go, Python, Node, Java, Rust or anything that runs. Describe it once in `jig.yaml`, then run, watch and tune
 it all from one CLI and one terminal UI.
 
-- **Plugin-based**: every runtime, database, broker, metrics or logs backend is an adapter behind one
-  registry. New components plug in without touching the core, and contributions are welcome.
+- **Plugin-based**: the core knows no technology. Docker, Kubernetes, SQL, Prometheus, GitLab, Jira and
+  the rest are plugins, and anyone can write one: YAML, a shell script, or a Go, Python or TypeScript
+  program, or any MCP server bridged in.
 - **AI built in**: `@` on any screen chats about what it shows and can act on it; query prompts get AI
   autocomplete. Works with opencode (free models, no login needed), Claude Code, OpenAI or any
   OpenAI-compatible endpoint, Anthropic, DeepSeek and 9router.
 
-![Services](docs/img/services.png)
+## How it is built
 
-| | |
-|---|---|
-| ![Metrics](docs/img/metrics.png) | ![Logs](docs/img/logs.png) |
-| ![Data](docs/img/data.png) | ![Manifests](docs/img/manifests.png) |
-| ![AI chat](docs/img/ai.png) | |
+```
+ clients   CLI · TUI · MCP server · AI · HTTP/WS server (jig serve)
+              │  all through one api.Engine: policy, jobs and audit apply to every caller
+ kernel    catalog · sources (data frames) · actions (jobs) · views (widget trees) · events · policy
+ engine    environments, dependency order, up/down, svc:// resolution, run state
+ host      install, lock, trust, supervisor, sandbox; talks to plugins over jig/1 (JSON-RPC)
+ plugins   jig-std (docker, kubernetes, sql, prometheus, ...) · gitlab · jira · terraform · yours
+```
+
+A plugin adds **sources** (data), **actions** (verbs, each with an effect: read, write or danger),
+**views** (tabs and panels), **importers** and **contracts** (`metrics/1`, `scm/1`, ...: implement one and
+jig's own screens use your plugin). See [design](docs/design.md) and [plugins](docs/plugins.md).
 
 ## What it does
 
@@ -43,7 +51,9 @@ curl -fsSL https://raw.githubusercontent.com/goxang/jig/main/install.sh | sh
 Linux and macOS (amd64, arm64). With Go 1.26+: `go install github.com/goxang/jig/cmd/jig@latest`.
 
 jig itself knows no technology. Runtimes, builders, databases, metrics and the rest come from the
-official plugins in [goxang/jig-plugins](https://github.com/goxang/jig-plugins):
+official plugins in [goxang/jig-plugins](https://github.com/goxang/jig-plugins). A project pins its
+plugins in `jig.lock`, and the first `jig` there installs them after one trust prompt. To install the
+everyday set by hand:
 
 ```bash
 go install github.com/goxang/jig-plugins/cmd/jig-std@latest && jig-std install
@@ -87,6 +97,35 @@ components:
 
 Try one of the [examples](examples): `cd examples/shop && jig up && jig`.
 
+## Plugins
+
+```bash
+jig plugin search jira          # the registry index
+jig plugin add pack/gitlab      # install and pin in jig.lock
+jig plugin ls                   # what the project uses, on or off
+```
+
+Official ones, a pack each: `pack-std` (local, docker, kubernetes, kind, go and command builders, git,
+compose/godev/rig imports), `pack-data` (sql, redis, rabbitmq, kafka, consul), `pack-observability`
+(prometheus, scrape, loki, jaeger, tempo, zipkin, pprof, grafana), `pack-qa` (junit, pytest, jest,
+vitest, hurl, k6, vegeta, ghz), `pack-gitlab`, `pack-github`, `pack-atlassian` (jira, confluence),
+`pack-cloud-aws` (aws, terraform, helm, registry) and `pack-product` (agents that turn specs into
+stories and MRs, every write waiting for approval). Plus `slack`, `mcp-bridge`, `arcade`, `ssh`,
+`delve`, `goland` and importers for just, make, npm scripts, Procfile, dotenv, OpenAPI and CI files.
+`jig-std list` prints them all.
+
+Write your own:
+
+```bash
+jig plugin new sentry --lang yaml   # or bash, python, go, ts
+cd sentry && jig plugin test
+cd ~/my-project && jig plugin dev ~/sentry
+```
+
+A plugin is a folder with a `jig-plugin.yaml`. If you can write `jig.yaml`, you can write one; add a
+program only when YAML and shell are not enough. [Plugins](docs/plugins.md) has the whole story, and
+`skills/jig-plugin` lets an AI agent write one for you.
+
 ## Docs
 
 - [Guide](docs/guide.md): CLI, every screen and its keys, AI, GoLand, agents
@@ -94,16 +133,18 @@ Try one of the [examples](examples): `cd examples/shop && jig up && jig`.
 - [CLI](docs/cli.md): every command
 - [Plugins](docs/plugins.md): using and writing plugins; [protocol](docs/protocol.md), [contracts](docs/contracts.md), [views](docs/views.md)
 - [Security](docs/security.md): trust, sandbox, secrets, policy, server, audit
-- [Design](docs/design.md): how jig is built, writing an adapter
+- [Design](docs/design.md): how jig is built
+- [Migration](docs/migration.md): from rig
 - [Manifests](docs/manifests.md): a manifest layout that works well with jig
 
 All of it ships in the binary too: `jig docs guide`.
 
 ## Contributing
 
-jig is open to contributions: new adapters, screens, fixes, docs. [Design](docs/design.md) shows how to
-write an adapter. `go vet ./... && go test -race ./...` must pass. Commits follow Conventional Commits; every green push
-to `main` is released (`feat:` minor, anything else patch).
+New technology support goes into a plugin, not the core: [goxang/jig-plugins](https://github.com/goxang/jig-plugins)
+or your own repo. Fixes, screens and docs are welcome here. `go vet ./... && go test -race ./...` must
+pass. Commits follow Conventional Commits; every green push to `main` is released (`feat:` minor,
+anything else patch).
 
 ## License
 

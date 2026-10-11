@@ -5,7 +5,7 @@ description: Change jig itself (github.com/goxang/jig): add or fix an adapter, a
 
 # Working on jig
 
-Map: `docs/design.md` (packages, component kinds, optional interfaces). Rules: `AGENTS.md`.
+Map: `docs/design.md` (layers, primitives, packages, kinds and contracts). Rules: `AGENTS.md`.
 Build and test with Go 1.26 and `GOTOOLCHAIN=local`. The UI is bubbletea, lipgloss and bubbles v2
 (`charm.land/...`); the full plan to 1.0 is `docs/plan.md`.
 
@@ -15,7 +15,7 @@ Build and test with Go 1.26 and `GOTOOLCHAIN=local`. The UI is bubbletea, lipglo
 |---|---|---|
 | a jig.yaml key | the type in `spec/spec.go` (decoding) or the adapter's `Options` | a row in `docs/config.md`, then `go generate ./spec` (the schema's descriptions come from those tables; a test fails when it is stale) |
 | services from another tool's file | a plugin importer (jig-plugins `cmd/jig-std`: compose, kubernetes, godev) | `imports` row in `docs/config.md`; `jig init` writes the import, never a copy |
-| a component type | `adapters/<kind>/<type>`, `plugin.Register` in `init()`, imported in `adapters/all` | the components table in `docs/config.md` |
+| a component type | a plugin, never core: Go adapters go in jig-plugins `adapters/<kind>/<type>` (`plugin.Register` in `init()`, a row in `cmd/jig-std/plugins.go`), anything else is its own plugin (`jig plugin new`) | the components table in `docs/config.md` |
 | an extra capability | an optional interface in `core` found by type assertion | nothing outside the adapter and its front end |
 | a command | `internal/cli`, thin over `engine` | `docs/guide.md`; shell completion in `complete.go` if it takes names |
 | an MCP tool | `mcpTools()` in `internal/cli/mcp.go`; mutating ones go through `guard()` | the tool list in `docs/guide.md` |

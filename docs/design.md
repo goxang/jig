@@ -1,50 +1,96 @@
 # Design
 
+jig's core knows nouns and verbs; plugins know technologies. The jig binary holds no docker,
+Kubernetes, SQL, Prometheus, GitLab or Jira code: all of it is a plugin, most of it in
+[goxang/jig-plugins](https://github.com/goxang/jig-plugins).
+
 ```
-cmd/jig             the binary: CLI + TUI + every bundled adapter
-spec/               jig.yaml: schema, loading, environments, variables, imports, dependency order
-core/               the interfaces: one per component kind, plus optional capabilities
-plugin/             the adapter registry
-engine/             a project opened for one environment: lazy components, svc:// resolution,
-                    up/down/build/wait, load limits, run state
-manifest/           Kubernetes manifests from any folder: objects, relations, lint, render
-adapters/<kind>/<type>
-internal/cli        commands, thin over engine
-internal/tui        the control plane, same engine
-internal/viz        charts, gauges, sparklines, waterfalls, relation graphs
+ clients   CLI · TUI · MCP server · AI tool router · HTTP/WS server
+              │
+ api       api.Engine: catalog, query/stream, run/jobs, render, events, search, resolve, plugins
+              │  (engine.Local in-process; api.Client over HTTPS + WebSocket to jig serve)
+ kernel    Catalog │ Sources+Frames │ Actions+Jobs │ Views+Widgets │ Events │ Policy+Audit
+           config pipeline (load, include, plugin defaults, imports, templates, env overlay,
+           interpolate, validate) with provenance · refs · cache · identity
+ engine    environments, dependency order, up/down/wait, svc:// resolution, shared infra, run state
+ host      discovery · install, lock, trust · supervisor (lazy start, idle stop, restart) · sandbox
+           transports: declarative │ script │ JSON-RPC over stdio (jig/1) │ MCP bridge
+ plugins   jig-std (docker, kubernetes, sql, prometheus, ...) · gitlab · jira · terraform · yours
 ```
 
-## Components and adapters
+## The six primitives
 
-Everything jig talks to is a **component**: a named instance of an **adapter**, which implements the
-interface of one **kind**.
-
-| kind | interface | bundled adapters |
+| primitive | what it is | example |
 |---|---|---|
-| runtime | `Runtime`: discover, start, stop, restart, status, scale, logs, exec, deploy | `local`, `docker`, `kubernetes`, `kind` |
-| builder | `Builder` | `go` (no daemon), `docker`, `command` |
-| metrics | `Metrics`: instant and range queries | `prometheus` (any Prometheus API), `scrape` (no server) |
-| tracing | `Tracing`: services, search, trace | `zipkin`, `jaeger`, `tempo` |
-| profiler | `Profiler` | `pprof`, `command` (async-profiler, perf, py-spy, ...) |
-| debugger | `Debugger` | `delve` |
-| logs | `LogSource` | `runtime` (default), `loki` |
-| database | `Database` | `sql` (postgres, mssql, mysql) |
-| cache | `Cache` | `redis` |
-| messaging | `Messaging` | `rabbitmq`, `kafka` |
-| kv | `KV` | `consul` |
-| loadgen | `LoadGenerator`: start, stop, set rate, status | `http` (in-process), `kv` (generator pods steered through a key), `command` |
-| hosts | `Hosts`: list with usage, shell | `ssh`; runtimes provide their own (nodes, this machine) |
-| query | `Querier` | `http`; most adapters also answer queries |
+| **Catalog** | typed resources built from config: services, components, environments, tasks, queries, dashboards, views, plus kinds plugins add | `service/api`, `component/db` |
+| **Source** | named data answering `query` (a frame) or `stream` (frames or lines over time), with an optional query language and completion | `metrics.range`, `db.query`, `jira.search` |
+| **Action** | a named verb with an argument schema and an `effect` (`read`, `write`, `danger`); running one makes a **job** with output, cancel and audit | `runtime.restart`, `tf.apply` |
+| **View** | a widget tree with data bindings, placed in a slot (a tab, a sub-tab, a detail page, a panel) | the Metrics screen, a Sentry tab |
+| **Event** | a bus message hooks and agents subscribe to | `deploy.finished`, `alert.firing` |
+| **Policy** | the decision for (who, verb, object): allow, deny, confirm, reauth or approve | AI writes wait in the inbox |
 
-What an adapter can do beyond its interface it offers through **optional interfaces**, found by type
-assertion: `Forwarder` (reach a service port), `Querier` (ad hoc queries in its own language),
-`Actioner` (named actions: `kind create`, `db seed`, `queue purge-all`, ...), `StateStore`,
-`ImageLoader`, `Registrar`, `ProcessLocator`, `Relauncher`, `Pinger`, `StatusLister` (every service's
-status in one call: what keeps the TUI light), `Bridger` (reach a service that runs outside the
-runtime under its own name), `LoadScaler` (a generator that runs as instances). Front ends discover them, so a
-new capability needs no change outside the adapter.
+**Refs** link them: `svc://api`, `k8s://ns/deployment/api`, `jira://PAY-12`. `enter` on one opens it,
+`jig open <ref>` too, and the AI follows them.
 
-## Writing an adapter
+## Packages
+
+```
+cmd/jig       the binary
+api/          the Engine seam every client uses; api.Fake for tests
+engine/       engine.Local: a project opened for one environment, behind api.Engine
+kernel/       the primitives: catalog, frames, actions, jobs, events, policy, audit, refs, view, inbox, cron
+spec/         jig.yaml: schema, loading, environments, variables, imports, lint, migrate from rig
+host/         plugins: manifests, discovery, install, lock, registry, signatures, trust, sandbox, MCP bridge
+protocol/     jig/1: the JSON schema, generated types, transcripts, conformance
+contracts/    metrics/1, scm/1, tracker/1, ...: what a plugin serves to stand in for a kind of tool
+core/         the Go interface of each component kind, for Go adapters
+plugin/       the in-process registry Go adapters register with (inside a plugin binary, not jig)
+sdk/          plugin SDKs: Go, Python, TypeScript
+ai/           chat, backends, tool router, redaction, guard rails, agents
+server/       jig serve: accounts, TOTP, OIDC, tokens, TLS
+manifest/     Kubernetes manifests from any folder: objects, relations, lint, render
+scaffold/     jig init and jig plugin new
+internal/cli  commands, thin over api.Engine
+internal/tui  the terminal renderer, same api.Engine
+```
+
+A new operation is an action or a source on the Engine, never a client-only shortcut: that is how
+policy, jobs and audit apply to the CLI, the TUI, MCP, the AI and remote users alike.
+
+## Components, kinds and contracts
+
+Everything jig talks to is a **component**: a named instance of a plugin that implements one **kind**.
+
+| kind | contract | official plugins |
+|---|---|---|
+| runtime | `runtime/1` | `local`, `docker`, `kubernetes`, `kind` |
+| builder | `builder/1` | `go` (no daemon), `docker`, `command` |
+| metrics | `metrics/1` | `prometheus`, `scrape` (no server), `aws` |
+| tracing | `traces/1` | `zipkin`, `jaeger`, `tempo` |
+| logs | `logs/1` | `runtime` (default), `loki`, `aws` |
+| profiler | `profiles/1` | `pprof`, `command` |
+| debugger | `debugger/1` | `delve` |
+| database | `database/1` | `sql` (postgres, mssql, mysql) |
+| cache | `cache/1` | `redis` |
+| messaging | `queue/1` | `rabbitmq`, `kafka` |
+| kv | `kv/1` | `consul` |
+| loadgen | `load/1` | `http`, `kv`, `command`, `k6`, `vegeta`, `ghz` |
+| hosts | `hosts/1` | `ssh` |
+| tests | `tests/1` | `junit`, `pytest`, `jest`, `vitest`, `hurl`, `k6` |
+| vcs, scm, tracker, docs, iac, registry, notify | `vcs/1`, `scm/1`, `tracker/1`, `docs/1`, `iac/1`, `registry/1`, `notify/1` | `git`, `gitlab`, `github`, `jira`, `confluence`, `markdown-docs`, `terraform`, `registry`, `slack` |
+
+A plugin that implements a contract feeds jig's own screens: write `metrics/1` and the Metrics screen,
+alerts and the AI use your backend. `jig-std list` shows what each official plugin serves;
+[contracts](contracts.md) lists every contract.
+
+## How an official plugin runs
+
+`jig-std` is one Go binary holding every Go adapter. A component `{type: prometheus}` makes the host
+start `jig-std prometheus` on first use (and stop it when idle); jig and the adapter talk jig/1 over
+stdio. Inside, the adapter implements the `core` interface of its kind, and `contracts.Serve` turns it
+into the contract's sources and actions. What an adapter can do beyond its interface it offers through
+optional interfaces (`Forwarder`, `Querier`, `Actioner`, `StatusLister`, ...), found by type assertion,
+so a new capability needs no change in jig.
 
 ```go
 package victoria
@@ -66,27 +112,21 @@ func New(env core.Env, c *spec.Component) (any, error) {
 }
 ```
 
-`c.Decode` fills your options from the component's YAML. `env` gives the project, the active runtime,
-`Resolve` for `svc://` addresses and `Component` for other components (the `kv` load generator uses the
-`kv` component it names). Build your own binary by importing `adapters/all` and your package next to
-`cmd/jig`'s three lines.
-
-Runtimes read their per-service settings from a section named after them (`k8s:`, `docker:`,
-`local:`), so the shared service schema never grows runtime fields.
+Add it to the table in jig-plugins' `cmd/jig-std/plugins.go`; `go test ./cmd/jig-std` checks it serves
+its contract. Outside jig-plugins, a plugin needs none of this: [plugins](plugins.md) shows the YAML,
+script, SDK and MCP ways.
 
 ## Choices worth knowing
 
 - **External tools over client libraries** for kubectl, docker, kind, ssh and dlv: jig uses the user's
-  kubeconfig, contexts, ssh config and agents exactly as the terminal does, and the binary stays small.
+  kubeconfig, contexts, ssh config and agents exactly as the terminal does.
 - **The Kubernetes runtime never uses the current context.** An environment names its context; a
-  protected environment refuses changes until confirmed (`--yes`, or the TUI's confirm prompt).
+  protected environment refuses changes until confirmed.
 - **Shared infrastructure**: an environment with `infra: <env>` hands its `shared` services to that
-  environment's runtime (`App.Owner`), so status, logs, start and stop go there and `svc://` resolves there.
-- **Front ends load lazily**: the TUI asks the runtime for all services in one call every 3s, and a
-  screen fetches only while it is showing.
+  environment's runtime, so status, logs, start and stop go there and `svc://` resolves there.
+- **Lazy everything**: plugins start on first use; the TUI asks the runtime for every service's status
+  in one call every 3s, and a screen fetches only while it is showing.
 - **Run state lives with the environment**: a ConfigMap on Kubernetes (the whole team sees the tag,
   images and rates), `.jig/<env>/state.json` elsewhere.
-- **Builds**: the `go` builder compiles on the host and adds one layer to a base image with
-  go-containerregistry: no daemon, no in-container module download, local build cache.
-- **No metrics server needed**: the `scrape` adapter reads `/metrics` itself and answers a PromQL
-  subset over a short in-memory history.
+- **The protocol is the contract, not Go types**: jig/1, the manifest, widgets and contracts are
+  append-only and versioned on their own, so old plugins keep working.

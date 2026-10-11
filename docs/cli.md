@@ -35,7 +35,7 @@ Every command; `jig <command> --help` has its flags. Generated from the code.
 | `deploy <service\|group...>` | roll out services: --tag deploys that image tag from the registry, --build builds a fresh one first |
 | `discover` | everything running in the environment, managed by jig or not |
 | `do [component] [action] [args...]` | adapter-specific actions: kind create, db seed, queue purge-all, runtime render, ... |
-| `docs [config\|guide\|cli\|plugins\|protocol\|contracts\|views\|security\|design\|manifests] [words...]` | jig's reference, from the binary: every jig.yaml key (config), CLI, screens and AI (guide), adapters (design), manifests; words print only the sections holding them |
+| `docs [config\|guide\|cli\|plugins\|protocol\|contracts\|views\|security\|design\|manifests] [words...]` | jig's reference, from the binary: every jig.yaml key (config), CLI, screens and AI (guide), architecture (design), manifests; words print only the sections holding them |
 | `doctor` | check this environment: jig.yaml, tools, cluster or daemon, ${VARS}, ports, components, AI |
 | `down [service\|group...]` | stop services in reverse dependency order (every app when none given; infra only when named) |
 | `env` | environments of the project and what each one runs on |
