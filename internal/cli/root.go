@@ -97,7 +97,7 @@ Run jig with no arguments for the terminal UI.`,
 				}
 			}
 			remembered := false
-			if g.env == "" && os.Getenv("JIG_ENV") == "" && UI != nil {
+			if g.env == "" && os.Getenv("JIG_ENV") == "" && UI != nil && !fresh {
 				g.env = engine.LastEnv(g.file)
 				remembered = g.env != ""
 			}
@@ -117,7 +117,7 @@ Run jig with no arguments for the terminal UI.`,
 			return UI(cmd.Context(), a)
 		},
 	}
-	root.Flags().BoolVar(&fresh, "fresh", false, "open the UI clean instead of on the session S saved last (and stop opening on it)")
+	root.Flags().BoolVar(&fresh, "fresh", false, "open the UI clean, on the project's default environment, instead of on the session S saved last (and stop opening on it)")
 	root.PersistentFlags().StringVarP(&g.file, "file", "f", "", "project file (default: jig.yaml found from here up, or $JIG_FILE)")
 	root.PersistentFlags().StringVarP(&g.env, "env", "e", "", "environment (default: $JIG_ENV, then the project's default; the UI opens on the one it last showed)")
 	root.PersistentFlags().StringVar(&engine.NamespaceOverride, "namespace", "", "Kubernetes namespace for this run, instead of the environment's (jig ns switches it for good)")
