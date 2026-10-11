@@ -34,7 +34,7 @@ func TestUIWalk(t *testing.T) {
 	if s := m.uiState(); !strings.Contains(s, "open: Metrics") || !strings.Contains(s, "only 2 of 4 panels") {
 		t.Fatalf("state:\n%s", s)
 	}
-	m.uiKeys([]string{"O"})
+	m.uiKeys([]string{"+"})
 	if _, ps := mt.items(m); len(ps) != 4 {
 		t.Fatalf("O kept %d panels", len(ps))
 	}

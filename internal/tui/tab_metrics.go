@@ -68,6 +68,7 @@ type mitem struct {
 // placed is where a panel landed in the last render, in content cells (before scrolling).
 type placed struct {
 	pi, x, y, w, h int
+	row            string // a row header's name (pi is -1)
 }
 
 type metricsTab struct {
@@ -77,6 +78,7 @@ type metricsTab struct {
 	source    string
 	dash      int
 	focus     int
+	focusRow  string // a row header holds the focus instead of a panel
 	zoom      bool
 	win       timeWindow
 	dragged   tea.Cmd // what a drag that zoomed asks for, taken by dragCmd
@@ -89,7 +91,7 @@ type metricsTab struct {
 	varErr    string
 	pending   string // a service to select once the dashboard's variables are known
 	collapsed map[string]bool
-	// only, per dashboard, is the panel titles jig_ui narrowed it to; O shows them all again
+	// only, per dashboard, is the panel titles jig_ui narrowed it to; + shows them all again
 	only     map[string]map[string]bool
 	series   map[string]*seriesState
 	stack    map[string]bool
@@ -111,7 +113,7 @@ func (t *metricsTab) hints() [][2]string {
 		return [][2]string{{"esc v", "back"}, {"↑↓", "series"}, {"space", "hide"}, {"enter", "only this"}, {"p", "open its pod in Services"}, {"a", "all"}, {"/", "filter"}, {"←→", "cursor"}, {"s", "stack"}, {"ctrl+alt+←→↑↓", "sort"}, {"y", "copy query"},
 			{"drag", "zoom to a time range"}, {"Z", "zoom out"}, {", .", "shift range"}, {"t", "range"}}
 	}
-	return [][2]string{{"←→↑↓", "focus"}, {"v enter", "view"}, {"ctrl+←→ d", "dashboard"}, {"i", "variables"}, {"t", "range"}, {"drag", "zoom to a time range"}, {"Z", "zoom out"}, {", .", "shift range"}, {"ctrl+wheel", "zoom time"}, {"m", "source"}, {"R", "refresh"}, {"o", "fold row"}, {"O + -", "show every panel, expand all, fold all"}, {"a e x", "ad hoc"}, {"click legend", "only/hide"}}
+	return [][2]string{{"←→↑↓", "focus"}, {"v enter", "view"}, {"ctrl+←→ d", "dashboard"}, {"i", "variables"}, {"t", "range"}, {"drag", "zoom to a time range"}, {"Z", "zoom out"}, {", .", "shift range"}, {"ctrl+wheel", "zoom time"}, {"m", "source"}, {"R", "refresh"}, {"space o", "fold row"}, {"+ - z", "expand all, fold all, toggle"}, {"a e x", "ad hoc"}, {"click legend", "only/hide"}}
 }
 
 func (t *metricsTab) init() {
@@ -435,9 +437,15 @@ func (t *metricsTab) gridKey(m *model, k tea.KeyPressMsg) tea.Cmd {
 	case "pgdown":
 		t.scroll = min(max(0, t.contentH-t.bodyH), t.scroll+t.bodyH/2)
 	case "home", "g":
-		t.focus, t.scroll = 0, 0
-	case "v", "z", "enter":
-		if t.focus < len(ps) {
+		t.focus, t.focusRow, t.scroll = 0, "", 0
+	case "enter":
+		if t.focusRow != "" {
+			t.foldRow(m, t.focusRow)
+		} else if t.focus < len(ps) {
+			t.zoom, t.hl = true, false
+		}
+	case "v":
+		if t.focusRow == "" && t.focus < len(ps) {
 			t.zoom, t.hl = true, false
 		}
 	case "esc":
@@ -477,24 +485,35 @@ func (t *metricsTab) gridKey(m *model, k tea.KeyPressMsg) tea.Cmd {
 			}
 			return t.fetchAll(m)
 		})
-	case "o":
-		if r := t.rowOf(m, t.focus); r != "" {
-			k := t.dashName(m) + "/" + r
-			t.collapsed[k] = !t.collapsed[k]
+	case "o", "space":
+		if r := cmp.Or(t.focusRow, t.rowOf(m, t.focus)); r != "" {
+			t.foldRow(m, r)
 		}
-	case "O", "+", "=":
+	case "+", "=":
 		delete(t.only, t.dashName(m))
 		for k := range t.collapsed {
 			if strings.HasPrefix(k, t.dashName(m)+"/") {
 				delete(t.collapsed, k)
 			}
 		}
-	case "-":
+	case "-", "z":
 		items, _ := t.items(m)
+		fold := k.String() == "-"
+		if !fold {
+			for _, it := range items {
+				if it.pi < 0 && it.row != "" && !t.collapsed[t.dashName(m)+"/"+it.row] {
+					fold = true
+					break
+				}
+			}
+		}
 		for _, it := range items {
 			if it.pi < 0 && it.row != "" {
-				t.collapsed[t.dashName(m)+"/"+it.row] = true
+				t.collapsed[t.dashName(m)+"/"+it.row] = fold
 			}
+		}
+		if r := t.rowOf(m, t.focus); r != "" && t.collapsed[t.dashName(m)+"/"+r] {
+			t.focusRow = r
 		}
 	case "s":
 		t.stack[t.key(m, t.focus)] = !t.stack[t.key(m, t.focus)]
@@ -507,7 +526,7 @@ func (t *metricsTab) gridKey(m *model, k tea.KeyPressMsg) tea.Cmd {
 			}
 			t.adhoc = append(t.adhoc, spec.Panel{Title: q, Query: q})
 			_, ps := t.items(m)
-			t.focus = len(ps) - 1
+			t.focus, t.focusRow = len(ps)-1, ""
 			return t.reload(m)
 		})
 		m.asPopup()
@@ -538,23 +557,24 @@ func (t *metricsTab) gridKey(m *model, k tea.KeyPressMsg) tea.Cmd {
 	return nil
 }
 
-// moveFocus steps to the next panel in reading order (dx), or to the nearest one above or below (dy).
+// moveFocus steps to the next panel or row header in reading order (dx), or to the nearest one above
+// or below (dy).
 func (t *metricsTab) moveFocus(dx, dy int) {
 	if len(t.placed) == 0 {
 		return
 	}
 	cur := -1
 	for i, p := range t.placed {
-		if p.pi == t.focus {
+		if t.focusRow != "" && p.row == t.focusRow || t.focusRow == "" && p.pi == t.focus {
 			cur = i
 		}
 	}
 	if cur < 0 {
-		t.focus = t.placed[0].pi
+		t.setFocus(t.placed[0])
 		return
 	}
 	if dx != 0 {
-		t.focus = t.placed[min(max(cur+dx, 0), len(t.placed)-1)].pi
+		t.setFocus(t.placed[min(max(cur+dx, 0), len(t.placed)-1)])
 		return
 	}
 	c := t.placed[cur]
@@ -570,7 +590,24 @@ func (t *metricsTab) moveFocus(dx, dy int) {
 		}
 	}
 	if best >= 0 {
-		t.focus = t.placed[best].pi
+		t.setFocus(t.placed[best])
+	}
+}
+
+func (t *metricsTab) setFocus(p placed) {
+	if p.pi < 0 {
+		t.focusRow = p.row
+		return
+	}
+	t.focus, t.focusRow = p.pi, ""
+}
+
+// foldRow folds or unfolds one row; a folded row's header takes the focus its panels lose.
+func (t *metricsTab) foldRow(m *model, row string) {
+	k := t.dashName(m) + "/" + row
+	t.collapsed[k] = !t.collapsed[k]
+	if t.collapsed[k] {
+		t.focusRow = row
 	}
 }
 
@@ -899,12 +936,11 @@ func (t *metricsTab) click(m *model, h hit) tea.Cmd {
 	case strings.HasPrefix(id, "mvar:"):
 		t.pickValues(m, strings.TrimPrefix(id, "mvar:"))
 	case strings.HasPrefix(id, "mrow:"):
-		k := t.dashName(m) + "/" + strings.TrimPrefix(id, "mrow:")
-		t.collapsed[k] = !t.collapsed[k]
+		t.foldRow(m, strings.TrimPrefix(id, "mrow:"))
 	case strings.HasPrefix(id, "mpanel:"), strings.HasPrefix(id, "mplot:"):
 		f := strings.Split(id, ":")
 		pi, _ := strconv.Atoi(f[1])
-		t.focus = pi
+		t.focus, t.focusRow = pi, ""
 		if f[0] == "mplot" && len(f) == 3 {
 			if w, _ := strconv.Atoi(f[2]); w > 1 {
 				t.cursor = math.Min(1, float64(h.x)/float64(w-1))
@@ -921,7 +957,7 @@ func (t *metricsTab) click(m *model, h hit) tea.Cmd {
 		if pi < len(ps) {
 			ls := t.panelLines(pi, ps[pi])
 			if si < len(ls) {
-				t.focus = pi
+				t.focus, t.focusRow = pi, ""
 				st := t.state(m, pi)
 				if h.mod {
 					st.hidden[ls[si].Name] = !st.hidden[ls[si].Name]
@@ -1016,13 +1052,13 @@ func (t *metricsTab) dragCmd() tea.Cmd {
 // keepFocusVisible moves the focus onto the screen after a scroll, so rendering does not scroll back.
 func (t *metricsTab) keepFocusVisible() {
 	for _, p := range t.placed {
-		if p.pi == t.focus && p.y >= t.scroll && p.y+p.h <= t.scroll+t.bodyH {
+		if (t.focusRow != "" && p.row == t.focusRow || t.focusRow == "" && p.pi == t.focus) && p.y >= t.scroll && p.y+p.h <= t.scroll+t.bodyH {
 			return
 		}
 	}
 	for _, p := range t.placed {
 		if p.y >= t.scroll && p.y+p.h <= t.scroll+t.bodyH {
-			t.focus = p.pi
+			t.setFocus(p)
 			return
 		}
 	}
@@ -1170,7 +1206,7 @@ func (t *metricsTab) header(m *model, w int) string {
 		line2.WriteString(sRed.Render(t.varErr) + " ")
 	}
 	if n := len(t.only[name]); n > 0 {
-		line2.WriteString(sAmber.Render(fmt.Sprintf("only %d of %d panels · O shows all", n, len(d.Panels))) + "  ")
+		line2.WriteString(sAmber.Render(fmt.Sprintf("only %d of %d panels · + shows all", n, len(d.Panels))) + "  ")
 	}
 	if d.Help != "" {
 		line2.WriteString(sDim.Render(d.Help))
@@ -1286,6 +1322,9 @@ func (t *metricsTab) grid(m *model, items []mitem, ps []spec.Panel, w, h int) st
 	y := 0
 	for i := range out {
 		l := &out[i]
+		if l.row != "" {
+			t.placed = append(t.placed, placed{pi: -1, row: l.row, w: w, y: y, h: 1})
+		}
 		units := 0
 		for _, p := range l.panels {
 			units = max(units, p.x+p.w)
@@ -1300,7 +1339,7 @@ func (t *metricsTab) grid(m *model, items []mitem, ps []spec.Panel, w, h int) st
 	}
 	t.contentH, t.bodyH = y, h
 	for _, p := range t.placed {
-		if p.pi == t.focus {
+		if t.focusRow != "" && p.row == t.focusRow || t.focusRow == "" && p.pi == t.focus {
 			if p.y < t.scroll {
 				t.scroll = p.y
 			} else if p.y+p.h > t.scroll+h {
@@ -1320,7 +1359,11 @@ func (t *metricsTab) grid(m *model, items []mitem, ps []spec.Panel, w, h int) st
 				arrow = "▸ "
 			}
 			visibleZone(m, "mrow:"+l.row, 0, y, w, 1, top-t.scroll, top, h)
-			rows = append(rows, sAccent.Render(arrow+l.row)+" "+sDim.Render(strings.Repeat("─", max(0, w-lipgloss.Width(arrow+l.row)-2))))
+			title := sAccent.Render(arrow + l.row)
+			if t.focusRow == l.row {
+				title = sSel.Render(arrow + l.row)
+			}
+			rows = append(rows, title+" "+sDim.Render(strings.Repeat("─", max(0, w-lipgloss.Width(arrow+l.row)-2))))
 			y++
 			continue
 		}

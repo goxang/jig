@@ -2,10 +2,12 @@ package tui
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -24,6 +26,18 @@ type filesTab struct {
 	// preview is the selected file's rendered text, for previewFor
 	preview, previewFor string
 	scroll              int
+	// query is a search over the whole project (/ names and content, f names), hits its results
+	query, mode string
+	hits        []fileHit
+	results     *grid
+	found       bool
+	idx         fileIndex
+	seq         int
+}
+
+type foundMsg struct {
+	seq  int
+	hits []fileHit
 }
 
 type filesMsg struct {
@@ -35,7 +49,7 @@ type filesMsg struct {
 func (t *filesTab) name() string { return "Files" }
 func (t *filesTab) typing() bool { return false }
 func (t *filesTab) hints() [][2]string {
-	return [][2]string{{"enter", "open"}, {"⌫", "up"}, {"e", "edit"}, {"o", "open with"}, {"/", "filter"}, {"y", "copy path"}, {"J/K", "scroll preview"}}
+	return [][2]string{{"enter", "open"}, {"⌫", "up"}, {"e", "edit"}, {"o", "open with"}, {"/", "search names + content"}, {"f", "find by name"}, {"y", "copy path"}, {"J/K", "scroll preview"}}
 }
 
 func (t *filesTab) open(m *model) tea.Cmd {
@@ -44,6 +58,8 @@ func (t *filesTab) open(m *model) tea.Cmd {
 		t.dir = t.root
 		t.list = newGrid("files", col("NAME", 0), rcol("SIZE", 8), rcol("MODIFIED", 9))
 		t.list.sortDefault(0, false)
+		t.results = newGrid("files-hits", col("FILE", 0), col("MATCH", 0))
+		t.idx.root = t.root
 	}
 	return t.refresh(m)
 }
@@ -67,7 +83,24 @@ func (t *filesTab) update(m *model, msg tea.Msg) tea.Cmd {
 			t.err = msg.err.Error()
 		}
 		t.setRows(msg.entries)
+	case foundMsg:
+		if msg.seq == t.seq {
+			t.hits, t.found = msg.hits, true
+			rows := make([]grow, len(msg.hits))
+			for i, h := range msg.hits {
+				name, text := h.path, h.text
+				if h.line > 0 {
+					name += ":" + strconv.Itoa(h.line)
+				}
+				rows[i] = grow{id: strconv.Itoa(i), cells: []string{name, text}}
+			}
+			t.results.sortBy = -1
+			t.results.set(rows)
+		}
 	case tea.KeyPressMsg:
+		if t.query != "" {
+			return t.searchKey(m, msg)
+		}
 		r, ok := t.list.current()
 		switch msg.String() {
 		case "enter", "right", "l":
@@ -90,10 +123,9 @@ func (t *filesTab) update(m *model, msg tea.Msg) tea.Cmd {
 				m.setStatus("copied "+r.id, false)
 			}
 		case "/":
-			m.ask("filter", t.filter, func(v string) tea.Cmd {
-				t.filter = v
-				return t.refresh(m)
-			})
+			return t.askSearch(m, "content")
+		case "f":
+			return t.askSearch(m, "name")
 		case "J":
 			t.scroll += 10
 		case "K":
@@ -106,7 +138,77 @@ func (t *filesTab) update(m *model, msg tea.Msg) tea.Cmd {
 }
 
 // atRoot: esc leaves the screen once the filter is cleared and the project's directory shows.
-func (t *filesTab) atRoot() bool { return t.filter == "" && t.dir == t.root }
+func (t *filesTab) atRoot() bool { return t.query == "" && t.filter == "" && t.dir == t.root }
+
+func (t *filesTab) askSearch(m *model, mode string) tea.Cmd {
+	label := "find file by name"
+	if mode == "content" {
+		label = "search file names and content"
+	}
+	m.ask(label, t.query, func(v string) tea.Cmd {
+		t.query, t.mode, t.hits, t.found, t.seq = v, mode, nil, false, t.seq+1
+		if v == "" {
+			return nil
+		}
+		t.idx.forget()
+		seq, ix := t.seq, &t.idx
+		return func() tea.Msg {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			hits := searchNames(ix.list(ctx), v)
+			if mode == "content" {
+				hits = append(hits, ix.searchContent(ctx, v)...)
+			}
+			return foundMsg{seq: seq, hits: hits}
+		}
+	})
+	return nil
+}
+
+func (t *filesTab) hit() (fileHit, bool) {
+	r, ok := t.results.current()
+	if !ok {
+		return fileHit{}, false
+	}
+	i, _ := strconv.Atoi(r.id)
+	if i >= len(t.hits) {
+		return fileHit{}, false
+	}
+	h := t.hits[i]
+	h.path = filepath.Join(t.root, h.path)
+	return h, true
+}
+
+// searchKey drives the hit list: enter opens the editor on the line, esc goes back to the folders.
+func (t *filesTab) searchKey(m *model, k tea.KeyPressMsg) tea.Cmd {
+	h, ok := t.hit()
+	switch k.String() {
+	case "esc", "backspace", "left", "h":
+		t.query, t.hits, t.found = "", nil, false
+	case "enter", "right", "l", "e":
+		if ok {
+			return openFileAt(h.path, max(h.line, 1))
+		}
+	case "g":
+		if ok {
+			t.dir, t.query, t.hits = filepath.Dir(h.path), "", nil
+			t.list.want = h.path
+			return t.refresh(m)
+		}
+	case "y":
+		if ok {
+			copyText(h.path)
+			m.setStatus("copied "+h.path, false)
+		}
+	case "/":
+		return t.askSearch(m, "content")
+	case "f":
+		return t.askSearch(m, "name")
+	default:
+		t.results.key(k)
+	}
+	return nil
+}
 
 func (t *filesTab) enter(m *model, path string) tea.Cmd {
 	if !strings.HasSuffix(path, "/") {
@@ -171,16 +273,33 @@ func (t *filesTab) view(m *model, w, h int) string {
 		title += " · filter " + t.filter
 	}
 	body := t.list.view(m, 1, 1, lw-2, h-2, true)
+	if t.query != "" {
+		title = fmt.Sprintf("%s · %q · %d hits", map[string]string{"content": "search", "name": "find"}[t.mode], t.query, len(t.hits))
+		body = t.results.view(m, 1, 1, lw-2, h-2, true)
+		switch {
+		case !t.found:
+			body = sDim.Render("searching…")
+		case len(t.hits) == 0:
+			body = sDim.Render("no file or line matches · / or f searches again, esc goes back")
+		}
+	}
 	if t.err != "" {
 		body = sRed.Render(wrap(t.err, lw-4))
 	}
 	left := panel(title, body, lw, h, true)
 	r, ok := t.list.current()
+	line := 0
+	if t.query != "" {
+		var h fileHit
+		if h, ok = t.hit(); ok {
+			r, line = grow{id: h.path}, h.line
+		}
+	}
 	pt, preview := "preview", sDim.Render("select a file")
 	if ok {
 		pt = filepath.Base(strings.TrimSuffix(r.id, "/"))
-		if t.previewFor != r.id+fmt.Sprint(w-lw) {
-			t.preview, t.previewFor, t.scroll = previewFile(r.id, w-lw-4), r.id+fmt.Sprint(w-lw), 0
+		if key := r.id + fmt.Sprint(w-lw, line); t.previewFor != key {
+			t.preview, t.previewFor, t.scroll = previewFile(r.id, w-lw-4), key, max(0, line-3)
 		}
 		lines := strings.Split(t.preview, "\n")
 		t.scroll = min(t.scroll, max(0, len(lines)-1))

@@ -1095,5 +1095,5 @@ func (t *manifestsTab) gotoService(m *model) tea.Cmd {
 }
 
 func (t *manifestsTab) atRoot() bool {
-	return t.issues == "" && t.filter == "" && (!t.tree || t.file == "" && (t.cwd == "" || t.cwd == filepath.Dir(t.cwd)))
+	return !t.inFields && t.issues == "" && t.filter == "" && (!t.tree || t.file == "" && (t.cwd == "" || t.cwd == filepath.Dir(t.cwd)))
 }

@@ -68,6 +68,10 @@ type wnode struct {
 	id         int
 	st         any
 	filter     string
+	// matches is the rows the table showed under filter; base the binding before a server search replaced it
+	matches int
+	fold    *tableFold
+	base    *protocol.Binding
 	// preview is the pane beside a table or board showing its selected row (preview: prop)
 	preview *wnode
 	// bound is the binding a preview pane last fetched, to drop answers for rows left behind; tpl
@@ -115,11 +119,79 @@ func (t *viewTab) typing() bool {
 }
 
 func (t *viewTab) clearFilter() bool {
-	if t.focus == nil || t.focus.filter == "" {
+	if t.focus == nil || t.focus.filter == "" && t.focus.base == nil {
 		return false
 	}
 	t.focus.filter = ""
+	t.unsearch(t.focus)
 	return true
+}
+
+// searchable is a widget whose source takes a query: a filter with no local match can ask it for more.
+func searchable(wn *wnode) bool {
+	return wn.n.Bind != nil && wn.n.Bind.Args["query"] != nil
+}
+
+// search re-queries the source with q, which reaches rows the first page did not hold.
+func (t *viewTab) search(wn *wnode, q string) tea.Cmd {
+	setQuery(wn, q)
+	return t.load(wn)
+}
+
+func setQuery(wn *wnode, q string) {
+	if wn.base == nil {
+		b := *wn.n.Bind
+		wn.base = &b
+	}
+	b := *wn.base
+	b.Args = maps.Clone(b.Args)
+	b.Args["query"] = q
+	wn.n.Bind, wn.frame, wn.err, wn.filter = &b, nil, nil, ""
+}
+
+// walkAll visits every widget of the tree, shown or not.
+func (t *viewTab) walkAll(fn func(*wnode)) {
+	var walk func(*wnode)
+	walk = func(wn *wnode) {
+		if wn == nil {
+			return
+		}
+		fn(wn)
+		walk(wn.preview)
+		for _, k := range wn.kids {
+			walk(k)
+		}
+	}
+	walk(t.root)
+}
+
+// keep and resume: the queries the user changed (Q, a search) belong to a saved session only.
+func (t *viewTab) keep() map[string]string {
+	out := map[string]string{}
+	t.walkAll(func(wn *wnode) {
+		if wn.base != nil {
+			out[strconv.Itoa(wn.id)] = fmt.Sprint(wn.n.Bind.Args["query"])
+		}
+	})
+	return out
+}
+
+func (t *viewTab) resume(m *model, v map[string]string) tea.Cmd {
+	t.walkAll(func(wn *wnode) {
+		if q, ok := v[strconv.Itoa(wn.id)]; ok && searchable(wn) {
+			setQuery(wn, q)
+		}
+	})
+	return t.refresh(m)
+}
+
+// unsearch goes back to the binding a server search replaced.
+func (t *viewTab) unsearch(wn *wnode) {
+	if wn.base == nil {
+		return
+	}
+	b := *wn.base
+	wn.n.Bind, wn.base, wn.frame, wn.err, wn.loading = &b, nil, nil, nil, false
 }
 
 func (t *viewTab) interval() time.Duration { return time.Second }
@@ -173,6 +245,9 @@ type viewRootMsg struct {
 }
 
 func (t *viewTab) hide(m *model) {
+	if m.session == nil {
+		t.walkAll(t.unsearch)
+	}
 	if t.stop != nil {
 		t.stop()
 		t.stop = nil
@@ -379,7 +454,7 @@ func (t *viewTab) key(m *model, k tea.KeyPressMsg) tea.Cmd {
 
 func (t *viewTab) keyFocused(m *model, k tea.KeyPressMsg) tea.Cmd {
 	if term, ok := t.focusTerm(); ok && term.input {
-		if k.String() == "ctrl+]" {
+		if s := k.String(); s == "ctrl+]" || s == "esc" {
 			term.input, term.left = false, true
 			return nil
 		}
@@ -390,7 +465,13 @@ func (t *viewTab) keyFocused(m *model, k tea.KeyPressMsg) tea.Cmd {
 		switch k.String() {
 		case "esc":
 			t.focus.filter, t.filtering = "", false
+			t.unsearch(t.focus)
+			return nil
 		case "enter", "down", "up":
+			if wn := t.focus; k.String() == "enter" && wn.filter != "" && wn.matches == 0 && searchable(wn) {
+				t.filtering = false
+				return t.search(wn, wn.filter)
+			}
 			t.filtering = false
 			return t.widgetKey(m, t.focus, k)
 		case "backspace":
@@ -415,17 +496,18 @@ func (t *viewTab) keyFocused(m *model, k tea.KeyPressMsg) tea.Cmd {
 	}
 	if wn := t.focus; k.String() == "Q" && wn != nil && wn.n.Bind != nil && wn.n.Bind.Args["query"] != nil {
 		m.ask(wn.n.Bind.Source+" query", fmt.Sprint(wn.n.Bind.Args["query"]), func(q string) tea.Cmd {
-			b := *wn.n.Bind
-			b.Args = maps.Clone(b.Args)
-			b.Args["query"] = q
-			wn.n.Bind, wn.frame, wn.err = &b, nil, nil
-			return t.load(wn)
+			return t.search(wn, q)
 		})
 		return nil
 	}
 	if k.String() == "v" && t.focus != nil && t.focus.preview != nil {
 		t.focus.previewOff = !t.focus.previewOff
 		return nil
+	}
+	if wn := t.focus; wn != nil && wn.fold != nil {
+		if g, ok := wn.st.(*grid); ok && wn.fold.key(g, k.String()) {
+			return nil
+		}
 	}
 	switch k.String() {
 	case "left", "right":
@@ -789,7 +871,7 @@ func (t *viewTab) drawLeaf(m *model, wn *wnode, x, y, w, h int) string {
 		title = fmt.Sprint(expandRow(title, t.previewRow))
 	}
 	if term, ok := wn.st.(*terminal); ok && term.input {
-		title += sDim.Render(" · ctrl+] leaves")
+		title += sDim.Render(" · esc leaves")
 	}
 	if wn.loading && wn.frame == nil {
 		title += " " + sDim.Render("…")

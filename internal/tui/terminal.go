@@ -23,7 +23,7 @@ import (
 )
 
 // terminal runs a program on a PTY inside a pane, drawn through a VT emulator: shells, ssh,
-// lazygit, k9s, vim, a game. With input on, every key but ctrl+] goes to the program.
+// lazygit, k9s, vim, a game. With input on, every key but esc and ctrl+] goes to the program.
 type terminal struct {
 	argv []string
 	dir  string

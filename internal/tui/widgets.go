@@ -348,7 +348,24 @@ func (t *viewTab) tableBody(m *model, wn *wnode, x, y, w, h int, focused bool) s
 		wn.st = g
 	}
 	rows := make([]grow, 0, frames.Len(f))
+	var fo *tableFold
+	if pf := foldField(wn); pf != "" && wn.filter == "" {
+		fo = wn.index(f, pf)
+	} else {
+		wn.fold = nil
+		if pf != "" {
+			wn.index(f, pf)
+		}
+	}
 	for i := range frames.Len(f) {
+		depth := 0
+		if fo != nil {
+			var hidden bool
+			depth, hidden = fo.depthOf(fo.byRow[strconv.Itoa(i)])
+			if hidden {
+				continue
+			}
+		}
 		cells := make([]string, len(shown))
 		for c, j := range shown {
 			fl := f.Fields[j]
@@ -363,6 +380,13 @@ func (t *viewTab) tableBody(m *model, wn *wnode, x, y, w, h int, focused bool) s
 			}
 			cells[c] = s
 		}
+		if fo != nil && len(cells) > 0 {
+			id, mark := fo.byRow[strconv.Itoa(i)], "  "
+			if fo.kids[id] {
+				mark = map[bool]string{true: "▸ ", false: "▾ "}[fo.collapsed[id]]
+			}
+			cells[0] = strings.Repeat("  ", depth) + mark + cells[0]
+		}
 		keys := make([]any, len(shown))
 		for c, j := range shown {
 			if x, ok := toFloat(f.Columns[j][i]); ok {
@@ -375,6 +399,7 @@ func (t *viewTab) tableBody(m *model, wn *wnode, x, y, w, h int, focused bool) s
 		rows = append(rows, grow{id: strconv.Itoa(i), cells: cells, keys: keys})
 	}
 	g.set(rows)
+	wn.matches = len(rows)
 	if wn.filter == "" && !(focused && t.filtering) {
 		return g.view(m, x, y, w, h, focused)
 	}
@@ -383,6 +408,9 @@ func (t *viewTab) tableBody(m *model, wn *wnode, x, y, w, h int, focused bool) s
 		bar += "▏"
 	}
 	bar += sDim.Render(fmt.Sprintf("  %d of %d  esc clears", len(rows), frames.Len(f)))
+	if len(rows) == 0 && searchable(wn) {
+		bar += sAmber.Render("  enter searches everything")
+	}
 	return bar + "\n" + g.view(m, x, y+1, w, h-1, focused)
 }
 

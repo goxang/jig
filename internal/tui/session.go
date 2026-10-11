@@ -45,6 +45,7 @@ type Session struct {
 	Load      map[string]savedLoadHist `json:"load,omitempty"`
 
 	Sorts    map[string]gridSort `json:"sorts,omitempty"`
+	Widths   map[string]int      `json:"widths,omitempty"`
 	Drafts   map[string]draft    `json:"drafts,omitempty"`
 	Activity []savedJob          `json:"activity,omitempty"`
 	Errors   []loggedErr         `json:"errors,omitempty"`
@@ -136,7 +137,7 @@ func (m *model) snapshot() *Session {
 		s.Results[n] = sr
 	}
 	s.Runs = sc.runs
-	s.Sorts, s.Drafts, s.Errors = gridSorts, m.drafts, m.errLog
+	s.Sorts, s.Drafts, s.Errors, s.Widths = gridSorts, m.drafts, m.errLog, gridWidths
 	s.Activity = nil
 	for _, j := range m.jobList() {
 		end, _, err := j.State()
@@ -225,6 +226,9 @@ func (m *model) restore(s *Session) {
 	sc.mu.Unlock()
 	for id, st := range s.Sorts {
 		gridSorts[id] = st
+	}
+	for id, w := range s.Widths {
+		gridWidths[id] = w
 	}
 	m.drafts, m.errLog, m.views = s.Drafts, s.Errors, s.Views
 	for _, sj := range s.Activity {

@@ -26,7 +26,7 @@ type colDrag struct {
 	start int
 }
 
-// gridWidths are the column widths dragged by hand, by grid id and column title, for this session.
+// gridWidths are the column widths dragged by hand, by grid id and column title; a saved session keeps them.
 var gridWidths = map[string]int{}
 
 // moved restarts the rest timer: the tooltip goes, and comes back if the pointer stays put.

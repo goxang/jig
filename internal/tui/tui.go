@@ -126,6 +126,8 @@ type model struct {
 
 	// quitArmed is the quit key pressed once; pressing it again right after quits
 	quitArmed string
+	// escAt is when esc last found nothing to close; a second one soon after goes to Services
+	escAt time.Time
 	// trail are the screen jumps (service → metrics, → logs, ...) that esc walks back
 	trail []crumb
 
@@ -1733,6 +1735,12 @@ func (m *model) key(k tea.KeyPressMsg) tea.Cmd {
 				return cmd
 			}
 			if r, ok := t.(rooted); ok && s == "esc" && r.atRoot() {
+				if time.Since(m.escAt) > 2*time.Second {
+					m.escAt = time.Now()
+					m.setStatus("esc again goes to Services", false)
+					return nil
+				}
+				m.escAt = time.Time{}
 				return m.home()
 			}
 		}
