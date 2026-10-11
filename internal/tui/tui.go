@@ -987,7 +987,11 @@ func (m *model) mouse(e mouseEvent) tea.Cmd {
 	if e.Action == mousePress && e.Button == tea.MouseRight && m.picker == nil && m.prompt == nil && m.confirm == nil {
 		e.Button = tea.MouseLeft
 		cmd := m.mouse(e)
-		m.menu()
+		if e.Y >= m.originY && e.Y < m.bodyEnd {
+			m.menu(&[2]int{e.X, e.Y - m.originY})
+		} else {
+			m.menu(nil)
+		}
 		return cmd
 	}
 	if m.dragZone != "" && (e.Action == mouseMotion || e.Action == mouseRelease) {
@@ -2234,7 +2238,7 @@ func (m *model) tabBar() string {
 	for ; n > 3; n-- {
 		w := 0
 		for _, t := range m.tabs {
-			w += 4 + min(n, len(t.name()))
+			w += 2 + min(n, len(t.name()))
 		}
 		if w <= m.w {
 			break
@@ -2244,10 +2248,6 @@ func (m *model) tabBar() string {
 	m.tabSpan = m.tabSpan[:0]
 	x := 0
 	for i, t := range m.tabs {
-		key := fmt.Sprint((i + 1) % 10)
-		if i == 10 {
-			key = "`"
-		}
 		name := t.name()
 		if len(name) > n {
 			name = name[:n]
@@ -2255,11 +2255,11 @@ func (m *model) tabBar() string {
 		var p string
 		switch {
 		case i == m.active:
-			p = sTabOn.Render(key + " " + name)
-		case m.hy == 1 && m.hx >= x && m.hx < x+lipgloss.Width(sTabOff.Render(key+" "+name)) && m.picker == nil:
-			p = sBand.Render(" ") + sKey.Background(cBar).Render(key) + sTabHover.Background(cBar).Padding(0).Render(" "+name) + sBand.Render(" ")
+			p = sTabOn.Render(name)
+		case m.hy == 1 && m.hx >= x && m.hx < x+lipgloss.Width(sTabOff.Render(name)) && m.picker == nil:
+			p = sBand.Render(" ") + sTabHover.Background(cBar).Padding(0).Render(name) + sBand.Render(" ")
 		default:
-			p = sBand.Render(" ") + sKey.Background(cBar).Render(key) + sBand.Foreground(cDim).Render(" "+name+" ")
+			p = sBand.Render(" ") + sBand.Foreground(cDim).Render(name+" ")
 		}
 		w := lipgloss.Width(p)
 		m.tabSpan = append(m.tabSpan, [2]int{x, x + w})
@@ -2477,9 +2477,9 @@ func (m *model) helpLines() []string {
 	k := func(command string) string { return cmp.Or(m.keyFor(command), ":"+command) }
 	rows := [][2]string{
 		{":", "command palette, the CLI's grammar: :restart parser, :kv get key, :open Logs"}, {k("search"), "search screens, services, tasks, actions, plugins"},
-		{k("go") + " then l m t d s g", "go to logs, metrics, traces, data, services, top"}, {". right-click", "this screen's keys as a menu"},
-		{"1-9 0 `  tab ⇧tab  ⇧←→ alt+←→", "switch screen (or click its name)"}, {"ctrl+←→", "switch the sub-tab inside a screen"}, {k("env"), "switch environment"}, {k("namespace"), "switch or create a Kubernetes namespace"}, {k("task"), "run a task (ctrl+o there shows its steps)"},
-		{"↑↓ / wheel", "move"}, {"enter / dbl-click", "open, run"}, {"ctrl+alt+←→↑↓", "sort column, order (or click a header; also < >, alt+↑↓, ctrl+⇧ arrows)"}, {"+ - z", "expand all, fold all, toggle (trees, dashboard rows)"},
+		{k("go") + " then a letter", "go to a screen by its letter: l logs, m metrics, t traces, d data, s services, k kv, q queries… (g shows them all)"}, {". right-click", "this screen's keys as a menu"},
+		{"tab ⇧tab  1-9 0", "next, previous, nth screen (or click its name)"}, {"ctrl+←→", "switch the sub-tab inside a screen"}, {k("env"), "switch environment"}, {k("namespace"), "switch or create a Kubernetes namespace"}, {k("task"), "run a task (ctrl+o there shows its steps)"},
+		{"↑↓ / wheel", "move"}, {"enter / dbl-click", "open, run"}, {"ctrl+⇧←→  ctrl+⇧↑↓", "sort by the next / previous column; ↑ ascending, ↓ descending (or click a header; also < >, alt+↑↓, ctrl+alt arrows)"}, {"+ - z", "expand all, fold all, toggle (trees, dashboard rows)"},
 		{"esc ⌫", "back: closes what is open, then returns to the screen you jumped from"}, {"drag a border", "resize panes (kept for next time; it lights up under the mouse)"}, {"@", "AI chat about this screen (jig ai config sets it up)"}, {"A", "alerts (header badge)"}, {"!", "activity: builds, deploys and tasks you started with their output; x stops one, enter types its input, tab errors, y copies"}, {k("kubeconfig"), "fetch the environment's kubeconfig (Rancher API key, URL or file) into yours"}, {k("envinfo"), "this environment: variables, databases, addresses (↑↓, / searches, e edits a variable)"}, {"ctrl+w", "watch: rebuild and restart services as their sources change (errors in A)"}, {"ctrl+p", "colour theme, previewed as you move (jig theme --save to make your own)"}, {"ctrl+r", "reload jig.yaml after you or the assistant edited it (filters stay)"}, {k("save"), "save this session: jig opens on it from now on, as you leave it, filters included (jig --fresh starts clean)"}, {"M", "mouse on/off (off: select text)"}, {"V", "simple / detailed view"}, {"?", "this help"}, {"q  ctrl+c", "quit"},
 	}
 	var b strings.Builder

@@ -784,6 +784,7 @@ func (t *viewTab) atRoot() bool { return true }
 func addViews(a *engine.App, all map[string]tab) []tab {
 	var out []tab
 	var home []protocol.Node
+	servedBy := map[*viewTab]string{}
 	add := func(key, title string, v *view.View, dir, remote string) {
 		if v.Slot == "home" {
 			tile := v.Root
@@ -803,6 +804,10 @@ func addViews(a *engine.App, all map[string]tab) []tab {
 			t = newViewTab(cmp.Or(v.Title, title), v, dir)
 			t.remote = remote
 			all[key] = t
+		}
+		if plugin, _, ok := strings.Cut(strings.TrimPrefix(key, "view:"), "/"); ok {
+			t.title = cmp.Or(v.Title, title)
+			servedBy[t] = plugin
 		}
 		out = append(out, t)
 	}
@@ -846,6 +851,16 @@ func addViews(a *engine.App, all map[string]tab) []tab {
 				served(&v.Root, m.Name)
 				add("view:"+m.Name+"/"+c.ID, v.Title, &v, m.Dir, "")
 			}
+		}
+	}
+	// two plugins serving one contract (docs from files and from Confluence) are named after the plugins
+	titles := map[string]int{}
+	for t := range servedBy {
+		titles[t.title]++
+	}
+	for t, plugin := range servedBy {
+		if titles[t.title] > 1 {
+			t.title = strings.ToUpper(plugin[:1]) + strings.ReplaceAll(plugin[1:], "-", " ")
 		}
 	}
 	if len(ms) > 0 || len(a.Spec.Plugins) > 0 {

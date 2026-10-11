@@ -55,7 +55,12 @@ protected environment asks nothing more.
 ## Terminal UI
 
 Screens load nothing until opened, and only the one showing refreshes. Everything is a sortable grid
-(`ctrl+alt+←→` pick the column, `ctrl+alt+↑↓` order it; `< >`, `alt+↑↓` and `ctrl+shift+arrows` too, or click a header) and works with the mouse. On a Kubernetes
+(`ctrl+shift+←→` pick the column, `ctrl+shift+↑` ascending, `ctrl+shift+↓` descending; `ctrl+alt` or `alt` arrows and `< >` too, or click a header) and works with the mouse.
+Tabs have no numbers: `g` then a letter jumps to one (`?` lists them), `tab`/`shift+tab` cycle, `1-9` still work.
+A right-click opens the screen's actions as a menu where you clicked, with each action's key beside it.
+Opening a document or link (`enter` on a doc, a ticket, a page) lists the apps on this machine that can open
+it: the system's default first, then the others registered for its type (LibreOffice, Kate, …), the browsers, the
+editor in the terminal, and copying the link. On a Kubernetes
 cluster, dangerous changes (stop, deploy, delete, edits) ask first and `enter` confirms; local, docker
 and kind never ask. `?` shows the keys of the current screen.
 Drag over any text (results, queries, test output, the chat) to copy it; the selection stays inside the

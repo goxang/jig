@@ -241,6 +241,10 @@ func (t *viewTab) openRow(m *model, wn *wnode) tea.Cmd {
 			}
 		}
 	}
+	if u, _ := row["url"].(string); strings.Contains(u, "://") {
+		title, _ := row["title"].(string)
+		return m.openWith(title, u)
+	}
 	return nil
 }
 
@@ -261,11 +265,10 @@ func (t *viewTab) openRef(m *model, ref string) tea.Cmd {
 		if err != nil {
 			return statusMsg{text: ref + ": " + err.Error(), err: true}
 		}
-		text := cmp.Or(r.Title, string(r.Ref))
 		if r.URL != "" {
-			text += "  " + r.URL
+			return m.openWith(r.Title, r.URL)()
 		}
-		return statusMsg{text: text}
+		return statusMsg{text: cmp.Or(r.Title, string(r.Ref))}
 	}
 }
 

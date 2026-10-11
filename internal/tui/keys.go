@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -59,8 +60,32 @@ func (m *model) globalKey(s string) (tea.Cmd, bool) {
 	return nil, false
 }
 
-func (m *model) goKey(s string) tea.Cmd {
+// goTargets are goKeys plus, for every other screen, the first free letter of its name.
+func (m *model) goTargets() [][3]string {
+	out := slices.Clone(goKeys)
+	used := map[string]bool{}
+	named := map[string]bool{}
 	for _, g := range goKeys {
+		used[g[0]], named[g[2]] = true, true
+	}
+	for _, t := range m.tabs {
+		name := t.name()
+		if named[name] {
+			continue
+		}
+		for _, r := range strings.ToLower(name) {
+			if k := string(r); r >= 'a' && r <= 'z' && !used[k] {
+				used[k] = true
+				out = append(out, [3]string{k, strings.ToLower(name), name})
+				break
+			}
+		}
+	}
+	return out
+}
+
+func (m *model) goKey(s string) tea.Cmd {
+	for _, g := range m.goTargets() {
 		if g[0] != s {
 			continue
 		}
@@ -79,7 +104,7 @@ func (m *model) goKey(s string) tea.Cmd {
 // whichKey is the box of the pending prefix's keys.
 func (m *model) whichKey() string {
 	var hs [][2]string
-	for _, g := range goKeys {
+	for _, g := range m.goTargets() {
 		hs = append(hs, [2]string{"g " + g[0], g[1]})
 	}
 	return keyHints(hs)
@@ -101,7 +126,7 @@ func (m *model) command(line string) tea.Cmd {
 		m.search()
 		return nil
 	case "menu":
-		m.menu()
+		m.menu(nil)
 		return nil
 	case "go":
 		m.prefix = "g"
@@ -242,25 +267,29 @@ func (m *model) search() {
 	})
 }
 
-// menu is . or right-click: the screen's keys as a list, each one pressed when chosen.
-func (m *model) menu() {
+// menu is . or right-click: the screen's keys as a list, each one pressed when chosen. A right-click
+// opens it as a dropdown where the pointer is, so the eye stays on what was clicked.
+func (m *model) menu(at *[2]int) {
 	t := m.tabs[m.active]
-	var items, desc []string
+	var items, keys []string
+	key := map[string]string{}
 	for _, h := range t.hints() {
-		if strings.ContainsAny(h[0], " /↑↓←→") && h[0] != "/" {
+		if strings.ContainsAny(h[0], " /↑↓←→") && h[0] != "/" || h[1] == "" || key[h[1]] != "" {
 			continue
 		}
-		items, desc = append(items, h[0]), append(desc, h[1])
+		key[h[1]] = h[0]
+		items, keys = append(items, h[1]), append(keys, h[0])
 	}
 	if len(items) == 0 {
 		return
 	}
-	m.pick(t.name(), items, desc, 0, false, func(chosen []string) tea.Cmd {
+	m.pick(t.name(), items, keys, 0, false, func(chosen []string) tea.Cmd {
 		if len(chosen) == 0 {
 			return nil
 		}
-		return t.update(m, keyOf(chosen[0]))
+		return t.update(m, keyOf(key[chosen[0]]))
 	})
+	m.picker.at = at
 }
 
 // keyFor is the preset's key for a command, or "" when it has none.

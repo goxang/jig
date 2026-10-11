@@ -439,13 +439,29 @@ func (p *picker) box(m *model, w, rows, off int, vis []int, sx, sy int) string {
 func (p *picker) dropdown(m *model, base string, h int) string {
 	vis := p.visible()
 	x, y := p.at[0], p.at[1]
-	rows := min(len(vis), max(3, h-y-4))
-	p.off = scroll(p.sel, p.off, rows, len(vis))
-	w := 20
-	for _, i := range vis {
-		w = max(w, lipgloss.Width(p.items[i])+4)
+	extra := 2
+	if p.filter != "" {
+		extra++
 	}
-	w = min(w, m.w-x-4)
+	// a menu opened low on the screen hangs above the pointer rather than shrinking to 3 rows
+	if y+len(vis)+extra > h {
+		y = max(0, h-len(vis)-extra)
+	}
+	rows := min(len(vis), max(3, h-y-extra))
+	p.off = scroll(p.sel, p.off, rows, len(vis))
+	nw, dw := 16, 0
+	for _, i := range vis {
+		nw = max(nw, lipgloss.Width(p.items[i]))
+		if i < len(p.desc) {
+			dw = max(dw, lipgloss.Width(p.desc[i]))
+		}
+	}
+	w := nw + 2
+	if dw > 0 {
+		w += dw + 2
+	}
+	w = min(w, m.w-4)
+	x = max(0, min(x, m.w-w-2))
 	var b strings.Builder
 	if p.filter != "" {
 		b.WriteString(sDim.Render("filter ") + sAmber.Render(p.filter) + "\n")
@@ -459,7 +475,11 @@ func (p *picker) dropdown(m *model, base string, h int) string {
 				mark = sGreen.Render("● ")
 			}
 		}
-		line := padRight(mark+p.items[i], w)
+		line := mark + p.items[i]
+		if i < len(p.desc) && p.desc[i] != "" {
+			line = padRight(line, nw+2) + sDim.Render(p.desc[i])
+		}
+		line = padRight(truncate(line, w), w)
 		if p.off+r == p.sel {
 			line = highlight(sSelected, line, w)
 		} else if m.hovering(p.zx, p.zy+r, w, 1) {
