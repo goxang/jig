@@ -106,7 +106,7 @@ func (t *servicesTab) typing() bool { return false }
 
 func (t *servicesTab) open(m *model) tea.Cmd {
 	t.list = newGrid("svc", col("", 1), col("", 1), col("SERVICE", 48), col("SECTION", 12), col("GROUPS", 16), rcol("READY", 13), rcol("RESTARTS", 8),
-		rcol("CPU", 6), rcol("MEMORY", 7), col("IMAGE", 28), col("MESSAGE", 0))
+		rcol("CPU", 6), rcol("MEMORY", 7), gcol{title: "IMAGE", width: 28, cutLeft: true}, col("MESSAGE", 0))
 	t.list.sortDefault(3, false)
 	t.list.simple = []int{0, 1, 2, 5, 10}
 	t.sections = m.app.Spec.SectionMap()
@@ -656,18 +656,10 @@ func (t *servicesTab) rows(m *model) []grow {
 			mark = sAccent.Render("●")
 		}
 		rows = append(rows, grow{id: st.Service,
-			cells: []string{mark, stateDot(st.State), name, sec, sDim.Render(groups), fmt.Sprintf("%d/%d", st.Ready, st.Desired) + arrow + hpaNote(st), rs, cpuText(cpu), bytesText(mem), tagOf(st.Image), msg},
+			cells: []string{mark, stateDot(st.State), name, sec, sDim.Render(groups), fmt.Sprintf("%d/%d", st.Ready, st.Desired) + arrow + hpaNote(st), rs, cpuText(cpu), bytesText(mem), lastPath(st.Image), msg},
 			keys:  []any{nil, stateRank(st.State), st.Service, t.sectionRank(m, sec, st.Service), groups, float64(st.Ready), float64(restarts), cpu, float64(mem), nil, nil}})
 	}
 	return rows
-}
-
-func tagOf(img string) string {
-	img = lastPath(img)
-	if len(img) > 28 {
-		return "…" + img[len(img)-27:]
-	}
-	return img
 }
 
 func (t *servicesTab) view(m *model, w, h int) string {

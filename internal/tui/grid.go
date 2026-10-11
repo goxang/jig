@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"cmp"
 	"slices"
 	"sort"
 	"strconv"
@@ -8,6 +9,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // grid is a sortable, scrollable, clickable table, htop style: ctrl+alt+←→ pick the sort column, ctrl+alt+↑↓ (or alt+↑↓) order it,
@@ -34,6 +36,8 @@ type gcol struct {
 	title string
 	width int // 0: share what is left
 	right bool
+	// cutLeft keeps a long cell's end (an image's tag), not its start
+	cutLeft bool
 }
 
 type grow struct {
@@ -246,9 +250,9 @@ func (g *grid) widths(w int, show []int) []int {
 	fixed, flex := len(show)-1, 0
 	for _, i := range show {
 		c := g.cols[i]
-		ws[i] = c.width
-		fixed += c.width
-		if c.width == 0 {
+		ws[i] = cmp.Or(gridWidths[g.id+"\x00"+c.title], c.width)
+		fixed += ws[i]
+		if ws[i] == 0 {
 			flex++
 		}
 	}
@@ -293,6 +297,20 @@ func (g *grid) view(m *model, x, y, w, h int, focused bool) string {
 		head = append(head, cell)
 		off += ws[i] + 1
 	}
+	cellX := make([]int, len(g.cols))
+	for k, c := range g.xcol {
+		cellX[c] = g.x0[k]
+	}
+	if m != nil {
+		if m.grids == nil {
+			m.grids = map[string]*grid{}
+		}
+		m.grids[g.id] = g
+		if m.hovering(x, y, w, 1) {
+			// drawn │ gaps show where a column's edge can be dragged
+			head = []string{strings.Join(head, sDim.Render("│"))}
+		}
+	}
 	g.shown = max(0, h-1)
 	g.offset = scroll(g.sel, g.offset, g.shown, len(g.rows))
 	var b strings.Builder
@@ -305,6 +323,12 @@ func (g *grid) view(m *model, x, y, w, h int, focused bool) string {
 			v := ""
 			if j < len(r.cells) {
 				v = printable(r.cells[j])
+			}
+			if m != nil {
+				m.tipFor(v, x+cellX[j], y+1+i-g.offset+m.originY, ws[j])
+			}
+			if c.cutLeft && lipgloss.Width(v) > ws[j] {
+				v = ansi.TruncateLeft(v, lipgloss.Width(v)-ws[j]+1, "…")
 			}
 			if c.right {
 				cells = append(cells, padLeft(v, ws[j]))

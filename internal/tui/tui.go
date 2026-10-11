@@ -10,7 +10,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"github.com/goxang/jig/kernel/jobs"
 	"image/color"
 	"os"
 	"os/exec"
@@ -20,6 +19,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/goxang/jig/kernel/jobs"
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
@@ -177,7 +178,14 @@ type model struct {
 	// drops are the labels of the strips drawn as dropdowns, by zone id
 	drops map[string][]string
 	// hx, hy is the cell under the mouse (-1 when unknown), for hover highlights
-	hx, hy  int
+	hx, hy int
+	// movedAt is the pointer's last move; still once it rested hoverDelay, when tip may show
+	movedAt time.Time
+	still   bool
+	tip     *tooltip
+	colDrag *colDrag
+	// grids are the grids drawn in the last frame, by id, for dragging their columns
+	grids   map[string]*grid
 	tabSpan [][2]int
 	lastHit hit
 	lastAt  time.Time
@@ -907,6 +915,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, func() tea.Msg { return msg.msg }
 	case thenMsg:
 		return m, msg()
+	case hoverMsg:
+		m.still = msg.at.Equal(m.movedAt)
+		return m, nil
 	case tickMsg:
 		m.noticeSpecEdit()
 		cmds := []tea.Cmd{tick(), m.sched.due(m), m.noticePluginDev()}
@@ -1047,7 +1058,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.key(msg)
 	case tea.MouseMsg:
-		return m, m.mouse(mouseOf(msg))
+		e := mouseOf(msg)
+		return m, batch(m.mouse(e), m.moved())
 	}
 	if cmd, ok := m.chatUpdate(msg); ok {
 		return m, cmd
@@ -1062,6 +1074,13 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *model) mouse(e mouseEvent) tea.Cmd {
 	m.hx, m.hy = e.X, e.Y
+	if m.colDrag != nil && e.Action != mousePress {
+		m.dragCol(e)
+		return nil
+	}
+	if e.Action == mousePress && e.Button == tea.MouseLeft && m.startColDrag(e) {
+		return nil
+	}
 	m.pointerAt(e.X, e.Y)
 	if e.Action == mousePress && e.Button == tea.MouseRight && m.picker == nil && m.prompt == nil && m.confirm == nil {
 		e.Button = tea.MouseLeft
@@ -2268,7 +2287,8 @@ func (m *model) render() string {
 	if m.sel != nil && m.sel.dragged {
 		return m.sel.paint()
 	}
-	m.zones = m.zones[:0]
+	m.zones, m.tip = m.zones[:0], nil
+	clear(m.grids)
 	header := m.header()
 	tabs := m.tabBar()
 	footer := m.footer()
@@ -2302,7 +2322,7 @@ func (m *model) render() string {
 	}
 	body = lipgloss.NewStyle().Height(bodyH).MaxHeight(bodyH).Render(body)
 	m.bodyEnd = m.originY + bodyH
-	m.frame = m.markBorder(lipgloss.JoinVertical(lipgloss.Left, header, tabs, body, footer))
+	m.frame = m.drawTip(m.markBorder(lipgloss.JoinVertical(lipgloss.Left, header, tabs, body, footer)))
 	return m.frame
 }
 
@@ -2604,7 +2624,7 @@ func (m *model) helpLines() []string {
 		{". right-click", "this screen's keys as a menu"}, {":plugins", "the plugins in use: info, logs, add, turn on or off, upgrade, remove"},
 		{"⇧←→  tab ⇧tab  1-9 0", "next, previous, nth screen (or click its name; ctrl+k finds one by name)"}, {"ctrl+←→", "switch the sub-tab inside a screen"}, {k("env"), "switch environment"}, {k("namespace"), "switch or create a Kubernetes namespace"}, {k("task"), "run a task (ctrl+o there shows its steps)"},
 		{"↑↓ / wheel", "move"}, {"enter / dbl-click", "open, run"}, {"ctrl+alt+←→  ctrl+alt+↑↓", "sort by the next / previous column; ↑ ascending, ↓ descending (or click a header; also < >, alt+↑↓, ctrl+⇧ arrows)"}, {"+ - z", "expand all, fold all, toggle (trees, dashboard rows)"},
-		{"esc ⌫", "back: closes what is open, then returns to the screen you jumped from"}, {"drag a border", "resize panes (kept for next time; it lights up under the mouse)"}, {"@", "AI chat about this screen (jig ai config sets it up)"}, {"A", "alerts (header badge)"}, {"!", "activity: builds, deploys and tasks you started with their output; x stops one, enter types its input, tab errors, y copies"}, {k("kubeconfig"), "fetch the environment's kubeconfig (Rancher API key, URL or file) into yours"}, {k("envinfo"), "this environment: variables, databases, addresses (↑↓, / searches, e edits a variable)"}, {"ctrl+w", "watch: rebuild and restart services as their sources change (errors in A)"}, {"ctrl+p", "colour theme, previewed as you move (jig theme --save to make your own)"}, {"ctrl+r", "reload jig.yaml after you or the assistant edited it (filters stay)"}, {k("save"), "save this session: jig opens on it from now on, as you leave it, filters included (jig --fresh starts clean)"}, {"M", "mouse on/off (off: select text)"}, {"V", "mode: detailed, simple, software (dev screens) or product (metrics, issues, docs)"}, {"?", "this help"}, {"q  ctrl+c", "quit"},
+		{"esc ⌫", "back: closes what is open, then returns to the screen you jumped from"}, {"drag a border", "resize panes (kept for next time; it lights up under the mouse)"}, {"drag a header │", "resize a table column"}, {"rest on a cell", "its whole text, when cut off"}, {"@", "AI chat about this screen (jig ai config sets it up)"}, {"A", "alerts (header badge)"}, {"!", "activity: builds, deploys and tasks you started with their output; x stops one, enter types its input, tab errors, y copies"}, {k("kubeconfig"), "fetch the environment's kubeconfig (Rancher API key, URL or file) into yours"}, {k("envinfo"), "this environment: variables, databases, addresses (↑↓, / searches, e edits a variable)"}, {"ctrl+w", "watch: rebuild and restart services as their sources change (errors in A)"}, {"ctrl+p", "colour theme, previewed as you move (jig theme --save to make your own)"}, {"ctrl+r", "reload jig.yaml after you or the assistant edited it (filters stay)"}, {k("save"), "save this session: jig opens on it from now on, as you leave it, filters included (jig --fresh starts clean)"}, {"M", "mouse on/off (off: select text)"}, {"V", "mode: detailed, simple, software (dev screens) or product (metrics, issues, docs)"}, {"?", "this help"}, {"q  ctrl+c", "quit"},
 	}
 	var b strings.Builder
 	for _, r := range rows {

@@ -59,6 +59,8 @@ Screens load nothing until opened, and only the one showing refreshes. Everythin
 `shift+←→` (or `tab`/`shift+tab`, `1-9`) switch screens; `ctrl+k` finds one by name. `:plugins` opens the plugins in use
 (info, logs, add, turn on or off, upgrade, remove) until you switch away. When a screen's sub-tabs do not fit, they fold
 into a dropdown (`name ▾ 3 of 12`).
+Resting the pointer on a cut-off cell for half a second shows its whole text; dragging the `│` gap after a
+column's header (it shows while the pointer is on the header row) resizes the column for the session.
 A right-click opens the screen's actions as a menu where you clicked, with each action's key beside it.
 Opening a document or link (`enter` on a doc, a ticket, a page) lists the apps on this machine that can open
 it: the system's default first, then the others registered for its type (LibreOffice, Kate, …), the browsers, the
