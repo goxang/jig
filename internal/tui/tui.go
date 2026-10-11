@@ -1714,19 +1714,6 @@ func (m *model) key(k tea.KeyPressMsg) tea.Cmd {
 			return m.openTab((m.active + 1) % len(m.tabs))
 		case "shift+tab":
 			return m.openTab((m.active + len(m.tabs) - 1) % len(m.tabs))
-		case "1", "2", "3", "4", "5", "6", "7", "8", "9", "0":
-			i := int(s[0]-'0') - 1
-			if s == "0" {
-				i = 9
-			}
-			if i < len(m.tabs) {
-				return m.openTab(i)
-			}
-		case "`":
-			// the eleventh screen has no digit
-			if len(m.tabs) > 10 {
-				return m.openTab(10)
-			}
 		case "esc", "backspace":
 			if f, ok := t.(interface{ clearFilter() bool }); ok && s == "esc" && f.clearFilter() {
 				return nil
@@ -2676,7 +2663,7 @@ func (m *model) helpLines() []string {
 	rows := [][2]string{
 		{":", "command palette, the CLI's grammar: :restart parser, :kv get key, :open Logs"}, {k("search"), "search screens, services, tasks, actions, plugins"},
 		{". right-click", "this screen's keys as a menu"}, {":plugins", "the plugins in use: info, logs, add, turn on or off, upgrade, remove"},
-		{"⇧←→  tab ⇧tab  1-9 0", "next, previous, nth screen (or click its name; ctrl+k finds one by name)"}, {"ctrl+←→", "switch the sub-tab inside a screen"}, {k("env"), "switch environment"}, {k("namespace"), "switch or create a Kubernetes namespace"}, {k("task"), "run a task (ctrl+o there shows its steps)"},
+		{"⇧←→  tab ⇧tab", "next, previous screen (or click its name; ctrl+k finds one by name)"}, {"ctrl+←→", "switch the sub-tab inside a screen"}, {k("env"), "switch environment"}, {k("namespace"), "switch or create a Kubernetes namespace"}, {k("task"), "run a task (ctrl+o there shows its steps)"},
 		{"↑↓ / wheel", "move"}, {"enter / dbl-click", "open, run"}, {"ctrl+alt+←→  ctrl+alt+↑↓", "sort by the next / previous column; ↑ ascending, ↓ descending (or click a header; also < >, alt+↑↓, ctrl+⇧ arrows)"}, {"+ - z", "expand all, fold all, toggle (trees, dashboard rows)"},
 		{"esc ⌫", "back: closes what is open, then returns to the screen you jumped from"}, {"drag a border", "resize panes (kept for next time; it lights up under the mouse)"}, {"drag a header │", "resize a table column"}, {"rest on a cell", "its whole text, when cut off"}, {"@", "AI chat about this screen (jig ai config sets it up)"}, {"A", "alerts (header badge)"}, {"!", "activity: builds, deploys and tasks you started with their output; x stops one, enter types its input, tab errors, y copies"}, {k("kubeconfig"), "fetch the environment's kubeconfig (Rancher API key, URL or file) into yours"}, {k("envinfo"), "this environment: variables, databases, addresses (↑↓, / searches, e edits a variable)"}, {"ctrl+w", "watch: rebuild and restart services as their sources change (errors in A)"}, {"ctrl+p", "colour theme, previewed as you move (jig theme --save to make your own)"}, {"ctrl+r", "reload jig.yaml after you or the assistant edited it (filters stay)"}, {k("save"), "save this session: jig opens on it from now on, as you leave it, filters included (jig --fresh starts clean)"}, {"M", "mouse on/off (off: select text)"}, {"V", "mode: detailed, simple, software (dev screens) or product (metrics, issues, docs)"}, {"?", "this help"}, {"q  ctrl+c", "quit"},
 	}

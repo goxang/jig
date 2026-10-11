@@ -326,7 +326,17 @@ func (t *servicesTab) ops(m *model, key string, names []string) tea.Cmd {
 				return each(names, func(n string) error { return a.Deploy(ctx, n, tag) })
 			})
 		})
-	case "b":
+	case "b", "super+b":
+		if task, ok := m.app.Tasks()["ship"]; ok && len(task.Args) > 0 {
+			args := slices.Clone(task.Args)
+			for i := range args {
+				if args[i].From == "services" {
+					args[i].Default = strings.Join(names, " ")
+				}
+			}
+			m.askTaskArgs("ship", args, nil)
+			return nil
+		}
 		return pickShipServices(m, names)
 	case "l":
 		for i, tb := range m.tabs {

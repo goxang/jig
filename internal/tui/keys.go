@@ -18,7 +18,7 @@ import (
 )
 
 // keyPresets map a key to a global command; keys left out go to the screen. Keys every preset
-// shares (q, @, ?, tab, digits, ...) stay in the global switch.
+// shares (q, @, ?, tab, ...) stay in the global switch.
 var keyPresets = map[string]map[string]string{
 	"jig": {":": "palette", "ctrl+k": "search", "ctrl+e": "env", ".": "menu", "T": "task"},
 	"rig": {"S": "save", "ctrl+e": "envinfo", "ctrl+k": "kubeconfig", "E": "env", "T": "task", "N": "namespace", ":": "palette"},
@@ -117,9 +117,7 @@ func (m *model) command(line string) tea.Cmd {
 		if len(args) > 1 {
 			for i, t := range m.tabs {
 				if v, ok := t.(*viewTab); ok && strings.EqualFold(t.name(), args[0]) {
-					cmd := m.jump(i)
-					v.filterFirst(strings.Join(args[1:], " "))
-					return cmd
+					return batch(m.jump(i), v.lookup(m, strings.Join(args[1:], " ")))
 				}
 			}
 		}

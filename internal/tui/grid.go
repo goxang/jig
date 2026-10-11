@@ -30,6 +30,8 @@ type grid struct {
 	simple []int
 	// want is a row id to select once a set brings it
 	want string
+	// xoff is how far the columns are scrolled sideways; total the width they need, vw what shows
+	xoff, total, vw int
 }
 
 type gcol struct {
@@ -190,6 +192,8 @@ func (g *grid) key(k tea.KeyPressMsg) bool {
 		return true
 	}
 	switch k.String() {
+	case "left", "right":
+		return g.scrollX(k.String() == "right")
 	case "ctrl+alt+right", "ctrl+shift+right", ">":
 		g.sortBy = (g.sortBy + 1) % len(g.cols)
 		g.sortRows()
@@ -210,6 +214,23 @@ func (g *grid) key(k tea.KeyPressMsg) bool {
 		return false
 	}
 	g.remember()
+	return true
+}
+
+// scrollX moves the columns sideways when they are wider than the grid; false (at either end, or
+// when everything fits) lets the arrow go on to move focus.
+func (g *grid) scrollX(right bool) bool {
+	most := g.total - g.vw
+	switch {
+	case most <= 0:
+		return false
+	case right && g.xoff < most:
+		g.xoff = min(most, g.xoff+8)
+	case !right && g.xoff > 0:
+		g.xoff = max(0, g.xoff-8)
+	default:
+		return false
+	}
 	return true
 }
 
@@ -258,25 +279,55 @@ func (g *grid) widths(w int, show []int) []int {
 	}
 	if flex > 0 {
 		each := max(6, (w-fixed)/flex)
+		nat, sum := map[int]int{}, 0
 		for _, i := range show {
 			if ws[i] == 0 {
-				ws[i] = each
+				nat[i] = g.natural(i)
+				sum += nat[i]
+			}
+		}
+		for _, i := range show {
+			if ws[i] != 0 {
+				continue
+			}
+			ws[i] = each
+			if sum > w-fixed && flex > 1 {
+				ws[i] = nat[i]
 			}
 		}
 	}
 	return ws
 }
 
+// natural is the width column c needs for its title and its first rows' cells, at most 40.
+func (g *grid) natural(c int) int {
+	n := lipgloss.Width(g.cols[c].title) + 1
+	for i, r := range g.rows {
+		if i == 200 {
+			break
+		}
+		if c < len(r.cells) {
+			n = max(n, lipgloss.Width(printable(r.cells[c])))
+		}
+	}
+	return max(6, min(n, 40))
+}
+
 // view renders the grid in w×h cells at (x, y) of the tab body and registers its click zones.
 func (g *grid) view(m *model, x, y, w, h int, focused bool) string {
 	show := g.shows(m)
 	ws := g.widths(w, show)
+	g.total, g.vw = len(show)-1, w
+	for _, i := range show {
+		g.total += ws[i]
+	}
+	g.xoff = max(0, min(g.xoff, g.total-w))
 	g.x0, g.xcol = g.x0[:0], g.xcol[:0]
 	var head []string
 	off := 0
 	for _, i := range show {
 		c := g.cols[i]
-		g.x0, g.xcol = append(g.x0, off), append(g.xcol, i)
+		g.x0, g.xcol = append(g.x0, off-g.xoff), append(g.xcol, i)
 		t := c.title
 		if i == g.sortBy {
 			if g.desc {
@@ -314,7 +365,20 @@ func (g *grid) view(m *model, x, y, w, h int, focused bool) string {
 	g.shown = max(0, h-1)
 	g.offset = scroll(g.sel, g.offset, g.shown, len(g.rows))
 	var b strings.Builder
-	b.WriteString(strings.Join(head, " "))
+	clip := func(l string) string {
+		if g.total <= w {
+			return l
+		}
+		return ansi.Cut(l, g.xoff, g.xoff+w)
+	}
+	hl := clip(strings.Join(head, " "))
+	if g.xoff > 0 {
+		hl = sAmber.Render("‹") + ansi.Cut(hl, 1, w)
+	}
+	if g.xoff < g.total-w {
+		hl = ansi.Cut(hl, 0, w-1) + sAmber.Render("›")
+	}
+	b.WriteString(hl)
 	for i := g.offset; i < len(g.rows) && i-g.offset < g.shown; i++ {
 		r := g.rows[i]
 		cells := make([]string, 0, len(show))
@@ -336,7 +400,7 @@ func (g *grid) view(m *model, x, y, w, h int, focused bool) string {
 				cells = append(cells, padRight(v, ws[j]))
 			}
 		}
-		line := strings.Join(cells, " ")
+		line := clip(strings.Join(cells, " "))
 		if i != g.sel && m.hovering(x, y+1+i-g.offset, w, 1) {
 			line = highlight(sHover, line, w)
 		} else if i == g.sel && focused {

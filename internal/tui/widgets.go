@@ -17,6 +17,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/goxang/jig/core"
 	"github.com/goxang/jig/internal/viz"
@@ -379,6 +380,13 @@ func (t *viewTab) tableBody(m *model, wn *wnode, x, y, w, h int, focused bool) s
 				}
 			}
 			cells[c] = s
+		}
+		if mf := markField(wn); mf != "" && len(cells) > 0 {
+			if wn.marks[rowMark(wn, i, mf)] {
+				cells[0] = sAccent.Render("● ") + cells[0]
+			} else {
+				cells[0] = "  " + cells[0]
+			}
 		}
 		if fo != nil && len(cells) > 0 {
 			id, mark := fo.byRow[strconv.Itoa(i)], "  "
@@ -1055,6 +1063,9 @@ func cardKey(v any) any {
 	return s
 }
 
+// cardH is the lines a board card takes: its key and meta, then the title over two lines.
+const cardH = 3
+
 // boardWidget is Kanban: a column per value of by: (in columns: order), a card per row showing
 // card: (else the title field, else the first), led by its key: field when the frame has one.
 func boardWidget(wn *wnode, w, h int, focused bool) string {
@@ -1067,6 +1078,12 @@ func boardWidget(wn *wnode, w, h int, focused bool) string {
 		}
 	}
 	key := cmp.Or(view.Prop(n, "key"), "key")
+	var metas []string
+	if ms, ok := n.Props["meta"].([]any); ok {
+		for _, x := range ms {
+			metas = append(metas, fmt.Sprint(x))
+		}
+	}
 	st, _ := wn.st.(*boardState)
 	if st == nil {
 		st = &boardState{off: map[string]int{}, cur: -1, sortBy: -1}
@@ -1142,7 +1159,7 @@ func boardWidget(wn *wnode, w, h int, focused bool) string {
 		}
 		lines := []string{head + " ", sDim.Render(strings.Repeat("─", cw-1)) + " "}
 		ids := cards[c]
-		vis := h - 2
+		vis := max(1, (h-2)/cardH)
 		off := st.off[c]
 		if ci == st.col {
 			off = scroll(st.card, off, vis, len(ids))
@@ -1150,20 +1167,42 @@ func boardWidget(wn *wnode, w, h int, focused bool) string {
 		}
 		for k := off; k < min(len(ids), off+vis); k++ {
 			i := ids[k]
-			text := str(rows[i][card])
-			if id := str(rows[i][key]); id != "" && key != card {
-				text = sDim.Render(id) + " " + text
-			}
-			line := padRight(" "+text, cw-1)
-			if ci == st.col && k == st.card {
-				st.cur = i
-				if focused {
-					line = sCursor.Render(padRight(" "+stripANSI(text), cw-1))
-				} else {
-					line = sSelected.Render(padRight(" "+stripANSI(text), cw-1))
+			title := strings.Join(strings.Fields(str(rows[i][card])), " ")
+			head := str(rows[i][key])
+			var meta []string
+			for _, mf := range metas {
+				if v := str(rows[i][mf]); v != "" {
+					meta = append(meta, v)
 				}
 			}
-			lines = append(lines, line+" ")
+			if len(meta) > 0 {
+				head = strings.TrimSpace(head + "  " + strings.Join(meta, " · "))
+			}
+			body := strings.Split(ansi.Wrap(title, cw-3, ""), "\n")
+			if len(body) > 2 {
+				body = []string{body[0], ansi.Truncate(body[1], cw-4, "") + "…"}
+			}
+			for len(body) < 2 {
+				body = append(body, "")
+			}
+			card3 := []string{truncate(head, cw-3), body[0], body[1]}
+			for n, l := range card3 {
+				line := " " + l
+				switch {
+				case ci == st.col && k == st.card && focused:
+					line = sCursor.Render(padRight(" "+stripANSI(l), cw-1))
+				case ci == st.col && k == st.card:
+					line = sSelected.Render(padRight(" "+stripANSI(l), cw-1))
+				case n == 0:
+					line = sDim.Render(padRight(line, cw-1))
+				default:
+					line = padRight(line, cw-1)
+				}
+				lines = append(lines, line+" ")
+			}
+			if ci == st.col && k == st.card {
+				st.cur = i
+			}
 		}
 		for len(lines) < h {
 			lines = append(lines, strings.Repeat(" ", cw))

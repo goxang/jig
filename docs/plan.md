@@ -634,7 +634,7 @@ state, and ask when policy says so. Symbols are global modes.
 |---|---|
 | `?` `:` `/` `@` `!` | help · command palette (**same grammar as the CLI**: `:restart parser`) · filter · ask the AI about what is shown · jobs and activity |
 | `ctrl+k` | search everything: resources, refs, actions, views, docs, plugins |
-| `1`–`9`, `0`, `tab`/`shift+tab` | screens · next and previous screen |
+| `tab`/`shift+tab` | screens · next and previous screen |
 | `[` `]` | sub-tabs |
 | `g` then a letter | go to, with the selection: `g l` logs, `g m` metrics, `g t` traces, `g d` data, `g s` services, `g g` top, `G` bottom |
 | `enter` `esc` `⌫` | open · back (jump history) |

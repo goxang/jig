@@ -57,7 +57,7 @@ protected environment asks nothing more.
 
 Screens load nothing until opened, and only the one showing refreshes. Everything is a sortable grid
 (`ctrl+alt+←→` pick the column, `ctrl+alt+↑` ascending, `ctrl+alt+↓` descending; `ctrl+shift` or `alt` arrows and `< >` too, or click a header) and works with the mouse.
-`shift+←→` (or `tab`/`shift+tab`, `1-9`) switch screens; `ctrl+k` finds one by name. `:plugins` opens the plugins in use
+`shift+←→` (or `tab`/`shift+tab`) switch screens; `ctrl+k` finds one by name. `:plugins` opens the plugins in use
 (info, logs, add, turn on or off, upgrade, remove) until you switch away. When a screen's sub-tabs do not fit, they fold
 into a dropdown (`name ▾ 3 of 12`).
 Resting the pointer on a cut-off cell for half a second shows its whole text; dragging the `│` gap after a
@@ -97,7 +97,7 @@ or shift+wheel, or by dragging past its edge). Copies go to the system clipboard
 | Tests | suites as tabs and the `go test` command they run; `r` runs, `f` reruns failures, `.` the selected test, `O` sets flags (race, cover, -run, …); a tree of packages and tests (`i` cycles failed/passed/skipped/running), its output beside it, benchmarks with the change since the last run, saved runs (`h`) |
 
 `jig` opens on the environment it last showed (`-e` or `$JIG_ENV` picks another). Screens switch with
-`1`-`0` and `` ` `` (the eleventh), `shift+←→` or `alt+←→`, or a click on their name; tabs inside a screen
+`tab`/`shift+tab`, `shift+←→` or `alt+←→`, or a click on their name (digits do not switch: they type); tabs inside a screen
 (dashboards, apps/infra, objects/folders, saved/history, suites, filters) switch with `ctrl+←→` and are clickable too. A screen
 shows only when jig.yaml gives it something (no `kv` component, no KV screen); `ui: { tabs: [services,
 logs, data, tests] }` picks the screens and their order, and the number keys follow it.

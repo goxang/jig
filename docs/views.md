@@ -53,7 +53,7 @@ off up to a minute and keep the last frame. `r` refetches.
 
 | widget | props |
 |---|---|
-| `table` | `columns: [{name, color, ref, width, hide}]`, `actions`; enter opens a row's ref, `y`/`Y` copy, `/` filters (with no match, enter asks a source that takes `query` for more; esc undoes it, and a changed query is kept only by a saved session). `fold: <parent field>` makes rows with `id` and that field a tree: `←→` space fold, `+ - z` all |
+| `table` | `columns: [{name, color, ref, width, hide}]`, `actions`; enter opens a row's ref, `y`/`Y` copy, `/` filters (with no match, enter asks a source that takes `query` for more; esc undoes it, and a changed query is kept only by a saved session). `fold: <parent field>` makes rows with `id` and that field a tree: `←→` space fold, `+ - z` all. `mark: <field>` lets space (ctrl+a: all) pick rows by that column; an action whose args use `${row.x}` then runs on every picked row (esc clears); ←→ scroll columns wider than the table |
 | `list` `kv` `tree` | the frame as lines, key/value pairs, a JSON tree |
 | `stat` `gauge` `progress` | `value`, `unit`, `min`, `max`, `thresholds`, `color` |
 | `bar` `sparkline` `chart` `heatmap` | `series`, `time`, `value`, `unit`, `colors` |

@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -71,7 +72,11 @@ type wnode struct {
 	// matches is the rows the table showed under filter; base the binding before a server search replaced it
 	matches int
 	fold    *tableFold
-	base    *protocol.Binding
+	// marks are the rows picked with space, by their mark: field; actions then run on each
+	marks map[string]bool
+	// expect is what a lookup asked for: when it arrives empty the screen says it was not found
+	expect string
+	base   *protocol.Binding
 	// preview is the pane beside a table or board showing its selected row (preview: prop)
 	preview *wnode
 	// bound is the binding a preview pane last fetched, to drop answers for rows left behind; tpl
@@ -119,6 +124,10 @@ func (t *viewTab) typing() bool {
 }
 
 func (t *viewTab) clearFilter() bool {
+	if t.focus != nil && t.focus.filter == "" && len(t.focus.marks) > 0 {
+		clear(t.focus.marks)
+		return true
+	}
 	if t.focus == nil || t.focus.filter == "" && t.focus.base == nil {
 		return false
 	}
@@ -369,6 +378,9 @@ func (t *viewTab) update(m *model, msg tea.Msg) tea.Cmd {
 		if msg.n.bound != "" && msg.n.bound != msg.key {
 			return nil
 		}
+		if wn := msg.n; (wn.base != nil || wn.expect != "") && wn.n.Bind != nil && msg.key != view.Key(*wn.n.Bind) {
+			return nil
+		}
 		msg.n.loading = false
 		if msg.err != nil && msg.t.ctx.Err() != nil {
 			return nil
@@ -376,6 +388,16 @@ func (t *viewTab) update(m *model, msg tea.Msg) tea.Cmd {
 		msg.n.err = msg.err
 		if msg.f != nil || msg.err == nil {
 			msg.n.frame = msg.f
+		}
+		if q := msg.n.expect; q != "" {
+			msg.n.expect = ""
+			switch {
+			case msg.err != nil:
+			case msg.f == nil || frames.Len(msg.f) == 0:
+				m.setStatus("not found: "+q+" ("+t.title+")", true)
+			default:
+				msg.n.previewOff = false
+			}
 		}
 		return t.syncPreviews()
 	case viewStreamMsg:
@@ -509,6 +531,12 @@ func (t *viewTab) keyFocused(m *model, k tea.KeyPressMsg) tea.Cmd {
 			return nil
 		}
 	}
+	if wn := t.focus; wn != nil && markField(wn) != "" && t.markKey(wn, k.String()) {
+		return nil
+	}
+	if g, ok := t.focusGrid(); ok && (k.String() == "left" || k.String() == "right") && g.scrollX(k.String() == "right") {
+		return nil
+	}
 	switch k.String() {
 	case "left", "right":
 		t.moveFocus(map[string]int{"left": -1, "right": 1}[k.String()])
@@ -539,6 +567,82 @@ func (t *viewTab) keyFocused(m *model, k tea.KeyPressMsg) tea.Cmd {
 		return cmd
 	}
 	return t.widgetKey(m, t.focus, k)
+}
+
+// markField is the column a table's rows are picked by (mark: path); empty when it takes no marks.
+func markField(wn *wnode) string {
+	f, _ := wn.n.Props["mark"].(string)
+	return f
+}
+
+func rowMark(wn *wnode, i int, field string) string {
+	return fmt.Sprint(frames.Row(wn.frame, i)[field])
+}
+
+// markKey picks rows: space marks the selected one and steps down, ctrl+a marks or clears every row shown.
+func (t *viewTab) markKey(wn *wnode, k string) bool {
+	g, ok := wn.st.(*grid)
+	if !ok || wn.frame == nil || (k != "space" && k != "ctrl+a") || wn.fold != nil {
+		return false
+	}
+	field := markField(wn)
+	if wn.marks == nil {
+		wn.marks = map[string]bool{}
+	}
+	toggle := func(r grow) {
+		i, err := strconv.Atoi(r.id)
+		if err != nil || i >= frames.Len(wn.frame) {
+			return
+		}
+		key := rowMark(wn, i, field)
+		if wn.marks[key] {
+			delete(wn.marks, key)
+		} else {
+			wn.marks[key] = true
+		}
+	}
+	if k == "ctrl+a" {
+		all := true
+		for _, r := range g.rows {
+			if i, err := strconv.Atoi(r.id); err == nil && i < frames.Len(wn.frame) && !wn.marks[rowMark(wn, i, field)] {
+				all = false
+			}
+		}
+		for _, r := range g.rows {
+			if i, err := strconv.Atoi(r.id); err == nil && i < frames.Len(wn.frame) && wn.marks[rowMark(wn, i, field)] == all {
+				toggle(r)
+			}
+		}
+		return true
+	}
+	if r, ok := g.current(); ok {
+		toggle(r)
+		g.sel = min(g.sel+1, len(g.rows)-1)
+	}
+	return true
+}
+
+// markedRows are the picked rows in frame order, or nothing when none is.
+func (t *viewTab) markedRows(wn *wnode) []map[string]any {
+	field := markField(wn)
+	if field == "" || len(wn.marks) == 0 || wn.frame == nil {
+		return nil
+	}
+	var out []map[string]any
+	for i := range frames.Len(wn.frame) {
+		if r := frames.Row(wn.frame, i); wn.marks[fmt.Sprint(r[field])] {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+func (t *viewTab) focusGrid() (*grid, bool) {
+	if t.focus == nil {
+		return nil, false
+	}
+	g, ok := t.focus.st.(*grid)
+	return g, ok
 }
 
 // tabsOf is the tabs widget that holds wn, else the first one showing.
@@ -592,6 +696,12 @@ func (t *viewTab) rowAction(m *model, wn *wnode, key string) (tea.Cmd, bool) {
 		}
 		row := t.currentRow(wn)
 		if c, ok := am["command"].(string); ok {
+			for _, ref := range rowRefs.FindAllStringSubmatch(c, -1) {
+				if v, has := row[ref[1]]; !has || fmt.Sprint(v) == "" || v == nil {
+					m.setStatus(fmt.Sprintf("%s: this row has no %s", cmp.Or(fmt.Sprint(am["name"]), key), ref[1]), true)
+					return nil, true
+				}
+			}
 			label, line := fmt.Sprint(am["name"]), fmt.Sprint(expandRow(c, row))
 			if danger, _ := am["danger"].(bool); danger {
 				m.confirm = &confirm{text: label + ": jig " + line + "?", run: func() tea.Msg { return commandMsg(line) }}
@@ -616,7 +726,26 @@ func (t *viewTab) rowAction(m *model, wn *wnode, key string) (tea.Cmd, bool) {
 			c.input.CursorEnd()
 			return nil, true
 		}
-		return t.fill(m, wn, label, args, row, func(a protocol.Args) tea.Cmd { return t.run(m, label, name, a) }), true
+		marked := t.markedRows(wn)
+		if len(marked) == 0 || !usesRow(am["args"]) {
+			return t.fill(m, wn, label, args, row, func(a protocol.Args) tea.Cmd { return t.run(m, label, name, a) }), true
+		}
+		raw, _ := am["args"].(map[string]any)
+		label += fmt.Sprintf(" (%d marked)", len(marked))
+		return t.fill(m, wn, label, args, marked[0], func(a protocol.Args) tea.Cmd {
+			list := make([]protocol.Args, len(marked))
+			for i, r := range marked {
+				list[i] = protocol.Args{}
+				for k, v := range a {
+					if rv, ok := raw[k].(string); ok && strings.Contains(rv, "${row.") {
+						v = expandRow(rv, r)
+					}
+					list[i][k] = v
+				}
+			}
+			clear(wn.marks)
+			return t.run(m, label, name, list...)
+		}), true
 	}
 	return nil, false
 }
@@ -680,14 +809,28 @@ func subject(row map[string]any) string {
 }
 
 // run runs an action through the Engine, so policy, confirmation and audit apply.
-func (t *viewTab) run(m *model, label, action string, args protocol.Args) tea.Cmd {
+func (t *viewTab) run(m *model, label, action string, list ...protocol.Args) tea.Cmd {
 	e := m.eng()
-	run := func(ctx context.Context) error {
-		_, res, err := e.Run(ctx, action, args, api.RunOpts{})
-		if err == nil && res != nil && res.Message != "" {
-			program.Send(statusMsg{text: res.Message})
+	args := list[0]
+	for _, a := range list {
+		for k, v := range a {
+			if s, ok := v.(string); ok && (strings.HasPrefix(s, "${ask") || strings.HasPrefix(s, "${pick:") || strings.Contains(s, "${row.")) {
+				m.setStatus(fmt.Sprintf("%s not run: %s still reads %q", label, k, s), true)
+				return nil
+			}
 		}
-		return err
+	}
+	run := func(ctx context.Context) error {
+		for _, args := range list {
+			_, res, err := e.Run(ctx, action, args, api.RunOpts{})
+			if err != nil {
+				return err
+			}
+			if res != nil && res.Message != "" {
+				program.Send(statusMsg{text: res.Message})
+			}
+		}
+		return nil
 	}
 	if a, ok := e.Action(action); ok && a.Effect == protocol.EffectRead {
 		return m.do(label, run)
@@ -710,6 +853,19 @@ func (t *viewTab) run(m *model, label, action string, args protocol.Args) tea.Cm
 		}
 	}
 	return m.actIf(danger || m.needsConfirm(false), label, refresh)
+}
+
+var rowRefs = regexp.MustCompile(`\$\{row\.([a-zA-Z0-9_]+)\}`)
+
+// usesRow is args mentioning ${row.x}: only those can differ between marked rows.
+func usesRow(args any) bool {
+	m, _ := args.(map[string]any)
+	for _, v := range m {
+		if s, ok := v.(string); ok && strings.Contains(s, "${row.") {
+			return true
+		}
+	}
+	return false
 }
 
 // unserved is an action of a plugin not in use, so a view can offer gitlab.scm.open and
@@ -783,6 +939,9 @@ func (t *viewTab) hints() [][2]string {
 		switch view.Kind(t.focus.n) {
 		case "table":
 			h = append(h, [2]string{"enter", "open"}, [2]string{"/", "filter"}, [2]string{"y Y", "copy"})
+			if markField(t.focus) != "" {
+				h = append(h, [2]string{"space ctrl+a", "mark rows"})
+			}
 		case "board":
 			h = append(h, [2]string{"/", "filter"}, [2]string{"< > alt+↑↓", "sort"})
 		case "terminal":
@@ -1225,6 +1384,34 @@ func (t *viewTab) filterFirst(q string) {
 	if target != nil {
 		target.filter, t.focus = q, target
 	}
+}
+
+// lookup finds words on this screen: its Search tab asks the server (an issue key, a title), else the
+// shown table is filtered. Nothing found says so in the status bar.
+func (t *viewTab) lookup(m *model, words string) tea.Cmd {
+	if t.root == nil {
+		t.build()
+	}
+	var tb, target *wnode
+	t.walkAll(func(wn *wnode) {
+		if view.Kind(wn.n) == "tabs" && tb == nil {
+			tb = wn
+		}
+	})
+	if tb != nil {
+		for i, k := range tb.kids {
+			if searchable(k) && (target == nil || strings.EqualFold(view.Prop(k.n, "title"), "search")) {
+				tb.tab, target = i, k
+			}
+		}
+	}
+	if target == nil {
+		t.filterFirst(words)
+		return nil
+	}
+	t.focus, target.expect = target, words
+	setQuery(target, words)
+	return t.load(target)
 }
 
 // filterable are the widgets / filters.
