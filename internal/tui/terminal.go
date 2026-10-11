@@ -32,10 +32,13 @@ type terminal struct {
 	keep  bool
 	input bool
 
-	emu    *vt.SafeEmulator
-	pty    *os.File
-	cmd    *exec.Cmd
-	w, h   int
+	emu  *vt.SafeEmulator
+	pty  *os.File
+	cmd  *exec.Cmd
+	w, h int
+	// x, y is the pane's top-left cell on screen, for mouse reports
+	x, y   int
+	mouse  atomic.Bool
 	exited atomic.Bool
 	err    error
 	// scroll is lines up into the scrollback
@@ -87,7 +90,19 @@ func (t *terminal) start(w, h int) error {
 	t.w, t.h = w, h
 	t.emu = vt.NewSafeEmulator(w, h)
 	t.emu.SetScrollbackSize(scrollback)
-	t.emu.SetCallbacks(vt.Callbacks{CursorVisibility: func(v bool) { t.hidden.Store(!v) }})
+	t.emu.SetCallbacks(vt.Callbacks{
+		CursorVisibility: func(v bool) { t.hidden.Store(!v) },
+		EnableMode: func(m ansi.Mode) {
+			if mouseMode(m) {
+				t.mouse.Store(true)
+			}
+		},
+		DisableMode: func(m ansi.Mode) {
+			if mouseMode(m) {
+				t.mouse.Store(false)
+			}
+		},
+	})
 	t.cmd = exec.Command(t.argv[0], t.argv[1:]...)
 	t.cmd.Dir = t.dir
 	t.cmd.Env = append(append(os.Environ(), "TERM=xterm-256color", "COLORTERM=truecolor"), t.env...)
@@ -164,9 +179,32 @@ func (t *terminal) close() {
 	t.input = false
 }
 
-// ponytail: keys and paste only; the wheel scrolls jig's scrollback, clicks are not sent as SGR mouse
-// reports, so mouse-driven programs (htop clicks, vim mouse=a) need the keyboard. Add pane-local
-// SGR encoding when someone asks.
+func mouseMode(m ansi.Mode) bool {
+	switch m {
+	case ansi.ModeMouseX10, ansi.ModeMouseNormal, ansi.ModeMouseHighlight, ansi.ModeMouseButtonEvent, ansi.ModeMouseAnyEvent:
+		return true
+	}
+	return false
+}
+
+// sendMouse reports e to a program that asked for the mouse, when it falls inside the pane.
+func (t *terminal) sendMouse(e mouseEvent) bool {
+	x, y := e.X-t.x, e.Y-t.y
+	if t.emu == nil || t.exited.Load() || !t.mouse.Load() || x < 0 || y < 0 || x >= t.w || y >= t.h {
+		return false
+	}
+	m := uv.Mouse{X: x, Y: y, Button: e.Button, Mod: e.Mod}
+	switch e.Action {
+	case mouseRelease:
+		t.emu.SendMouse(uv.MouseReleaseEvent(m))
+	case mouseMotion:
+		t.emu.SendMouse(uv.MouseMotionEvent(m))
+	default:
+		t.emu.SendMouse(uv.MouseClickEvent(m))
+	}
+	return true
+}
+
 func (t *terminal) key(k tea.KeyPressMsg) {
 	if t.emu == nil || t.exited.Load() {
 		return
@@ -236,7 +274,7 @@ func (t *terminal) lines() []string {
 	return screen
 }
 
-func (t *viewTab) terminalBody(m *model, wn *wnode, w, h int, focused bool) string {
+func (t *viewTab) terminalBody(m *model, wn *wnode, x, y, w, h int, focused bool) string {
 	term, _ := wn.st.(*terminal)
 	if term == nil {
 		nt, err := newTerminal(wn.n, m.app.Spec.Dir, t.dir)
@@ -255,6 +293,7 @@ func (t *viewTab) terminalBody(m *model, wn *wnode, w, h int, focused bool) stri
 		}
 	}
 	term.pending.Store(false)
+	term.x, term.y = x, y+m.originY
 	term.resize(w, h)
 	if !focused {
 		term.input = false

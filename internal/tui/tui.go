@@ -1033,6 +1033,11 @@ func (m *model) mouse(e mouseEvent) tea.Cmd {
 			return nil
 		}
 	}
+	if t, ok := m.tabs[m.active].(*viewTab); ok && m.picker == nil && m.confirm == nil && m.prompt == nil {
+		if term, ok := t.focusTerm(); ok && term.input && term.sendMouse(e) {
+			return nil
+		}
+	}
 	if e.Action == mousePress && e.Button == tea.MouseLeft && e.Y != 1 {
 		m.selectStart(e.X, e.Y)
 	}

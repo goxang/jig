@@ -127,7 +127,7 @@ func (t *viewTab) leaf(m *model, wn *wnode, x, y, w, h int, focused bool) string
 	case "board":
 		return boardWidget(wn, w, h, focused)
 	case "terminal":
-		return t.terminalBody(m, wn, w, h, focused)
+		return t.terminalBody(m, wn, x, y, w, h, focused)
 	case "canvas":
 		return t.canvasBody(m, wn, w, h)
 	}

@@ -37,3 +37,34 @@ func TestTerminalRunsAProgram(t *testing.T) {
 		t.Fatalf("screen: %q", lines)
 	}
 }
+
+func TestTerminalReportsTheMouse(t *testing.T) {
+	cmd := `printf '\033[?1000h\033[?1006hready\n'; stty raw -echo; head -c 9 | od -c | head -1`
+	term, err := newTerminal(protocol.Node{Widget: "terminal", Props: protocol.Args{"command": cmd}}, t.TempDir(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := term.start(40, 6); err != nil {
+		t.Fatal(err)
+	}
+	defer term.close()
+	term.x, term.y = 10, 5
+	screen := func(want string) string {
+		for deadline := time.Now().Add(3 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
+			if s := strings.Join(term.lines(), "\n"); strings.Contains(s, want) {
+				return s
+			}
+		}
+		return strings.Join(term.lines(), "\n")
+	}
+	screen("ready")
+	if term.sendMouse(mouseEvent{Mouse: tea.Mouse{X: 9, Y: 5}}) {
+		t.Error("a click left of the pane went in")
+	}
+	if !term.sendMouse(mouseEvent{Mouse: tea.Mouse{X: 12, Y: 8, Button: tea.MouseLeft}}) {
+		t.Fatal("a click in the pane did not go in")
+	}
+	if s := screen("<   0   ;   3   ;   4"); !strings.Contains(s, "<   0   ;   3   ;   4") {
+		t.Fatalf("no SGR report: %q", s)
+	}
+}

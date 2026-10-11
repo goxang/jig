@@ -58,7 +58,7 @@ off up to a minute and keep the last frame. `r` refetches.
 | `calendar` | `time`; the month, with a count on each day that has events |
 | `board` | `by` (the column field), `card` (the title field), `columns` |
 | `form` | `schema`, or `action` (its args), `submit` |
-| `terminal` | `command` (string or list; default `$SHELL`), `dir` (default the project; relative to the view's own folder), `env`, `keep` (runs while hidden). Keys go to the program; ctrl+] leaves |
+| `terminal` | `command` (string or list; default `$SHELL`), `dir` (default the project; relative to the view's own folder), `env`, `keep` (runs while hidden). Keys, and clicks when the program asks for the mouse, go to the program; ctrl+] leaves |
 | `canvas` | drawn by `plugin` through `widget.render` |
 
 `widget: calendar@2` asks for a version; a jig without it, or without the widget, renders `fallback:`
