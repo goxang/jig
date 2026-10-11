@@ -55,10 +55,14 @@ off up to a minute and keep the last frame. `r` refetches.
 | `text` `markdown` `code` `diff` | `text`, `file`, or the frame |
 | `logs` | a stream of lines; `stream: true` |
 | `waterfall` `timeline` `graph` | spans, events, nodes and edges |
+| `calendar` | `time`; the month, with a count on each day that has events |
 | `board` | `by` (the column field), `card` (the title field), `columns` |
 | `form` | `schema`, or `action` (its args), `submit` |
 | `terminal` | `command` (string or list; default `$SHELL`), `dir` (default the project; relative to the view's own folder), `env`, `keep` (runs while hidden). Keys go to the program; ctrl+] leaves |
 | `canvas` | drawn by `plugin` through `widget.render` |
+
+`widget: calendar@2` asks for a version; a jig without it, or without the widget, renders `fallback:`
+(another widget) instead. Plugins get the host's widget versions at `initialize`.
 
 Colours are theme tokens: `ok`, `warn`, `err`, `info`, `accent`, `muted`, `border`, `fg`, `series1`…
 

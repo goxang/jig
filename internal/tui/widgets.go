@@ -64,6 +64,13 @@ func (t *viewTab) leaf(m *model, wn *wnode, x, y, w, h int, focused bool) string
 	if n.Bind != nil && n.Bind.Source != "" && f == nil && !needsNoData[view.Kind(n)] {
 		return sDim.Render("loading…")
 	}
+	if !view.Supported(n) {
+		if n.Fallback != nil {
+			fb := &wnode{n: *n.Fallback, frame: f, err: wn.err, id: wn.id}
+			return t.leaf(m, fb, x, y, w, h, focused)
+		}
+		return sDim.Render("no widget " + n.Widget + " in this jig")
+	}
 	switch view.Kind(n) {
 	case "table":
 		return t.tableBody(m, wn, x, y, w, h, focused)
@@ -115,6 +122,8 @@ func (t *viewTab) leaf(m *model, wn *wnode, x, y, w, h int, focused bool) string
 		return graphWidget(f, n, w, h)
 	case "timeline":
 		return timelineWidget(f, n, w, h, scrollOf(wn))
+	case "calendar":
+		return calendarWidget(f, n, w, time.Now())
 	case "board":
 		return boardWidget(wn, w, h, focused)
 	case "terminal":
@@ -122,11 +131,7 @@ func (t *viewTab) leaf(m *model, wn *wnode, x, y, w, h int, focused bool) string
 	case "canvas":
 		return t.canvasBody(m, wn, w, h)
 	}
-	if n.Fallback != nil {
-		fb := &wnode{n: *n.Fallback, frame: f, err: wn.err, id: wn.id}
-		return t.leaf(m, fb, x, y, w, h, focused)
-	}
-	return sDim.Render("no widget " + n.Widget + " in this jig")
+	return ""
 }
 
 // needsNoData are widgets that draw without a frame.
@@ -859,6 +864,50 @@ func timelineWidget(f *protocol.Frame, n protocol.Node, w, h, off int) string {
 		return sDim.Render("nothing yet")
 	}
 	return strings.Join(out, "\n")
+}
+
+// calendarWidget is the month of now as a grid, Monday first; days with events show their count.
+func calendarWidget(f *protocol.Frame, n protocol.Node, w int, now time.Time) string {
+	tf := cmp.Or(view.Prop(n, "time"), "time")
+	now = now.Local()
+	first := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.Local)
+	count := map[int]int{}
+	for _, r := range frames.Rows(f) {
+		if t := toTime(r[tf]).Local(); t.Year() == now.Year() && t.Month() == now.Month() {
+			count[t.Day()]++
+		}
+	}
+	cw := max(4, min(10, w/7))
+	cell := func(s string) string { return lipgloss.PlaceHorizontal(cw, lipgloss.Left, s) }
+	head := []string{lipgloss.PlaceHorizontal(cw*7, lipgloss.Center, sAccent.Render(now.Format("January 2006")))}
+	var days []string
+	for _, d := range []string{"Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"} {
+		days = append(days, cell(sDim.Render(d)))
+	}
+	head = append(head, strings.Join(days, ""))
+	row := make([]string, (int(first.Weekday())+6)%7)
+	for i := range row {
+		row[i] = cell("")
+	}
+	for d := 1; d <= first.AddDate(0, 1, -1).Day(); d++ {
+		s := fmt.Sprintf("%2d", d)
+		switch {
+		case d == now.Day():
+			s = lipgloss.NewStyle().Bold(true).Reverse(true).Render(s)
+		case count[d] == 0:
+			s = sDim.Render(s)
+		}
+		if count[d] > 0 {
+			s += sAccent.Render(fmt.Sprintf("•%d", count[d]))
+		}
+		if row = append(row, cell(s)); len(row) == 7 {
+			head, row = append(head, strings.Join(row, "")), nil
+		}
+	}
+	if len(row) > 0 {
+		head = append(head, strings.Join(row, ""))
+	}
+	return strings.Join(head, "\n")
 }
 
 // boardWidget is Kanban: a column per value of by: (in columns: order), a card per row showing

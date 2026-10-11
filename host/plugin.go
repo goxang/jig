@@ -26,6 +26,7 @@ import (
 	"github.com/goxang/jig/kernel/events"
 	"github.com/goxang/jig/kernel/identity"
 	"github.com/goxang/jig/kernel/jobs"
+	"github.com/goxang/jig/kernel/view"
 	"github.com/goxang/jig/protocol"
 	"github.com/goxang/jig/protocol/rpc"
 )
@@ -142,8 +143,9 @@ func (p *Plugin) handshake(ctx context.Context, c *rpc.Conn) error {
 	}
 	var ir protocol.InitializeResult
 	err := c.Call(ctx, protocol.MethodInitialize, protocol.InitializeParams{
-		Host:      protocol.HostInfo{Name: "jig", Version: Version},
-		Protocols: []string{protocol.Version},
+		Host:         protocol.HostInfo{Name: "jig", Version: Version},
+		Protocols:    []string{protocol.Version},
+		Capabilities: &protocol.HostCapabilities{Widgets: view.Widgets},
 	}, &ir)
 	if err != nil {
 		return err

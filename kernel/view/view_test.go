@@ -133,3 +133,11 @@ func TestFetcherSharesCachesAndBacksOff(t *testing.T) {
 		t.Fatalf("after backoff: %v %d", err, calls.Load())
 	}
 }
+
+func TestSupported(t *testing.T) {
+	for w, want := range map[string]bool{"calendar": true, "calendar@1": true, "calendar@2": false, "table@x": false, "agenda": false} {
+		if got := Supported(protocol.Node{Widget: w}); got != want {
+			t.Errorf("%s: %v", w, got)
+		}
+	}
+}

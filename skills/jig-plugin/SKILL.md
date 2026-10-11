@@ -94,7 +94,7 @@ vendor the Python and TypeScript SDKs in `jig/`.
 
 Layouts: `grid: [[a, b], [c]]`, `tabs: {Name: widget}`, `split: [a, b]`, `stack`, `box`, `scroll`;
 or one widget's keys at the view's top level. Widgets: `table list kv tree stat gauge bar sparkline
-chart heatmap text markdown code diff logs waterfall timeline graph board form terminal canvas`.
+chart heatmap text markdown code diff logs waterfall timeline calendar graph board form terminal canvas`.
 Bind with `source:`, `args:`, `refresh:`. Slots: `tab`, `{tab: {key: K}}`, `home`. A terminal takes
 `command`, `dir` (relative to the plugin: `dir: .`), `env`, `keep`. Unknown widgets render their
 `fallback:`. Details: `jig docs views`.
