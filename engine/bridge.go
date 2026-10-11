@@ -64,7 +64,7 @@ func (a *App) newComponent(c *spec.Component) (any, plugin.Adapter, error) {
 	if _, err := plugin.Resolve(c); err == nil || !a.hasPlugin(c.Type) {
 		v, ad, err := plugin.New(a, c)
 		if err != nil && len(plugin.List()) == 0 {
-			err = fmt.Errorf("%w: no plugin named %q is installed (official ones: `jig-std install`, from goxang/jig-plugins)", err, c.Type)
+			err = fmt.Errorf("%w: no plugin named %q is installed (the official ones: %s)", err, c.Type, InstallStd)
 		}
 		return v, ad, err
 	}

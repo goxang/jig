@@ -103,3 +103,7 @@ if [ -n "$rc" ] && ! grep -qs "jig completion" "$rc"; then
   printf '\n%s\n' "$line" >> "$rc"
   echo "jig: added tab completion to $rc"
 fi
+
+echo "jig: next, in a project with a jig.yaml:"
+echo "  jig doctor   # what this machine still needs (plugins, trust, credentials) and the command for each"
+echo "  jig          # the control plane"

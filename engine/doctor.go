@@ -62,7 +62,7 @@ func (a *App) Doctor(ctx context.Context) []Check {
 	} else {
 		add(Check{Name: "variables", Status: CheckOK, Detail: "every ${NAME} is set"})
 	}
-	out = append(out, a.pluginChecks()...)
+	out = append(out, a.PluginChecks()...)
 	if a.Env == nil {
 		return append(out, Check{Name: "environment", Status: CheckFail, Detail: "none defined", Fix: "add one under environments: and set default:"})
 	}
@@ -95,9 +95,16 @@ func (a *App) Doctor(ctx context.Context) []Check {
 	return append(out, a.componentChecks(ctx, fix)...)
 }
 
-// pluginChecks are the plugins this project uses that need a credential nobody has given them yet.
-func (a *App) pluginChecks() []Check {
+// InstallStd installs every official plugin, the runtimes and importers most jig.yaml files use.
+const InstallStd = "go install github.com/goxang/jig-plugins/cmd/jig-std@latest && jig-std install"
+
+// PluginChecks are the plugins this project uses that need a credential nobody has given them yet.
+func (a *App) PluginChecks() []Check {
 	var out []Check
+	for _, kind := range a.Spec.NoImporter {
+		out = append(out, Check{Name: "import " + kind, Status: CheckWarn, Detail: "skipped: no installed plugin reads " + kind,
+			Fix: "jig plugin search " + kind + ", then jig plugin add the one that imports it; or all the official ones: " + InstallStd})
+	}
 	ms, _ := host.Discover(a.Spec.Dir, a.Spec.Plugins)
 	known := a.KnownSecrets()
 	for _, m := range ms {

@@ -30,7 +30,7 @@ func pluginImport(dir, name, path string) (map[string]any, error) {
 		}
 	}
 	if m == nil {
-		return nil, fmt.Errorf("no installed plugin imports %q (official importers: `jig-std install`, from goxang/jig-plugins)", name)
+		return nil, fmt.Errorf("%q: %w", name, spec.ErrNoImporter)
 	}
 	cache := filepath.Join(dir, ".jig", "cache", "import", importKey(m, name, path)+".json")
 	if b, err := os.ReadFile(cache); err == nil {

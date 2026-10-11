@@ -21,12 +21,12 @@ func TestPluginChecksAskForCredential(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c := a.pluginChecks()
+	c := a.PluginChecks()
 	if len(c) != 1 || c[0].Status != CheckWarn || !strings.Contains(c[0].Fix, "jig secret set TK_TOKEN") {
 		t.Fatalf("%+v", c)
 	}
 	t.Setenv("TK_TOKEN", "x")
-	if c := a.pluginChecks(); c[0].Status != CheckOK {
+	if c := a.PluginChecks(); c[0].Status != CheckOK {
 		t.Fatalf("%+v", c)
 	}
 }

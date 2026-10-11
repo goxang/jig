@@ -64,7 +64,11 @@ func TestTerminalReportsTheMouse(t *testing.T) {
 	if !term.sendMouse(mouseEvent{Mouse: tea.Mouse{X: 12, Y: 8, Button: tea.MouseLeft}}) {
 		t.Fatal("a click in the pane did not go in")
 	}
-	if s := screen("<   0   ;   3   ;   4"); !strings.Contains(s, "<   0   ;   3   ;   4") {
-		t.Fatalf("no SGR report: %q", s)
+	// od's bytes can wrap across lines when the tty's echo lands first: compare without whitespace
+	squash := func(s string) string { return strings.Join(strings.Fields(s), "") }
+	for deadline := time.Now().Add(3 * time.Second); !strings.Contains(squash(screen("4")), "033[<0;3;4"); time.Sleep(20 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("no SGR report: %q", screen("4"))
+		}
 	}
 }

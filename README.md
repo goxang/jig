@@ -59,6 +59,10 @@ everyday set by hand:
 go install github.com/goxang/jig-plugins/cmd/jig-std@latest && jig-std install
 ```
 
+Joining a project that already has a `jig.yaml`: run `jig doctor` there. It names each thing still
+missing on your machine (plugins, workspace trust, a credential such as `jig secret set JIRA_TOKEN`)
+with the command that fixes it; `jig` shows the same list when it opens.
+
 ## Start
 
 ```bash

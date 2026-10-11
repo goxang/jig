@@ -247,6 +247,7 @@ type prompt struct {
 
 type (
 	tickMsg   struct{}
+	setupMsg  string
 	statusMsg struct {
 		text string
 		err  bool
@@ -507,7 +508,26 @@ func run(ctx context.Context, a *engine.App, s *Session, init func(m *model)) er
 }
 
 func (m *model) Init() tea.Cmd {
-	return batch(m.openTab(m.active), m.fetchServices(), tick())
+	return batch(m.openTab(m.active), m.fetchServices(), tick(), m.setupHint())
+}
+
+// setupHint names what a newcomer still has to set up: plugin credentials, importers to install.
+func (m *model) setupHint() tea.Cmd {
+	a := m.app
+	return func() tea.Msg {
+		var names []string
+		fix := ""
+		for _, c := range a.PluginChecks() {
+			if c.Status == engine.CheckWarn {
+				names = append(names, c.Name)
+				fix = cmp.Or(fix, strings.SplitN(c.Fix, " (", 2)[0])
+			}
+		}
+		if len(names) == 0 {
+			return nil
+		}
+		return setupMsg(fmt.Sprintf("to set up: %s · %s · jig doctor says how", strings.Join(names, ", "), fix))
+	}
 }
 
 var program *tea.Program
@@ -966,6 +986,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, nil
+	case setupMsg:
+		m.setStatus(string(msg), true)
 	case statusMsg:
 		m.busy = max(0, m.busy-1)
 		if msg.text != "" {

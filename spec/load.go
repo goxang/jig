@@ -65,8 +65,16 @@ var PluginDefaults func(dir string, plugins map[string]*Plugin) []*config.Doc
 // where it stands, for its directory and messages.
 func LoadData(raw []byte, file, env string, overrides map[string]string) (*Project, *Environment, error) {
 	dir := filepath.Dir(file)
+	var noImporter []string
 	opts := config.Options{Import: func(kind, path string, root *yaml.Node) (*config.Doc, error) {
-		return importFragment(kind, path, dir, root)
+		d, err := importFragment(kind, path, dir, root)
+		if errors.Is(err, ErrNoImporter) {
+			if !slices.Contains(noImporter, kind) {
+				noImporter = append(noImporter, kind)
+			}
+			return nil, nil
+		}
+		return d, err
 	}}
 	doc, err := config.Compose(raw, file, opts)
 	if err != nil {
@@ -143,7 +151,7 @@ func LoadData(raw []byte, file, env string, overrides map[string]string) (*Proje
 	unset := map[string]bool{}
 	expandTop(root, env, lookup, func(name string) { unset[name] = true })
 
-	p := &Project{File: file, Dir: dir, Unset: keys(unset), FromEnv: fromEnv, Config: doc, lookup: lookup}
+	p := &Project{File: file, Dir: dir, Unset: keys(unset), NoImporter: noImporter, FromEnv: fromEnv, Config: doc, lookup: lookup}
 	if err := root.Decode(p); err != nil {
 		return nil, nil, fmt.Errorf("%s: %w", file, err)
 	}

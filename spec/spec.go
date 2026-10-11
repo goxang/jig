@@ -106,6 +106,8 @@ type Project struct {
 	// Unset are the ${NAME}s the file uses (outside other environments) that nothing sets and that
 	// have no :-default: they stay as written.
 	Unset []string `yaml:"-"`
+	// NoImporter are the imports: kinds skipped because no installed plugin reads them.
+	NoImporter []string `yaml:"-"`
 	// FromEnv are the ${NAME}s the file took from the process environment, with their values.
 	FromEnv map[string]string `yaml:"-"`
 	lookup  func(string) (string, bool)

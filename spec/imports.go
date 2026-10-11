@@ -1,6 +1,7 @@
 package spec
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -22,6 +23,10 @@ var importers = map[string]Importer{}
 func RegisterImporter(name string, f Importer) { importers[name] = f }
 
 func Importers() []string { return keys(importers) }
+
+// ErrNoImporter is an imports: kind no installed plugin reads: the import is skipped, not fatal,
+// so a checkout opens before its plugins are installed.
+var ErrNoImporter = errors.New("no installed plugin imports it")
 
 // PluginImport runs the installed plugin importer of that name on path, returning its jig.yaml
 // fragment; the plugin host sets it.

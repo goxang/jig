@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -22,7 +23,14 @@ func doctorCommand() *cobra.Command {
 			var checks []engine.Check
 			a, err := open()
 			if err != nil {
-				checks = append(checks, engine.Check{Name: "jig.yaml", Status: engine.CheckFail, Detail: err.Error(), Fix: "jig init writes one; jig schema validates it in your editor"})
+				fix := "jig init writes one; jig schema validates it in your editor"
+				switch {
+				case strings.Contains(err.Error(), "is installed"):
+					fix = engine.InstallStd
+				case strings.Contains(err.Error(), "workspace trust"):
+					fix = "jig trust, once you have read what the project's plugins do (listed above)"
+				}
+				checks = append(checks, engine.Check{Name: "jig.yaml", Status: engine.CheckFail, Detail: err.Error(), Fix: fix})
 			} else {
 				defer a.Close()
 				checks = a.Doctor(cmd.Context())
