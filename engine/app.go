@@ -543,7 +543,7 @@ func infer(dir string) (string, []byte) {
 		return "", nil
 	}
 	plan, err := scaffold.Detect(context.Background(), abs, scaffold.Options{})
-	if err != nil || len(plan.Services) == 0 {
+	if err != nil {
 		return "", nil
 	}
 	raw, err := plan.YAML()

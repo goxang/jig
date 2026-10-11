@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -29,8 +30,56 @@ func upgradeCommand() *cobra.Command {
 			cmd := exec.Command(sh, "-c", "curl -fsSL https://raw.githubusercontent.com/goxang/jig/main/install.sh | sh")
 			cmd.Stdout, cmd.Stderr, cmd.Stdin = os.Stdout, os.Stderr, os.Stdin
 			cmd.Env = os.Environ()
-			return cmd.Run()
+			if err := cmd.Run(); err != nil {
+				return err
+			}
+			removeOldBinaries()
+			return nil
 		},
+	}
+}
+
+// installDir mirrors install.sh: JIG_INSTALL_DIR, else /usr/local/bin when writable, else ~/.local/bin.
+func installDir() string {
+	if d := os.Getenv("JIG_INSTALL_DIR"); d != "" {
+		return d
+	}
+	if f, err := os.CreateTemp("/usr/local/bin", ".jig-w"); err == nil {
+		f.Close()
+		os.Remove(f.Name())
+		return "/usr/local/bin"
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".local", "bin")
+}
+
+// removeOldBinaries deletes the other jig binaries on PATH and the running one, now that the
+// installer put the new one in installDir.
+func removeOldBinaries() {
+	keep, err := filepath.EvalSymlinks(filepath.Join(installDir(), "jig"))
+	if err != nil {
+		return
+	}
+	old := map[string]bool{}
+	if self, err := os.Executable(); err == nil {
+		old[self] = true
+	}
+	for _, d := range filepath.SplitList(os.Getenv("PATH")) {
+		if d != "" {
+			old[filepath.Join(d, "jig")] = true
+		}
+	}
+	for p := range old {
+		real, err := filepath.EvalSymlinks(p)
+		if err != nil || real == keep {
+			continue
+		}
+		if fi, err := os.Stat(real); err != nil || !fi.Mode().IsRegular() {
+			continue
+		}
+		if os.Remove(p) == nil {
+			fmt.Printf("jig: removed old binary %s\n", p)
+		}
 	}
 }
 
