@@ -10,7 +10,7 @@ import (
 var FS embed.FS
 
 // Names are the docs FS holds, the default first.
-var Names = []string{"config", "guide", "design", "manifests", "views", "contracts"}
+var Names = []string{"config", "guide", "cli", "plugins", "protocol", "contracts", "views", "security", "design", "manifests"}
 
 // Sections returns the ## / ### sections of a doc holding every word of query (case ignored),
 // each under its heading, and the doc's headings for when none does.

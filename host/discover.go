@@ -180,6 +180,9 @@ func writeAtomic(path string, b []byte, mode os.FileMode) error {
 	return os.Rename(tmp.Name(), path)
 }
 
+// DevStamp, under .jig, names the plugin jig plugin dev just built; a running TUI reloads when it changes.
+const DevStamp = "plugin-dev"
+
 // Relevant reports whether m belongs on dir's screens. Project plugins always do; a user-wide one
 // does when jig.yaml configures it, its detect matches, or it has neither detect nor config.
 func (m *Manifest) Relevant(dir string, cfg map[string]*spec.Plugin) bool {

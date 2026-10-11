@@ -107,6 +107,7 @@ func pluginCommand() *cobra.Command {
 			return nil
 		},
 	})
+	addPluginAuthoring(pc)
 	pc.AddCommand(&cobra.Command{
 		Use: "check <name>", Short: "check a plugin against the contracts it implements, live", Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -261,7 +262,16 @@ func pluginCheck(ctx context.Context, w io.Writer, dir, name string) error {
 	if len(p.Implements) == 0 {
 		return fmt.Errorf("%s implements no contract", name)
 	}
-	pr, bad := p.Provides(ctx), 0
+	if bad := checkContracts(ctx, w, h, p); bad > 0 {
+		return fmt.Errorf("%d problems", bad)
+	}
+	return nil
+}
+
+// checkContracts checks p against each contract it implements, live, and returns the problems found.
+// checkContracts checks p against its contracts, and its frames live unless q is nil.
+func checkContracts(ctx context.Context, w io.Writer, q contracts.Querier, p *host.Plugin) int {
+	name, pr, bad := p.Name, p.Provides(ctx), 0
 	for _, id := range p.Implements {
 		c := contracts.Get(id)
 		if c == nil {
@@ -270,8 +280,8 @@ func pluginCheck(ctx context.Context, w io.Writer, dir, name string) error {
 			continue
 		}
 		ps := c.Check(pr)
-		if len(ps) == 0 {
-			ps = c.CheckFrames(ctx, h, name, pr)
+		if len(ps) == 0 && q != nil {
+			ps = c.CheckFrames(ctx, q, name, pr)
 		}
 		if len(ps) == 0 {
 			fmt.Fprintf(w, "%s %s\n", green("✓"), id)
@@ -281,10 +291,7 @@ func pluginCheck(ctx context.Context, w io.Writer, dir, name string) error {
 		}
 		bad += len(ps)
 	}
-	if bad > 0 {
-		return fmt.Errorf("%d problems", bad)
-	}
-	return nil
+	return bad
 }
 
 func pluginInfo(ctx context.Context, w io.Writer, dir string, m *host.Manifest) error {

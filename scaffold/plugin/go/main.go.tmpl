@@ -1,0 +1,18 @@
+package main
+
+import "github.com/goxang/jig/sdk"
+
+type helloArgs struct {
+	Name string `json:"name" desc:"who to greet" jig:"required"`
+}
+
+func main() {
+	p := sdk.New("{%.Name%}").Version("0.1.0")
+	p.Source("items", func(c *sdk.Ctx, _ sdk.Empty) (*sdk.Frame, error) {
+		return sdk.NewFrame(sdk.Col("name", sdk.TypeString), sdk.Col("count", sdk.TypeInt)).Append("alpha", 1).Append("beta", 2), nil
+	}, sdk.Describe("sample rows: replace with your data"))
+	p.Action("hello", sdk.Write, func(c *sdk.Ctx, a helloArgs) (*sdk.Result, error) {
+		return &sdk.Result{Message: "hello " + a.Name}, nil
+	}, sdk.Describe("greet someone"))
+	p.Serve()
+}

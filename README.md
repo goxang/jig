@@ -91,6 +91,9 @@ Try one of the [examples](examples): `cd examples/shop && jig up && jig`.
 
 - [Guide](docs/guide.md): CLI, every screen and its keys, AI, GoLand, agents
 - [Config](docs/config.md): every `jig.yaml` key
+- [CLI](docs/cli.md): every command
+- [Plugins](docs/plugins.md): using and writing plugins; [protocol](docs/protocol.md), [contracts](docs/contracts.md), [views](docs/views.md)
+- [Security](docs/security.md): trust, sandbox, secrets, policy, server, audit
 - [Design](docs/design.md): how jig is built, writing an adapter
 - [Manifests](docs/manifests.md): a manifest layout that works well with jig
 

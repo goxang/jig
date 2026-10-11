@@ -53,9 +53,8 @@ func ArgsSchema(t reflect.Type) Schema {
 	}
 	props := map[string]any{}
 	var req []string
-	for i := 0; i < t.NumField(); i++ {
-		sf := t.Field(i)
-		if !sf.IsExported() {
+	for _, sf := range reflect.VisibleFields(t) {
+		if !sf.IsExported() || sf.Anonymous && sf.Type.Kind() == reflect.Struct {
 			continue
 		}
 		name, _, _ := strings.Cut(sf.Tag.Get("json"), ",")

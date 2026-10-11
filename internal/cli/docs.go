@@ -17,7 +17,7 @@ import (
 
 func docsCommand() *cobra.Command {
 	return &cobra.Command{
-		Use:     "docs [config|guide|design|manifests|views|contracts] [words...]",
+		Use:     "docs [config|guide|cli|plugins|protocol|contracts|views|security|design|manifests] [words...]",
 		Short:   "jig's reference, from the binary: every jig.yaml key (config), CLI, screens and AI (guide), adapters (design), manifests; words print only the sections holding them",
 		Example: "  jig docs config tasks\n  jig docs load generator   (no doc named: every doc)",
 		RunE: func(_ *cobra.Command, args []string) error {
@@ -67,15 +67,19 @@ func schemaCommand() *cobra.Command {
 func skillCommand() *cobra.Command {
 	var install bool
 	c := &cobra.Command{
-		Use:   "skill [install]",
-		Short: "the agent skill for working with jig: print it, or install it and every active plugin's skills into .claude/skills and .agents/skills",
+		Use:   "skill [install|plugin]",
+		Short: "the agent skill for working with jig: print it (plugin: the one for writing plugins), or install both and every active plugin's skills into .claude/skills and .agents/skills",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
+			if len(args) > 0 && args[0] == "plugin" {
+				fmt.Print(skills.Plugin)
+				return nil
+			}
 			if !install && (len(args) == 0 || args[0] != "install") {
 				fmt.Print(skills.Jig)
 				return nil
 			}
-			all := []host.Skill{{Name: "jig", Body: skills.Jig}}
+			all := []host.Skill{{Name: "jig", Body: skills.Jig}, {Name: "jig-plugin", Body: skills.Plugin}}
 			if a, err := open(); err == nil {
 				all = append(all, a.Host().Skills()...)
 				a.Close()

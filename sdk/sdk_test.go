@@ -3,7 +3,9 @@ package sdk
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"io"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -117,4 +119,17 @@ func TestStreamWaitsForAcks(t *testing.T) {
 func mustJSON(v any) []byte {
 	b, _ := json.Marshal(v)
 	return b
+}
+
+func TestArgsSchemaEmbedded(t *testing.T) {
+	type base struct {
+		Release string `json:"release" jig:"required"`
+	}
+	s := ArgsSchema(reflect.TypeOf(struct {
+		base
+		All bool `json:"all"`
+	}{}))
+	if fmt.Sprint(s["required"]) != "[release]" || len(s["properties"].(map[string]any)) != 2 {
+		t.Fatalf("schema %v", s)
+	}
 }

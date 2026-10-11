@@ -16,7 +16,7 @@ What implementing one gets you:
   stand in for a built-in adapter: `components: {m: {type: myplugin}}`. jig's screens, CLI and AI use
   it like any other metrics store. The component's config reaches the plugin in `configure`.
 - **a standard view**: `scm`, `tracker`, `docs`, `iac`, `vcs`, `registry` and `secrets` come with a
-  screen, added for every plugin that implements them.
+  screen, added for every plugin that implements them and has no views of its own.
 
 `jig plugin check <name>` checks a plugin against its contracts: every source and action is there,
 streams stream, effects match, optional capabilities are whole, and the sources that need no

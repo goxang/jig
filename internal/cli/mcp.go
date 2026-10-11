@@ -187,7 +187,7 @@ func mcpRouter() (*router.Router, func()) {
 	}
 	e := engine.NewLocal(a, nil)
 	me := identity.AI(e.Session(context.Background()))
-	sk := append([]host.Skill{host.ParseSkill(skills.Jig, "jig")}, e.Host.Skills()...)
+	sk := append([]host.Skill{host.ParseSkill(skills.Jig, "jig"), host.ParseSkill(skills.Plugin, "jig-plugin")}, e.Host.Skills()...)
 	r := &router.Router{E: e, As: &me, Skills: sk,
 		Approve: func(_ context.Context, what string, args map[string]any) bool {
 			_, err := approval(args, what, "AI: "+what+"  (on "+aiEnvLabel(a.Env.Name, a.Env.Protected)+")")

@@ -1,0 +1,13 @@
+name: {%.Name%}
+version: 0.1.0
+description: what {%.Name%} shows and does
+build: [go, build, -o, bin/{%.Name%}, .]
+server: {command: [bin/{%.Name%}]}
+skills: [skills/{%.Name%}]
+views:
+  {%.Title%}:
+    slot: tab
+    widget: table
+    source: {%.Name%}.items
+    refresh: 30s
+    actions: [{key: H, name: hello, action: {%.Name%}.hello, args: {name: '${row.name}'}}]

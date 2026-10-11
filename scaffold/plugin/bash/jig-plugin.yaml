@@ -1,0 +1,15 @@
+name: {%.Name%}
+version: 0.1.0
+description: what {%.Name%} shows and does
+sources:
+  items: {run: ./items.sh, help: "sample rows: replace with your data"}
+actions:
+  hello: {run: ./hello.sh, effect: write, help: greet someone, args: {name: {type: string, description: who to greet}}}
+skills: [skills/{%.Name%}]
+views:
+  {%.Title%}:
+    slot: tab
+    widget: table
+    source: {%.Name%}.items
+    refresh: 30s
+    actions: [{key: H, name: hello, action: {%.Name%}.hello, args: {name: '${row.name}'}}]

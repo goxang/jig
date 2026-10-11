@@ -1,0 +1,10 @@
+name: {%.Name%}
+version: 0.1.0
+description: what {%.Name%} shows and does
+skills: [skills/{%.Name%}]
+views:
+  {%.Title%}:
+    slot: tab
+    tabs:
+      Shell: {widget: terminal, dir: ., keep: true}
+      Readme: {widget: text, file: README.md}

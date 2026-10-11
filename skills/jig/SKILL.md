@@ -80,9 +80,15 @@ do runtime render <svc>` (what a Kubernetes deploy applies), `jig manifests <fil
 (`--failed` reruns failures), `jig traces`, `jig metrics -- '<promql>'`. Mutating commands on a
 protected environment need the user's go-ahead.
 
+## Plugins
+
+Tools beyond the built-ins come as plugins: `jig plugin search <text>`, `jig plugin add pack/<name>`
+(packs: std, observability, data, qa, gitlab, github, atlassian, cloud-aws, product), then configure
+them under `plugins.<name>:` in jig.yaml. When nothing fits, write one: `jig skill plugin` prints how.
+
 ## When jig itself falls short
 
-Fix jig instead of working around it in jig.yaml, when you can push to github.com/goxang/jig. Ship
+A new tool or domain is a plugin, not a jig change. For core behaviour, fix jig instead of working around it in jig.yaml, when you can push to github.com/goxang/jig. Ship
 every change you make there yourself: commit (Conventional Commits: `feat:` bumps the minor version,
 anything else the patch), push to `main`, wait until the `ci` workflow is green; its
 last job, `release`, publishes the new tag (`gh run watch`, `gh release view`). The user's only step is

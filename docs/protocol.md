@@ -116,9 +116,12 @@ one, replays against all three.
 
 ## Testing a plugin
 
-`protocol/conformance` runs what every plugin must pass: initialize with unknown fields, configure,
-unknown methods and sources, invalid params, a stray `$/cancel`, every source and stream that takes no
-required arguments (a frame, or `-32003`/`-32005`), `doctor`, `search` and shutdown.
+`jig plugin test [folder]` is what a plugin author runs: the manifest, the build, every source that
+needs no arguments, the contracts it implements and its `testdata/*.jsonl` transcripts (`--record`
+writes one). Underneath, `protocol/conformance` runs what every plugin must pass: initialize with
+unknown fields, configure, unknown methods and sources, invalid params, a stray `$/cancel`, every
+source and stream that takes no required arguments (a frame, or `-32003`/`-32005`), `doctor`,
+`search` and shutdown.
 `protocol/transcript` records a session through `rpc.Options.Tap` and replays it; record sessions
 whose output does not depend on the clock.
 

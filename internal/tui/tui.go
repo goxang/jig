@@ -30,6 +30,7 @@ import (
 	"github.com/goxang/jig/ai"
 	"github.com/goxang/jig/core"
 	"github.com/goxang/jig/engine"
+	"github.com/goxang/jig/host"
 	"github.com/goxang/jig/internal/kubectx"
 	"github.com/goxang/jig/internal/sh"
 	"github.com/goxang/jig/spec"
@@ -103,6 +104,8 @@ type model struct {
 	// specAt is jig.yaml's modification time when it was read, to notice an edit
 	specAt    time.Time
 	specNoted bool
+	// devAt is when jig plugin dev last built, to reload after the next build
+	devAt time.Time
 	// jobs are the operations started this session (act, do, tasks), shown with their output under !
 	jobs      jobs.Manager
 	local     *engine.Local
@@ -400,6 +403,9 @@ func run(ctx context.Context, a *engine.App, s *Session, init func(m *model)) er
 	m.tabs = newTabs(a, m.all, m.simple)
 	m.sched = newScheduler(a)
 	m.specAt = specTime(a)
+	if st, err := os.Stat(filepath.Join(a.Spec.Dir, ".jig", host.DevStamp)); err == nil {
+		m.devAt = st.ModTime()
+	}
 	if s != nil {
 		m.restore(s)
 	}
@@ -824,7 +830,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, msg()
 	case tickMsg:
 		m.noticeSpecEdit()
-		cmds := []tea.Cmd{tick(), m.sched.due(m)}
+		cmds := []tea.Cmd{tick(), m.sched.due(m), m.noticePluginDev()}
 		if time.Since(m.svcAt) >= 3*time.Second {
 			cmds = append(cmds, m.fetchServices())
 		}
@@ -1988,6 +1994,20 @@ func specTime(a *engine.App) time.Time {
 		return time.Time{}
 	}
 	return st.ModTime()
+}
+
+// noticePluginDev reloads after jig plugin dev rebuilt a plugin, tracing its RPC from then on.
+func (m *model) noticePluginDev() tea.Cmd {
+	file := filepath.Join(m.app.Spec.Dir, ".jig", host.DevStamp)
+	st, err := os.Stat(file)
+	if err != nil || !st.ModTime().After(m.devAt) {
+		return nil
+	}
+	m.devAt = st.ModTime()
+	if name, _ := os.ReadFile(file); len(name) > 0 && os.Getenv("JIG_TRACE") == "" {
+		os.Setenv("JIG_TRACE", string(name))
+	}
+	return m.reload()
 }
 
 func (m *model) noticeSpecEdit() {
