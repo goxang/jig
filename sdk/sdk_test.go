@@ -3,8 +3,10 @@ package sdk
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"os/exec"
 	"reflect"
 	"strings"
 	"testing"
@@ -131,5 +133,15 @@ func TestArgsSchemaEmbedded(t *testing.T) {
 	}{}))
 	if fmt.Sprint(s["required"]) != "[release]" || len(s["properties"].(map[string]any)) != 2 {
 		t.Fatalf("schema %v", s)
+	}
+}
+
+func TestFailedToolIsUnavailable(t *testing.T) {
+	err := exec.Command("false").Run()
+	if e := asError(fmt.Errorf("git log: %w", err)); e.Code != CodeUnavailable {
+		t.Errorf("failed tool: %+v", e)
+	}
+	if e := asError(errors.New("nil map")); e.Code != CodeInternal {
+		t.Errorf("bug: %+v", e)
 	}
 }

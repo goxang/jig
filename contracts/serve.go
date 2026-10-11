@@ -24,10 +24,11 @@ type (
 // Served is a component kind's side of its contract, the reverse of Bridge: what a plugin registers
 // (names without the plugin prefix) to stand in for components it builds in-process.
 type Served struct {
-	Sources map[string]SourceFunc
-	Streams map[string]StreamFunc
-	Actions map[string]ActionFunc
-	Effects map[string]string
+	Contract *Contract
+	Sources  map[string]SourceFunc
+	Streams  map[string]StreamFunc
+	Actions  map[string]ActionFunc
+	Effects  map[string]string
 }
 
 // Lookup finds what a call names: its component (args.component) and services.
@@ -64,7 +65,7 @@ func Serve(kind core.Kind, probe any, l Lookup) (*Served, error) {
 	if ct == nil {
 		return nil, fmt.Errorf("no contract serves the %s kind", kind)
 	}
-	s := &server{Served: Served{Sources: map[string]SourceFunc{}, Streams: map[string]StreamFunc{}, Actions: map[string]ActionFunc{}, Effects: map[string]string{}},
+	s := &server{Served: Served{Contract: ct, Sources: map[string]SourceFunc{}, Streams: map[string]StreamFunc{}, Actions: map[string]ActionFunc{}, Effects: map[string]string{}},
 		ct: ct, l: l, p: strings.Split(ct.ID, "/")[0]}
 	s.shared(probe)
 	switch kind {

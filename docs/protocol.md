@@ -118,7 +118,8 @@ one, replays against all three.
 
 `jig plugin test [folder]` is what a plugin author runs: the manifest, the build, every source that
 needs no arguments, the contracts it implements and its `testdata/*.jsonl` transcripts (`--record`
-writes one). Underneath, `protocol/conformance` runs what every plugin must pass: initialize with
+writes one). A source that answers `-32003` or `-32005` (no project, a missing tool or setting) is
+listed as unable to run there, not failed; the Go SDK sends `-32003` for a tool that is missing or fails. Underneath, `protocol/conformance` runs what every plugin must pass: initialize with
 unknown fields, configure, unknown methods and sources, invalid params, a stray `$/cancel`, every
 source and stream that takes no required arguments (a frame, or `-32003`/`-32005`), `doctor`,
 `search` and shutdown.

@@ -47,6 +47,40 @@ type Action struct {
 	Outputs map[string]string `yaml:"outputs"`
 }
 
+// ArgsSchema is the JSON Schema of a source's or action's arguments, as a plugin declares them.
+func (c *Contract) ArgsSchema(name string) protocol.Schema {
+	args := c.Sources[name].Args
+	if a, ok := c.Actions[name]; ok {
+		args = a.Args
+	}
+	props := map[string]any{}
+	var req []string
+	for _, n := range sortedKeys(args) {
+		t, required := strings.CutSuffix(args[n], "!")
+		p := map[string]any{}
+		switch t {
+		case protocol.TypeInt:
+			p["type"] = "integer"
+		case protocol.TypeNumber:
+			p["type"] = "number"
+		case protocol.TypeBool:
+			p["type"] = "boolean"
+		case protocol.TypeJSON:
+		default:
+			p["type"] = "string"
+		}
+		props[n] = p
+		if required {
+			req = append(req, n)
+		}
+	}
+	s := protocol.Schema{"type": "object", "properties": props}
+	if req != nil {
+		s["required"] = req
+	}
+	return s
+}
+
 // Capability is an optional group of sources and actions a plugin provides all of or none.
 type Capability struct {
 	Sources []string `yaml:"sources"`
@@ -198,6 +232,9 @@ func (c *Contract) CheckFrames(ctx context.Context, q Querier, plugin string, p 
 			continue
 		}
 		f, err := q.Query(ctx, plugin+"."+n, protocol.Args{})
+		if protocol.Unmet(err) {
+			continue
+		}
 		if err != nil {
 			out = append(out, Problem{n, err.Error()})
 			continue

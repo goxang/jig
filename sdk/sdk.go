@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"reflect"
 	"runtime/debug"
 	"sort"
@@ -51,6 +52,7 @@ type Option func(*options)
 type options struct {
 	desc, cache, language string
 	keys, on              []string
+	args                  Schema
 }
 
 func Describe(s string) Option           { return func(o *options) { o.desc = s } }
@@ -58,6 +60,9 @@ func Cache(d string) Option              { return func(o *options) { o.cache = d
 func Language(l string) Option           { return func(o *options) { o.language = l } }
 func Keys(k ...string) Option            { return func(o *options) { o.keys = k } }
 func On(schemesOrKinds ...string) Option { return func(o *options) { o.on = schemesOrKinds } }
+
+// Arguments declares the arguments of a handler that takes sdk.Args, which has no fields to read them from.
+func Arguments(s Schema) Option { return func(o *options) { o.args = s } }
 
 type handler struct {
 	fn  reflect.Value
@@ -170,6 +175,9 @@ func (p *Plugin) sourceSpec(name string, h handler, stream bool, opts []Option) 
 	}
 	s := p.info.Provides.Sources[name]
 	s.Description, s.Cache, s.Language, s.Args = first(o.desc, s.Description), first(o.cache, s.Cache), first(o.language, s.Language), ArgsSchema(h.arg)
+	if o.args != nil {
+		s.Args = o.args
+	}
 	s.Stream = s.Stream || stream
 	p.info.Provides.Sources[name] = s
 }
@@ -207,6 +215,9 @@ func (p *Plugin) Action(name, effect string, fn any, opts ...Option) *Plugin {
 	}
 	a := p.info.Provides.Actions[name]
 	a.Effect, a.Description, a.Args, a.Keys, a.On = effect, o.desc, ArgsSchema(h.arg), o.keys, o.on
+	if o.args != nil {
+		a.Args = o.args
+	}
 	p.info.Provides.Actions[name] = a
 	return p
 }
@@ -372,6 +383,11 @@ func asError(err error) *Error {
 	var e *Error
 	if errors.As(err, &e) {
 		return e
+	}
+	var exit *exec.ExitError
+	if errors.Is(err, exec.ErrNotFound) || errors.As(err, &exit) {
+		// a tool that is missing or fails is the environment's doing, not the plugin's
+		return &Error{Code: CodeUnavailable, Message: err.Error()}
 	}
 	return &Error{Code: CodeInternal, Message: err.Error()}
 }

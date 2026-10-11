@@ -114,7 +114,8 @@ optional arguments only. A breaking change is a new major version (and a new con
 ## Testing
 
 `jig plugin test` checks the manifest, runs the build, calls every source that needs no arguments,
-checks contracts and replays `testdata/*.jsonl`. `jig plugin test --record` writes the transcript;
+checks contracts and replays `testdata/*.jsonl`. Answer what the environment lacks (a setting, a
+service) with `sdk.Unavailable(message, hint)`: the test lists it instead of failing. `jig plugin test --record` writes the transcript;
 record only output that does not depend on the clock or the network. Then try it for real:
 `jig plugin dev <folder>` from a project, open its tab, run its actions.
 

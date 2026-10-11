@@ -5,6 +5,7 @@ package protocol
 import (
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -174,3 +175,9 @@ func CheckFrame(f *Frame) error {
 }
 
 func (e *Error) Error() string { return e.Message }
+
+// Unmet says err is an answer that the call cannot work here: a missing tool, service or setting.
+func Unmet(err error) bool {
+	var e *Error
+	return errors.As(err, &e) && (e.Code == CodeUnavailable || e.Code == CodeNeedsInput)
+}

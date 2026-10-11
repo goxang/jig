@@ -78,3 +78,13 @@ func TestCapabilitiesGateOptionalInterfaces(t *testing.T) {
 		t.Fatal("browse capability not admitted")
 	}
 }
+
+func TestArgsSchema(t *testing.T) {
+	s := Get("kv/1").ArgsSchema("kv.get")
+	if r, _ := s["required"].([]string); len(r) != 1 || r[0] != "key" {
+		t.Errorf("kv.get %v", s)
+	}
+	if s := Get("kv/1").ArgsSchema("kv.put"); len(s["properties"].(map[string]any)) != 2 {
+		t.Errorf("kv.put %v", s)
+	}
+}

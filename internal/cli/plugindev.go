@@ -159,6 +159,10 @@ func pluginTest(ctx context.Context, w io.Writer, dir string, record bool) error
 				unbound = true
 				continue
 			}
+			if protocol.Unmet(err) {
+				fmt.Fprintln(w, dim("· source "+n+" cannot run here"+errSuffix(err)))
+				continue
+			}
 			say(err == nil, "source "+n+errSuffix(err))
 		}
 		if unbound {
