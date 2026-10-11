@@ -47,6 +47,9 @@ type Artifact struct {
 	SHA256 string `json:"sha256"`
 	// Sig is the minisign signature file's text.
 	Sig string `json:"sig,omitempty"`
+	// Files are gzipped files the archive leaves out because several plugins share them (jig-std),
+	// by their path in the plugin; each is downloaded once.
+	Files map[string]Artifact `json:"files,omitempty"`
 }
 
 // Registry reads the plugin index, from a mirror when one is set.
@@ -81,6 +84,14 @@ func (r *Registry) indexURL() string {
 func (r *Registry) artifactURL(name, version string, a Artifact) string {
 	if r.Mirror != "" {
 		return fmt.Sprintf("%s/%s/%s/%s", r.Mirror, name, version, path.Base(a.URL))
+	}
+	return a.URL
+}
+
+// fileURL is where a shared file is: <mirror>/files/<name> on a mirror.
+func (r *Registry) fileURL(a Artifact) string {
+	if r.Mirror != "" {
+		return r.Mirror + "/files/" + path.Base(a.URL)
 	}
 	return a.URL
 }

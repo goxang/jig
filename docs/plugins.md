@@ -20,6 +20,10 @@ jig finds plugins in what `jig.lock` pins, then `~/.config/jig/plugins`, then `.
 against its `config:` schema. A plugin in `~/.config/jig/plugins` shows its views only in projects
 it applies to (see [views](views.md)). A pack is a plugin that is mostly `requires:`.
 
+`jig plugin vendor` copies the locked plugins into `.jig/vendor` for offline installs. A mirror (`JIG_REGISTRY` or
+`registry:` in `~/.config/jig/config.yaml`) holds `index.json`, `<name>/<version>/<archive>` and the
+shared files (one `jig-std` per platform) in `files/`.
+
 ## Writing one
 
 ```bash

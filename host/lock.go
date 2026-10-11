@@ -20,6 +20,8 @@ type Locked struct {
 	Commit string `yaml:"commit,omitempty"`
 	// SHA256 is per os/arch, or "any" for a platform-independent artifact.
 	SHA256 map[string]string `yaml:"sha256,omitempty"`
+	// Files are the shared files' sha256, per os/arch and then by path in the plugin.
+	Files map[string]map[string]string `yaml:"files,omitempty"`
 	// Permissions is the hash of the permissions granted; a plugin asking for more needs approval again.
 	Permissions string `yaml:"permissions"`
 	// Pack names the pack that brought it in, if any.

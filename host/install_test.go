@@ -1,6 +1,8 @@
 package host
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
@@ -199,5 +201,54 @@ func TestSignVerifies(t *testing.T) {
 	}
 	if err := verifyMinisign(pub, sig, []byte("sums")); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestSharedFileOnceVendored(t *testing.T) {
+	isolate(t)
+	ctx := context.Background()
+	mirror := fakeRegistry(t, map[string]map[string]string{"a": {"1.0.0": ""}, "b": {"1.0.0": ""}})
+	var gz bytes.Buffer
+	zw := gzip.NewWriter(&gz)
+	zw.Write([]byte("#!/bin/sh\n"))
+	zw.Close()
+	os.MkdirAll(filepath.Join(mirror, "files"), 0o755)
+	os.WriteFile(filepath.Join(mirror, "files", "std.gz"), gz.Bytes(), 0o644)
+	sum := sha256.Sum256(gz.Bytes())
+	var ix Index
+	b, _ := os.ReadFile(filepath.Join(mirror, "index.json"))
+	json.Unmarshal(b, &ix)
+	for _, e := range ix.Plugins {
+		a := e.Versions["1.0.0"].Artifacts["any"]
+		a.Files = map[string]Artifact{"bin/std": {URL: "https://example.invalid/std.gz", SHA256: hex.EncodeToString(sum[:])}}
+		e.Versions["1.0.0"].Artifacts["any"] = a
+	}
+	b, _ = json.Marshal(ix)
+	os.WriteFile(filepath.Join(mirror, "index.json"), b, 0o644)
+
+	proj := t.TempDir()
+	in := &Installer{Dir: proj, Registry: &Registry{Mirror: mirror}, Yes: true}
+	if err := in.Add(ctx, []string{"a", "b"}); err != nil {
+		t.Fatal(err)
+	}
+	fa, err := os.Stat(filepath.Join(storePath("a", "1.0.0"), "bin/std"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fb, _ := os.Stat(filepath.Join(storePath("b", "1.0.0"), "bin/std"))
+	if !os.SameFile(fa, fb) || fa.Mode().Perm()&0o100 == 0 {
+		t.Fatalf("the shared file is not one executable copy: %v %v", fa.Mode(), fb)
+	}
+
+	if _, err := in.Vendor(); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	offline := &Installer{Dir: proj, Registry: &Registry{Mirror: filepath.Join(mirror, "gone")}, Yes: true}
+	if _, err := offline.Ensure(ctx); err != nil {
+		t.Fatalf("offline install from vendor: %v", err)
+	}
+	if got, _ := os.ReadFile(filepath.Join(storePath("a", "1.0.0"), "bin/std")); string(got) != "#!/bin/sh\n" {
+		t.Fatalf("vendored shared file: %q", got)
 	}
 }

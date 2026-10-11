@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -269,9 +270,23 @@ func (in *Installer) installRegistry(ctx context.Context, ix *Index, name, versi
 	l := &Locked{Version: version, Source: "registry", SHA256: map[string]string{}}
 	for p, a := range vv.Artifacts {
 		l.SHA256[p] = a.SHA256
+		for f, fa := range a.Files {
+			if l.Files == nil {
+				l.Files = map[string]map[string]string{}
+			}
+			if l.Files[p] == nil {
+				l.Files[p] = map[string]string{}
+			}
+			l.Files[p][f] = fa.SHA256
+		}
 	}
 	if locked != nil && locked.SHA256[plat] != "" && locked.SHA256[plat] != art.SHA256 {
 		return nil, nil, fmt.Errorf("plugin %s %s: the index's checksum differs from jig.lock; refusing", name, version)
+	}
+	for f, fa := range art.Files {
+		if locked != nil && locked.Files[plat][f] != "" && locked.Files[plat][f] != fa.SHA256 {
+			return nil, nil, fmt.Errorf("plugin %s %s: the index's checksum of %s differs from jig.lock; refusing", name, version, f)
+		}
 	}
 	data, err := in.artifact(ctx, name, version, plat, in.Registry.artifactURL(name, version, art))
 	if err != nil {
@@ -296,8 +311,94 @@ func (in *Installer) installRegistry(ctx context.Context, ix *Index, name, versi
 	if err != nil {
 		return nil, nil, err
 	}
+	for f, fa := range art.Files {
+		if err := in.sharedFile(ctx, key, f, fa, storePath(name, version)); err != nil {
+			return nil, nil, fmt.Errorf("plugin %s %s: %s: %w", name, version, f, err)
+		}
+	}
 	l.Permissions = m.Permissions.Hash()
 	return m, l, nil
+}
+
+var sha256Hex = regexp.MustCompile(`^[0-9a-f]{64}$`)
+
+// ponytail: GC leaves blobs; drop those with one link left if the store grows.
+func blobPath(sha string) string { return filepath.Join(StoreDir(), ".blobs", sha) }
+
+func vendorBlob(dir, sha string) string {
+	return filepath.Join(dir, ".jig", "vendor", "blobs", sha+".gz")
+}
+
+// sharedFile puts a shared file at path f in the plugin at dir: a hard link to the store's one copy,
+// downloaded (or read from .jig/vendor), checked and unpacked the first time.
+func (in *Installer) sharedFile(ctx context.Context, key, f string, a Artifact, dir string) error {
+	if !sha256Hex.MatchString(a.SHA256) {
+		return fmt.Errorf("bad sha256 %q", a.SHA256)
+	}
+	to := filepath.Join(dir, f)
+	if !strings.HasPrefix(to, filepath.Clean(dir)+string(os.PathSeparator)) {
+		return fmt.Errorf("path %q escapes the plugin", f)
+	}
+	blob := blobPath(a.SHA256)
+	if !exists(blob) {
+		data, err := os.ReadFile(vendorBlob(in.Dir, a.SHA256))
+		if err != nil {
+			body, err := in.Registry.get(ctx, in.Registry.fileURL(a))
+			if err != nil {
+				return err
+			}
+			data, err = io.ReadAll(body)
+			body.Close()
+			if err != nil {
+				return err
+			}
+		}
+		if err := checkSum(data, a.SHA256); err != nil {
+			return err
+		}
+		if key != "" {
+			if a.Sig == "" {
+				return errors.New("not signed")
+			}
+			if err := verifyMinisign(key, a.Sig, data); err != nil {
+				return err
+			}
+		}
+		if err := unpackBlob(data, blob); err != nil {
+			return err
+		}
+	}
+	if err := os.MkdirAll(filepath.Dir(to), 0o755); err != nil {
+		return err
+	}
+	_ = os.Remove(to)
+	if os.Link(blob, to) == nil {
+		return nil
+	}
+	b, err := os.ReadFile(blob)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(to, b, 0o755)
+}
+
+// unpackBlob writes the gunzipped data at blob, keeping data beside it as blob.gz for vendor.
+func unpackBlob(data []byte, blob string) error {
+	zr, err := gzip.NewReader(bytes.NewReader(data))
+	if err != nil {
+		return err
+	}
+	raw, err := io.ReadAll(io.LimitReader(zr, 1<<30))
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(blob), 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(blob+".gz", data, 0o644); err != nil {
+		return err
+	}
+	return writeAtomic(blob, raw, 0o755)
 }
 
 // artifact reads a vendored artifact when there is one, else downloads it.
@@ -660,7 +761,17 @@ func (in *Installer) restore(ctx context.Context, name string, l *Locked, index 
 			if err := checkSum(b, l.SHA256[plat]); err != nil {
 				return nil, fmt.Errorf("vendored %s: %w", name, err)
 			}
-			return installArchive(b, name, l.Version)
+			m, err := installArchive(b, name, l.Version)
+			if err != nil {
+				return nil, err
+			}
+			// the lock's checksum stands in for the signature, as for the vendored archive
+			for f, sha := range l.Files[plat] {
+				if err := in.sharedFile(ctx, "", f, Artifact{SHA256: sha}, storePath(name, l.Version)); err != nil {
+					return nil, fmt.Errorf("vendored %s: %s: %w", name, f, err)
+				}
+			}
+			return m, nil
 		}
 		ix, err := index()
 		if err != nil {
@@ -806,6 +917,20 @@ func (in *Installer) Vendor() ([]string, error) {
 			return out, err
 		}
 		out = append(out, f)
+		for _, sha := range l.Files[plat] {
+			b, err := os.ReadFile(blobPath(sha) + ".gz")
+			if err != nil {
+				return out, fmt.Errorf("vendor %s: %w (jig plugin up first?)", n, err)
+			}
+			vf := vendorBlob(in.Dir, sha)
+			if err := os.MkdirAll(filepath.Dir(vf), 0o755); err != nil {
+				return out, err
+			}
+			if err := os.WriteFile(vf, b, 0o644); err != nil {
+				return out, err
+			}
+			out = append(out, vf)
+		}
 	}
 	return out, nil
 }
