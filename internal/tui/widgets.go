@@ -965,6 +965,12 @@ type boardState struct {
 	cur int
 	// cols are the cards' row indexes per column, as last drawn
 	cols [][]int
+	// fields are the frame's fields the cards sort by; sortBy indexes them, -1 for frame order
+	fields []string
+	sortBy int
+	desc   bool
+	// first is the leftmost column showing when they do not all fit
+	first int
 }
 
 func (b *boardState) key(k string) bool {
@@ -987,10 +993,38 @@ func (b *boardState) key(k string) bool {
 		b.card = 0
 	case "end", "G":
 		b.card = 1 << 30
+	case "ctrl+alt+right", "ctrl+shift+right", ">", "ctrl+alt+left", "ctrl+shift+left", "<":
+		if len(b.fields) == 0 {
+			return true
+		}
+		step := 1
+		if strings.HasSuffix(k, "left") || k == "<" {
+			step = len(b.fields) - 1
+		}
+		b.sortBy = (max(b.sortBy, 0) + step) % len(b.fields)
+	case "ctrl+alt+up", "ctrl+shift+up", "alt+up", "ctrl+alt+down", "ctrl+shift+down", "alt+down":
+		b.sortBy, b.desc = max(b.sortBy, 0), strings.HasSuffix(k, "down")
 	default:
 		return false
 	}
 	return true
+}
+
+// cardKey sorts numbers as numbers and issue keys like PIN-123 by their number.
+func cardKey(v any) any {
+	if f, ok := v.(float64); ok {
+		return f
+	}
+	s := str(v)
+	if f, err := strconv.ParseFloat(s, 64); err == nil {
+		return f
+	}
+	if i := strings.LastIndexByte(s, '-'); i > 0 {
+		if n, err := strconv.Atoi(s[i+1:]); err == nil {
+			return fmt.Sprintf("%s-%012d", s[:i], n)
+		}
+	}
+	return s
 }
 
 // boardWidget is Kanban: a column per value of by: (in columns: order), a card per row showing
@@ -1007,7 +1041,7 @@ func boardWidget(wn *wnode, w, h int, focused bool) string {
 	key := cmp.Or(view.Prop(n, "key"), "key")
 	st, _ := wn.st.(*boardState)
 	if st == nil {
-		st = &boardState{off: map[string]int{}, cur: -1}
+		st = &boardState{off: map[string]int{}, cur: -1, sortBy: -1}
 		wn.st = st
 	}
 	var order []string
@@ -1032,6 +1066,27 @@ func boardWidget(wn *wnode, w, h int, focused bool) string {
 		st.cur = -1
 		return sDim.Render("no cards")
 	}
+	st.fields = st.fields[:0]
+	for _, fl := range f.Fields {
+		st.fields = append(st.fields, fl.Name)
+	}
+	sortLabel := ""
+	if st.sortBy >= 0 && st.sortBy < len(st.fields) {
+		sf := st.fields[st.sortBy]
+		for _, ids := range cards {
+			sort.SliceStable(ids, func(a, b int) bool {
+				c := compare(cardKey(rows[ids[a]][sf]), cardKey(rows[ids[b]][sf]))
+				if st.desc {
+					return c > 0
+				}
+				return c < 0
+			})
+		}
+		sortLabel = " ↑" + sf
+		if st.desc {
+			sortLabel = " ↓" + sf
+		}
+	}
 	st.cols = st.cols[:0]
 	for _, c := range order {
 		st.cols = append(st.cols, cards[c])
@@ -1039,12 +1094,23 @@ func boardWidget(wn *wnode, w, h int, focused bool) string {
 	st.col = min(st.col, len(order)-1)
 	st.card = max(0, min(st.card, len(cards[order[st.col]])-1))
 	st.cur = -1
-	cw := max(10, w/len(order))
+	// columns narrower than this scroll sideways instead of squeezing cards into a few letters
+	fit := max(1, min(len(order), w/24))
+	st.first = min(max(st.first, st.col-fit+1), st.col, len(order)-fit)
+	cw := w / fit
 	var out []string
-	for ci, c := range order {
-		head := sTitle.Render(padRight(fmt.Sprintf("%s %s", c, sDim.Render(strconv.Itoa(len(cards[c])))), cw-1))
+	for ci := st.first; ci < st.first+fit; ci++ {
+		c := order[ci]
+		label := c
+		if ci == st.first && ci > 0 {
+			label = "‹ " + label
+		}
+		if ci == st.first+fit-1 && ci < len(order)-1 {
+			label += " ›"
+		}
+		head := sTitle.Render(padRight(fmt.Sprintf("%s %s", label, sDim.Render(strconv.Itoa(len(cards[c])))), cw-1))
 		if ci == st.col && focused {
-			head = sAccent.Render(padRight(fmt.Sprintf("%s %d", c, len(cards[c])), cw-1))
+			head = sAccent.Render(padRight(fmt.Sprintf("%s %d%s", label, len(cards[c]), sortLabel), cw-1))
 		}
 		lines := []string{head + " ", sDim.Render(strings.Repeat("─", cw-1)) + " "}
 		ids := cards[c]

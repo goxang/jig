@@ -542,6 +542,9 @@ func (t *viewTab) rowAction(m *model, wn *wnode, key string) (tea.Cmd, bool) {
 // fill asks for the args written ${ask} (an input; ${ask:field} starts from the row's field, to edit
 // it) and ${pick:field} (one of the values the frame has in field: a board's columns), then runs done.
 func (t *viewTab) fill(m *model, wn *wnode, label string, args protocol.Args, row map[string]any, done func(protocol.Args) tea.Cmd) tea.Cmd {
+	if s := subject(row); s != "" && !strings.Contains(label, s) {
+		label += " " + s
+	}
 	for _, k := range slices.Sorted(maps.Keys(args)) {
 		v, _ := args[k].(string)
 		set := func(val string) tea.Cmd {
@@ -564,10 +567,34 @@ func (t *viewTab) fill(m *model, wn *wnode, label string, args protocol.Args, ro
 				init = fmt.Sprint(row[f])
 			}
 			m.ask(label+": "+k, init, set)
+			if longText[k] || len(init) > 60 {
+				m.asPopup()
+			}
 			return nil
 		}
 	}
 	return done(args)
+}
+
+// longText are the args asked in a box over the screen rather than the footer's line.
+var longText = map[string]bool{"body": true, "description": true, "text": true, "comment": true, "message": true}
+
+// subject names the row an action asks about: its key or id and its title, so the prompt says which
+// issue a comment goes to.
+func subject(row map[string]any) string {
+	id := ""
+	for _, k := range []string{"key", "iid", "id", "name"} {
+		if v, ok := row[k]; ok && v != nil && fmt.Sprint(v) != "" {
+			id = fmt.Sprint(v)
+			break
+		}
+	}
+	for _, k := range []string{"title", "summary"} {
+		if v, ok := row[k]; ok && v != nil && fmt.Sprint(v) != "" {
+			return strings.TrimSpace(id + " " + truncate(fmt.Sprint(v), 50))
+		}
+	}
+	return id
 }
 
 // run runs an action through the Engine, so policy, confirmation and audit apply.
@@ -652,7 +679,7 @@ func (t *viewTab) hints() [][2]string {
 		case "table":
 			h = append(h, [2]string{"enter", "open"}, [2]string{"/", "filter"}, [2]string{"y Y", "copy"})
 		case "board":
-			h = append(h, [2]string{"/", "filter"})
+			h = append(h, [2]string{"/", "filter"}, [2]string{"< > alt+↑↓", "sort"})
 		case "terminal":
 			h = append(h, [2]string{"enter", "type into it"}, [2]string{"R", "restart"})
 		case "form":

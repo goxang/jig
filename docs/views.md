@@ -61,7 +61,7 @@ off up to a minute and keep the last frame. `r` refetches.
 | `logs` | a stream of lines; `stream: true` |
 | `waterfall` `timeline` `graph` | spans, events, nodes and edges |
 | `calendar` | `time`; the month, with a count on each day that has events |
-| `board` | `by` (the column field), `card` (the title field), `key` (shown before it), `columns`; arrows or hjkl move, `/` filters |
+| `board` | `by` (the column field), `card` (the title field), `key` (shown before it), `columns`; arrows or hjkl move, `/` filters, `<` `>` pick the field cards sort by and `alt+↑↓` its direction; columns that do not fit scroll sideways |
 | `form` | `schema`, or `action` (its args), `submit` |
 | `terminal` | `command` (string or list; default `$SHELL`), `dir` (default the project; relative to the view's own folder), `env`, `keep` (runs while hidden). Keys, and clicks when the program asks for the mouse, go to the program; ctrl+] leaves |
 | `canvas` | drawn by `plugin` through `widget.render` |
@@ -92,6 +92,6 @@ binding with a `query` arg gets `Q` to edit it.
 ## Keys
 
 The `jig` preset: `:` palette (`:restart parser`, `:kv get key`, `:open Logs`), `ctrl+k` search,
-`g l|m|t|d|s|g` go to, `.` or right-click a menu of the screen's keys, `ctrl+e` environment, `T` tasks.
+shift+←→ switch screens, `:plugins` the plugins in use, `.` or right-click a menu of the screen's keys, `ctrl+e` environment, `T` tasks.
 `keys: rig` in `.jig/local.yaml` or `~/.config/jig/config.yaml` restores rig's keys (`E`, `N`, `S`,
 `ctrl+k` kubeconfig, `ctrl+e` environment details).

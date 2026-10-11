@@ -67,7 +67,9 @@ it: the system's default first, then the others registered for its type (LibreOf
 editor in the terminal, and copying the link.
 In a plugin's table or board (Jira, GitLab, Confluence pages) `/` filters the rows as you type, fzf style; `esc` clears it;
 `Q` edits its query (JQL, a search), `v` shows the selected row's details beside it, and the keys in the footer act on the row
-(Jira: `m` move, `e` edit, `c` comment, `a` assign, `I` the AI does it, `o` its MR; GitLab: `i` its issue).
+(Jira: `m` move, `e` edit, `c` comment, `a` assign, `I` the AI does it, `o` its MR; GitLab: `i` its issue); their prompts name the
+issue, and long text (a comment, a description) is typed in a box. On a board `<` `>` (or ctrl+alt+←→) pick the field cards sort
+by and `alt+↑↓` (ctrl+alt+↑↓) its direction; columns that do not fit scroll sideways as the cursor moves.
 `V` picks the mode: detailed, simple (fewer screens, columns and keys), software (the dev screens) or product
 (metrics, issues, docs, merge requests). A shell pane takes the keys while focused; `ctrl+]` leaves it, a click goes back. On a Kubernetes
 cluster, dangerous changes (stop, deploy, delete, edits) ask first and `enter` confirms; local, docker
