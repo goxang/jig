@@ -22,6 +22,7 @@ jig task bootstrap            # a named list of steps from jig.yaml (jig task <t
 jig watch api                 # rebuild and restart as the sources change (ctrl+w in the UI)
 jig why checkout is slow      # incident: logs, traces, metrics, deploys; the AI's root cause and fix; answer "fix"
 jig doctor                    # what this environment lacks: tools, cluster, ${VARS}, plugin credentials, ports, components (--json)
+jig purge --dry-run           # what old sessions, reports, logs, builds, backups and plugin versions jig purge deletes (--days 30)
 jig vars set MAIN_DB=x        # manifest variables per environment; jig setenv api K=V for env
 jig data db Switch tables     # walk databases and caches
 jig data snapshot db before   # pg_dump/mysqldump/BACKUP into .jig/<env>/snapshots (S on the Data screen)

@@ -229,7 +229,7 @@ func pluginCommand() *cobra.Command {
 		pc.AddCommand(c)
 	}
 	pc.AddCommand(&cobra.Command{
-		Use: "gc", Short: "delete installed plugin versions no project locks",
+		Use: "gc", Short: "delete installed plugin versions no project (and not your own) lock pins",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			removed, err := host.GC()
 			for _, r := range removed {

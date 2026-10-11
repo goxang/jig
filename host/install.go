@@ -959,6 +959,7 @@ func (in *Installer) Vendor() ([]string, error) {
 func GC() ([]string, error) {
 	keep := map[string]bool{}
 	ps := projects()
+	ps[ConfigDir()] = true
 	for dir := range ps {
 		if !exists(filepath.Join(dir, LockFile)) {
 			continue

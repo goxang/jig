@@ -75,7 +75,7 @@ Every command; `jig <command> --help` has its flags. Generated from the code.
 | `plugin add <source>...` | install plugins and pin them in jig.lock (--user: only for you): a name, pack/<name>, host/owner/repo[/sub]@ref, a .tar.gz URL or a path |
 | `plugin check <name>` | check a plugin against the contracts it implements, live |
 | `plugin dev [folder]` | link a plugin folder into this project, rebuild it on change and show its RPC trace |
-| `plugin gc` | delete installed plugin versions no project locks |
+| `plugin gc` | delete installed plugin versions no project (and not your own) lock pins |
 | `plugin info <name>` | what a plugin provides and the permissions it has |
 | `plugin logs <name>` | the plugin's stderr and host/log lines |
 | `plugin ls` | the project's plugins: version, kind, where from, on or off |
@@ -89,6 +89,7 @@ Every command; `jig <command> --help` has its flags. Generated from the code.
 | `plugin up [name...]` | upgrade plugins within their major version (all when none is named) |
 | `plugin vendor` | copy the locked plugins into .jig/vendor for offline installs |
 | `profile <service>` | capture a profile (cpu, heap, ... per profiler) and print its top |
+| `purge` | free space: saved sessions, reports, logs, profiles, builds and backups older than --days, and plugin versions no project uses |
 | `push <service\|group...> -t <tag>` | push images jig build --no-push left in the local Docker daemon to the environment's registry |
 | `query [saved-query [name=value...] \| component query...]` | run a saved query from jig.yaml, or an ad hoc one in a component's language (SQL, PromQL, redis, kubectl, ...) |
 | `queue list` | queues with depth, consumers and rates |
